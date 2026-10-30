@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { DrillEngine, type HudState, type Scenario, type Tool } from './engine.ts'
 import type { Plan } from './plan.ts'
 import { BUNDLED_FILES, isTemple, listSites, loadPlan, parseKey, sourceFromHash, sourceHash, sourceKey, type SiteItem, type Source } from './load.ts'
+import { CROWD_PROFILES, type CrowdProfile } from './sim.ts'
 import './sim3d.css'
 
-type Opts = { scenario: Scenario; startRoom: string }
+type Opts = { scenario: Scenario; startRoom: string; crowd: CrowdProfile; wheelchair: boolean }
 const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 const read = (k: string, d: boolean) => { try { const v = localStorage.getItem(k); return v === null ? d : v === '1' } catch { return d } }
 const write = (k: string, v: boolean) => { try { localStorage.setItem(k, v ? '1' : '0') } catch { /* private mode */ } }
@@ -40,7 +41,7 @@ export default function Sim3D() {
   const key = sourceKey(src)
   const [loaded, setLoaded] = useState<{ key: string; plan?: Plan; error?: string } | null>(null)
   const [run, setRun] = useState(0)
-  const [opts, setOpts] = useState<Opts>({ scenario: 'fire', startRoom: '' })
+  const [opts, setOpts] = useState<Opts>({ scenario: 'fire', startRoom: '', crowd: 'guided', wheelchair: true })
   useEffect(() => {
     const on = () => setSrc(s => { const n = sourceFromHash(); return sourceKey(n) === sourceKey(s) ? s : n })
     addEventListener('hashchange', on)
@@ -72,7 +73,7 @@ export default function Sim3D() {
   }
   const plan = loaded.plan
   const startRoom = plan.rooms.some(r => r.id === opts.startRoom) ? opts.startRoom : plan.defaultStart
-  return <DrillRun key={`${key}#${run}`} plan={plan} source={src} opts={{ scenario: opts.scenario, startRoom }} onRestart={o => { setOpts(o); setRun(k => k + 1) }} />
+  return <DrillRun key={`${key}#${run}`} plan={plan} source={src} opts={{ scenario: opts.scenario, startRoom, crowd: opts.crowd, wheelchair: opts.wheelchair }} onRestart={o => { setOpts(o); setRun(k => k + 1) }} />
 }
 
 function DrillRun({ plan, source, opts, onRestart }: { plan: Plan; source: Source; opts: Opts; onRestart: (o: Opts) => void }) {
@@ -81,6 +82,8 @@ function DrillRun({ plan, source, opts, onRestart }: { plan: Plan; source: Sourc
   const [hud, setHud] = useState<HudState | null>(null)
   const [scenario, setScenario] = useState<Scenario>(opts.scenario)
   const [room, setRoom] = useState(opts.startRoom)
+  const [crowd, setCrowd] = useState<CrowdProfile>(opts.crowd)
+  const [wheel, setWheel] = useState(opts.wheelchair)
   const [bigMap, setBigMap] = useState(false)
   const [help, setHelp] = useState(false)
   const [stairMenu, setStairMenu] = useState(false)
@@ -89,7 +92,7 @@ function DrillRun({ plan, source, opts, onRestart }: { plan: Plan; source: Sourc
   const LV = plan.levels
 
   useEffect(() => {
-    const e = new DrillEngine(host.current!, labels.current!, setHud, { plan, scenario: opts.scenario, startRoom: opts.startRoom, muted, flash })
+    const e = new DrillEngine(host.current!, labels.current!, setHud, { plan, scenario: opts.scenario, startRoom: opts.startRoom, muted, flash, crowd: opts.crowd, wheelchair: opts.wheelchair })
     eng.current = e
     e.setMinimap(map.current)
     void e.init()
@@ -187,6 +190,16 @@ function DrillRun({ plan, source, opts, onRestart }: { plan: Plan; source: Sourc
             <div className={c?.trapped ? 'bad' : ''}><dt>Needs rescue</dt><dd>{c?.trapped ?? 0}</dd></div>
           </dl>
         </section>
+        {hud?.crowd && (
+          <section className="d-panel" aria-label="Crowd behaviour">
+            <h2 className="d-kicker">Crowd · {hud.crowd.label}</h2>
+            <dl className="d-stats">
+              <div><dt>Ignoring guidance</dt><dd>{hud.crowd.ignoring}</dd></div>
+              {hud.crowd.wcOn && <div><dt>Wheelchair out</dt><dd>{hud.crowd.wcOut}/{hud.crowd.wc}</dd></div>}
+              {hud.crowd.wcWaiting > 0 && <div className="bad"><dt>Waiting for staff</dt><dd>{hud.crowd.wcWaiting}</dd></div>}
+            </dl>
+          </section>
+        )}
         <section className="d-panel d-groups" aria-label="Groups">
           <h2 className="d-kicker">Groups{hud?.groups.length ? <span className="d-count">{hud.groups.length}</span> : null}</h2>
           {!hud?.groups.length && <p className="d-muted">{live ? 'Groups are assigned after the exit check.' : `${hud?.startCount ?? '…'} people in ${hud?.startLabel ?? 'the start room'}.`}</p>}
@@ -266,7 +279,7 @@ function DrillRun({ plan, source, opts, onRestart }: { plan: Plan; source: Sourc
         <div className="d-time d-panel" role="group" aria-label="Playback">
           <button className="d-icon" onClick={() => e?.setPaused(!hud?.paused)} aria-label={hud?.paused ? 'Resume' : 'Pause'} title="Pause (Space)" disabled={!live}><Icon d={hud?.paused ? I.play : I.pause} size={17} /></button>
           <div className="d-seg" role="group" aria-label="Speed">{[1, 2, 4].map(s => <button key={s} className={hud?.speed === s ? 'on' : ''} aria-pressed={hud?.speed === s} onClick={() => e?.setSpeed(s)}>{s}×</button>)}</div>
-          <button className="d-icon" onClick={() => onRestart({ scenario, startRoom: room })} aria-label="Restart simulation" title="Restart"><Icon d={I.restart} size={17} /></button>
+          <button className="d-icon" onClick={() => onRestart({ scenario, startRoom: room, crowd, wheelchair: wheel })} aria-label="Restart simulation" title="Restart"><Icon d={I.restart} size={17} /></button>
           <button className="d-icon" onClick={() => { const m = !muted; setMuted(m); write('nikaas-sim3d-muted', m); e?.setMuted(m) }} aria-label={muted ? 'Turn sound on' : 'Turn sound off'} aria-pressed={!muted} title="Sound"><Icon d={muted ? I.mute : I.sound} size={17} /></button>
           <button className={`d-icon ${flash ? '' : 'off'}`} onClick={() => { const f = !flash; setFlash(f); write('nikaas-sim3d-flash', f); e?.setFlash(f) }} aria-label={flash ? 'Turn off the alarm frame' : 'Turn on the alarm frame'} aria-pressed={flash} title="Red alarm frame"><Icon d={I.flash} size={17} /></button>
           <button className="d-icon" onClick={() => setHelp(v => !v)} aria-label="Controls" title="Controls (H)"><Icon d={I.help} size={17} /></button>
@@ -306,6 +319,21 @@ function DrillRun({ plan, source, opts, onRestart }: { plan: Plan; source: Sourc
                 ))}
               </div>
             </fieldset>
+            <fieldset className="d-field">
+              <legend className="d-kicker">Crowd behaviour</legend>
+              <div className="d-rooms">
+                {(Object.keys(CROWD_PROFILES) as CrowdProfile[]).map(k => (
+                  <label key={k} className={crowd === k ? 'on' : ''}>
+                    <input type="radio" name="d-crowd" value={k} checked={crowd === k} onChange={() => { setCrowd(k); e?.setCrowd(k, wheel) }} />
+                    <span>{CROWD_PROFILES[k].label}</span><small>{CROWD_PROFILES[k].text}</small>
+                  </label>
+                ))}
+                <label className={wheel ? 'on' : ''}>
+                  <input type="checkbox" checked={wheel} onChange={ev => { setWheel(ev.target.checked); e?.setCrowd(crowd, ev.target.checked) }} />
+                  <span>Wheelchair users</span><small>{wheel ? 'About 6% cannot use stairs' : 'None in this run'}</small>
+                </label>
+              </div>
+            </fieldset>
             <div className="d-brief-foot">
               <button className="d-go" onClick={() => e?.begin()} disabled={!hud?.ready}>{hud?.ready ? 'Start simulation' : 'Preparing the model…'}</button>
               <span className="d-muted">Drag to orbit, right-drag to pan, scroll to zoom. Times shown are illustrative.</span>
@@ -336,7 +364,7 @@ function DrillRun({ plan, source, opts, onRestart }: { plan: Plan; source: Sourc
               ))}
             </div>
             <div className="d-brief-foot">
-              <button className="d-go" onClick={() => onRestart({ scenario, startRoom: room })}>Run again</button>
+              <button className="d-go" onClick={() => onRestart({ scenario, startRoom: room, crowd, wheelchair: wheel })}>Run again</button>
               <span className="d-muted">The scene stays live: keep exploring, or add incidents and watch who re-routes.</span>
             </div>
           </div>

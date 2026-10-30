@@ -15,9 +15,25 @@ export type Agent = {
   out: boolean; tOut: number; target: [number, number] | null; slot: [number, number] | null; injured: boolean
   phase: number; move: number; scale: number
   lookT: number; legT: number; ghost: number   // look-ahead timer, time on this leg, deadlock escape until
+  follows: boolean     // takes the exit the guidance gives (false: rushes the exit they know)
+  wc: boolean          // wheelchair user who cannot use stairs on their own
+  chair: boolean       // drawn in a wheelchair (stays true when staff carry them)
+  assistAt: number     // when staff reach a wheelchair user with no step-free route
+  base: number; react0: number; sit0: number   // as spawned, so the crowd can be reconfigured before the start
 }
 export type Hazard = { id: number; kind: 'fire' | 'collapse'; level: number; x: number; z: number; r: number; rMax: number; grow: number; label: string; t0: number }
 export type SimEvent = { kind: 'info' | 'warn' | 'danger' | 'good'; text: string }
+/** How the crowd behaves: the share who follow the group exit they are given; the rest rush the exit they know. */
+export type CrowdProfile = 'guided' | 'mixed' | 'panic'
+export const CROWD_PROFILES: Record<CrowdProfile, { follow: number; label: string; text: string }> = {
+  guided: { follow: 0.9, label: 'Guided', text: '90% follow their group exit' },
+  mixed: { follow: 0.65, label: 'Mixed', text: '35% ignore the guidance' },
+  panic: { follow: 0.3, label: 'Panic', text: '70% rush the exit they know' },
+}
+/** Share of the crowd using a wheelchair when that option is on. */
+export const WHEELCHAIR_SHARE = 0.06
+/** Seconds a wheelchair user with no step-free route waits before staff carry them down. */
+const ASSIST_DELAY = 40
 export type Group = { exit: string; letter: string; color: [number, number, number]; css: string }
 
 // muted but distinct: teal, ochre, lilac, olive (status colours stay reserved for safe / smoke / danger)
@@ -32,6 +48,9 @@ export class Sim {
   nav: Nav
   agents: Agent[] = []
   D: Record<string, Float64Array> = {}
+  DA: Record<string, Float64Array> = {}   // distance fields for step-free routes (no stairs)
+  hasWc = false
+  private assistNow = false
   blocked: Uint8Array
   pen: Float32Array
   hazards: Hazard[] = []
@@ -60,7 +79,7 @@ export class Sim {
   private stairCache = new Map<string, string | null>()
   private nextHazard = 1
 
-  constructor(plan: Plan, seats: Seat[], startRoom: string, rnd: () => number, emit: (e: SimEvent) => void) {
+  constructor(plan: Plan, seats: Seat[], startRoom: string, rnd: () => number, emit: (e: SimEvent) => void, opt: { follow?: number; wheelchair?: number } = {}) {
     this.plan = plan; this.nav = plan.nav; this.exits = plan.exits
     this.startRoom = startRoom; this.rnd = rnd; this.emit = emit
     const n = this.nav.nodes.length
@@ -83,7 +102,36 @@ export class Sim {
       const chosen = [...stand, ...sit].slice(0, room.people)
       for (const s of chosen) this.spawn(s, room.id === startRoom)
     }
+    this.configure(opt)
+  }
+
+  /** Decide who follows the guidance and who uses a wheelchair. Only before the drill starts. */
+  configure(opt: { follow?: number; wheelchair?: number }) {
+    let seed = 7
+    const g = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed / 4294967296 }
+    const follow = opt.follow ?? 1, share = opt.wheelchair ?? 0, n = this.agents.length
+    const order = this.agents.map((_, i) => i)
+    for (let k = order.length - 1; k > 0; k--) { const j = Math.floor(g() * (k + 1)); [order[k], order[j]] = [order[j], order[k]] }
+    const wcSet = new Set(share > 0 && n >= 8 ? order.slice(0, Math.max(1, Math.round(n * share))) : [])
+    for (const a of this.agents) {
+      a.follows = g() < follow
+      a.wc = a.chair = wcSet.has(a.i)
+      a.assistAt = Infinity
+      a.speed = a.wc ? 0.62 + (a.base - 1.2) * 0.35 : a.base * (a.follows ? 1 : 1.12)
+      a.react = a.react0 * (a.follows ? 1 : 0.55)
+      a.mode = a.wc || !a.sit0 ? 'idle' : 'seated'; a.sit = a.wc ? 0 : a.sit0
+    }
     this.recompute()
+  }
+
+  /** Read-outs for the crowd panel. */
+  crowdStats() {
+    let ignoring = 0, wc = 0, wcOut = 0, wcWaiting = 0
+    for (const a of this.agents) {
+      if (!a.follows) ignoring++
+      if (a.chair) { wc++; if (a.out) wcOut++; else if (a.mode === 'trapped' && !a.injured) wcWaiting++ }
+    }
+    return { ignoring, wc, wcOut, wcWaiting }
   }
 
   private spawn(s: Seat, start: boolean) {
@@ -96,7 +144,10 @@ export class Sim {
       mx: s.x, mz: s.z, millT: 0, stuckT: 0, lastD: 1e9, danger: 0, crouch: 0,
       out: false, tOut: 0, target: null, slot: null, injured: false,
       phase: r() * 6, move: 0, scale: 0.9 + r() * 0.13, lookT: 0, legT: 0, ghost: -1,
+      follows: true, wc: false, chair: false, assistAt: Infinity, base: 0, react0: 0, sit0: s.sit ? 1 : 0,
     })
+    const a = this.agents[this.agents.length - 1]
+    a.base = a.speed; a.react0 = a.react
   }
 
   // ---------- hazards and distance fields ----------
@@ -117,7 +168,11 @@ export class Sim {
         } else if (d < h.r + 0.5) B[n.i] = 1
       }
     }
-    for (const e of this.exits) this.D[e.id] = this.dijkstra(this.exitNode[e.id])
+    this.hasWc = this.agents.some(a => a.wc)
+    for (const e of this.exits) {
+      this.D[e.id] = this.dijkstra(this.exitNode[e.id])
+      this.DA[e.id] = this.hasWc && this.plan.stairs.length ? this.dijkstra(this.exitNode[e.id], true) : this.D[e.id]
+    }
     this.stairCache.clear()
   }
 
@@ -142,7 +197,9 @@ export class Sim {
     return { trapped, exitsLost }
   }
 
-  private dijkstra(src: number) {
+  private dOf(a: Agent, e: string) { return a.wc ? this.DA[e] : this.D[e] }
+
+  private dijkstra(src: number, stepFree = false) {
     const n = this.nav.nodes.length, dist = new Float64Array(n).fill(Infinity), done = new Uint8Array(n)
     if (this.blocked[src]) return dist
     dist[src] = 0
@@ -152,7 +209,7 @@ export class Sim {
       if (u < 0) break
       done[u] = 1
       for (const e of this.nav.adj[u]) {
-        if (this.blocked[e.to]) continue
+        if (this.blocked[e.to] || (stepFree && e.rail)) continue
         const c = best + e.len * (e.rail ? 1.25 : 1) + this.pen[e.to]
         if (c < dist[e.to]) dist[e.to] = c
       }
@@ -162,8 +219,8 @@ export class Sim {
 
   exitReachable(e: string) {
     if (this.blocked[this.exitNode[e]]) return false
-    const D = this.D[e], left = this.agents.filter(a => !a.out && a.mode !== 'trapped')
-    return !left.length || left.some(a => isFinite(this.costTo(a, e, D))) // nobody left inside: nothing is cut off
+    const left = this.agents.filter(a => !a.out && a.mode !== 'trapped')
+    return !left.length || left.some(a => isFinite(this.costTo(a, e))) // nobody left inside: nothing is cut off
   }
 
   private startNodes(a: Agent): number[] {
@@ -176,7 +233,7 @@ export class Sim {
     return [best]
   }
 
-  private costTo(a: Agent, e: string, D = this.D[e]) {
+  private costTo(a: Agent, e: string, D = this.dOf(a, e)) {
     if (a.mode === 'rail' && a.rail) return a.rail.len - a.rail.t + D[a.rail.b]
     if (a.mode === 'walk' && a.node >= 0 && !a.pre.length) {
       const n = this.nav.nodes[a.node]
@@ -193,8 +250,8 @@ export class Sim {
   /** First stair on the way from an agent to an exit (stairs are the shared bottleneck upstairs). */
   private stairOf(a: Agent, e: string) {
     if (!this.plan.stairs.length || (this.groundExits && a.level === 0 && a.mode !== 'rail')) return null
-    const D = this.D[e], from = a.mode === 'rail' && a.rail ? a.rail.b : a.node >= 0 && !a.pre.length ? a.node : this.startNodes(a)[0]
-    const key = `${from}:${e}`
+    const D = this.dOf(a, e), from = a.mode === 'rail' && a.rail ? a.rail.b : a.node >= 0 && !a.pre.length ? a.node : this.startNodes(a)[0]
+    const key = `${from}:${e}:${a.wc ? 1 : 0}`
     if (this.stairCache.has(key)) return this.stairCache.get(key)!
     let n = from, found: string | null = null
     for (let k = 0; k < 600 && n >= 0; k++) {
@@ -227,6 +284,7 @@ export class Sim {
     const cost = live.map(a => ids.map(e => this.costTo(a, e)))
     let startPool = new Set(ids)
     let choice: (string | null)[] = []
+    const known = ids.reduce((b, e) => (flow[e] > (flow[b] ?? -1) ? e : b), ids[0])   // the widest door: the one people came in by
     for (let iter = 0; iter < 4; iter++) {
       const load: Record<string, number> = {}, sload: Record<string, number> = {}
       const order = live.map((_, k) => k).sort((p, q) => Math.min(...cost[p]) - Math.min(...cost[q]))
@@ -234,6 +292,12 @@ export class Sim {
       for (const k of order) {
         const a = live[k]
         let best: string | null = null, bs = Infinity
+        if (!a.follows) {   // rushes the nearest exit they know, ignoring the group split
+          ids.forEach((e, j) => { const c = cost[k][j]; if (!isFinite(c)) return; const v = e === known ? c * 0.5 : c; if (v < bs) { bs = v; best = e } })
+          choice[k] = best
+          if (best) { load[best] = (load[best] ?? 0) + 1; const st = this.stairOf(a, best); if (st) sload[st] = (sload[st] ?? 0) + 1 }
+          continue
+        }
         ids.forEach((e, j) => {
           if (a.start && !startPool.has(e)) return
           const c = cost[k][j]
@@ -272,6 +336,7 @@ export class Sim {
 
   private trap(a: Agent) {
     a.mode = 'trapped'; a.pre = []; a.rail = null
+    if (a.wc && !a.injured && a.assistAt === Infinity) a.assistAt = this.t + ASSIST_DELAY
   }
 
   /** The alarm sounds: everyone reacts after their own short delay. */
@@ -299,7 +364,7 @@ export class Sim {
   private reassignOne(a: Agent, from: number) {
     let best: string | null = null, bc = Infinity
     for (const e of this.exits) {
-      const d = this.D[e.id][from]
+      const d = this.dOf(a, e.id)[from]
       if (!isFinite(d)) continue
       let load = 0
       for (const o of this.agents) if (!o.out && o.exit === e.id) load++
@@ -313,7 +378,7 @@ export class Sim {
 
   // ---------- movement ----------
   private startWalk(a: Agent): void {
-    const D = this.D[a.exit]
+    const D = this.dOf(a, a.exit)
     let s = -1, bc = Infinity
     for (const k of this.startNodes(a)) {
       const n = this.nav.nodes[k], c = Math.hypot(n.x - a.x, n.z - a.z) + D[k]
@@ -321,7 +386,7 @@ export class Sim {
     }
     if (!isFinite(bc)) {
       if (this.reassignOne(a, this.startNodes(a)[0])) return this.startWalk(a)
-      this.trap(a); this.emit({ kind: 'danger', text: `Person trapped in ${this.roomLabel(a.room)}: no safe route` }); return
+      this.trap(a); this.emit(a.wc ? { kind: 'warn', text: `Wheelchair user in ${this.roomLabel(a.room)}: no step-free route, waiting for staff to carry them down` } : { kind: 'danger', text: `Person trapped in ${this.roomLabel(a.room)}: no safe route` }); return
     }
     const n = this.nav.nodes[s]
     // line up with the door first (along the door wall's normal), then walk to it
@@ -361,7 +426,7 @@ export class Sim {
       a.slot = [e.assembly[0] + Math.cos(ang) * (0.9 + ring * 0.85), e.assembly[1] + Math.sin(ang) * (0.9 + ring * 0.85)]
       return
     }
-    const D = this.D[a.exit]
+    const D = this.dOf(a, a.exit)
     let best = -1, bc = Infinity, rail = false, len = 0
     for (const e of this.nav.adj[n]) {
       if (this.blocked[e.to]) continue
@@ -374,7 +439,7 @@ export class Sim {
     }
     if (!isFinite(bc)) {
       if (depth < 2 && this.reassignOne(a, n) && a.exit !== undefined) return this.decide(a, n, depth + 1)
-      this.trap(a); this.emit({ kind: 'danger', text: `Person cut off near ${node.room ? this.roomLabel(node.room) : 'a corridor'}` }); return
+      this.trap(a); this.emit({ kind: a.wc ? 'warn' : 'danger', text: `${a.wc ? 'Wheelchair user' : 'Person'} cut off near ${node.room ? this.roomLabel(node.room) : 'a corridor'}` }); return
     }
     a.prev = n; a.node = best; a.legT = 0
     if (rail) { a.mode = 'rail'; a.rail = { a: n, b: best, t: 0, len: Math.hypot(this.nav.nodes[best].x - node.x, this.nav.nodes[best].z - node.z) || len } }
@@ -433,6 +498,17 @@ export class Sim {
       if (a.mode === 'assembled' || a.mode === 'trapped' && a.injured) continue
       const key = ((a.out ? OUT_LEVEL : a.level) * 4096 + Math.floor(a.x + this.gx)) * 4096 + Math.floor(a.z + this.gz)
       let l = grid.get(key); if (!l) grid.set(key, l = []); l.push(a)
+    }
+    for (const a of this.agents) {
+      if (a.mode === 'trapped' && a.wc && !a.injured && !a.out && this.t >= a.assistAt) {
+        a.wc = false; a.assistAt = Infinity; a.speed = 0.5; a.mode = 'mill'; a.goT = this.t; a.millT = 0
+        this.assistNow = true
+      }
+    }
+    if (this.assistNow) {
+      this.assistNow = false
+      this.recompute(); this.assign(false)
+      this.emit({ kind: 'good', text: 'Staff are carrying wheelchair users down the stairs' })
     }
     for (const a of this.agents) this.agentStep(a, dt)
   }
@@ -540,7 +616,7 @@ export class Sim {
   private lookAhead(a: Agent) {
     const n = a.node, N = this.nav.nodes[n]
     if (n < 0 || N.kind === 'exit' || N.kind === 'stair' || N.rail) return false
-    const D = this.D[a.exit]
+    const D = this.dOf(a, a.exit)
     let best = -1, bc = Infinity, rail = false
     for (const e of this.nav.adj[n]) {
       if (this.blocked[e.to]) continue
@@ -568,7 +644,7 @@ export class Sim {
 
   /** Pushed round a corner by the crowd and the target is now behind a wall: head for the best node in sight. */
   private recover(a: Agent) {
-    const D = this.D[a.exit]
+    const D = this.dOf(a, a.exit)
     let best = -1, bc = Infinity
     for (const reach of [9, Infinity]) { // nearby first; on long diagonal corridors the nearest node can be far
       for (const n of this.nav.nodes) {

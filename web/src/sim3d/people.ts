@@ -2,6 +2,7 @@
 // Instanced human figures: torso, head, hair, two arms, two-part legs and a glow ring at the feet.
 // One draw call per body part for the whole crowd.
 import * as THREE from 'three'
+import { mergeGeometries } from '../vendor/three/addons/utils/BufferGeometryUtils.js'
 
 export type Pose = {
   x: number; y: number; z: number; yaw: number; scale: number
@@ -13,6 +14,7 @@ export type Pose = {
   alarm: number    // 0 .. 1 tense arms
   lean: number
   t: number
+  chair: boolean   // seated in a wheelchair
 }
 
 const SKIN = ['#f1c7a5', '#e0ac85', '#c68863', '#a86f4c', '#8d5a3c', '#6e4430']
@@ -22,7 +24,7 @@ const PANTS = ['#1f2937', '#111827', '#374151', '#1e3a8a', '#44403c', '#57534e',
 
 export class CrowdView {
   n: number
-  torso: any; head: any; hair: any; arms: any; thighs: any; shins: any; ring: any
+  torso: any; head: any; hair: any; arms: any; thighs: any; shins: any; ring: any; frame: any; wheels: any
   private B = new THREE.Matrix4(); private T = new THREE.Matrix4(); private P = new THREE.Matrix4(); private Q = new THREE.Matrix4()
   private R = new THREE.Matrix4(); private S = new THREE.Matrix4(); private Z = new THREE.Matrix4().makeScale(0, 0, 0)
   private c = new THREE.Color()
@@ -45,6 +47,21 @@ export class CrowdView {
     this.arms = mk(cap(0.048, 0.5, true), n * 2, !lite); this.thighs = mk(cap(0.072, 0.32, true), n * 2); this.shins = mk(cap(0.06, 0.34, true), n * 2, !lite)
     const ringMat = new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })
     const ringG = new THREE.RingGeometry(0.27, 0.38, 28); ringG.rotateX(-Math.PI / 2)
+    // wheelchairs: one frame and two wheels per person, shown only for wheelchair users
+    const bx = (w: number, h: number, d: number, x: number, y: number, z: number) => { const g = new THREE.BoxGeometry(w, h, d); g.translate(x, y, z); return g }
+    const frameG = mergeGeometries([
+      bx(0.44, 0.05, 0.42, 0, 0.48, -0.02), bx(0.44, 0.5, 0.04, 0, 0.75, -0.22), bx(0.04, 0.05, 0.36, 0.23, 0.62, -0.04), bx(0.04, 0.05, 0.36, -0.23, 0.62, -0.04),
+      bx(0.3, 0.03, 0.14, 0, 0.2, 0.3), bx(0.04, 0.04, 0.12, 0.2, 0.98, -0.28), bx(0.04, 0.04, 0.12, -0.2, 0.98, -0.28),
+      bx(0.04, 0.3, 0.04, 0.2, 0.33, 0.24), bx(0.04, 0.3, 0.04, -0.2, 0.33, 0.24),
+    ])
+    const hub = new THREE.CylinderGeometry(0.05, 0.05, 0.05, 8); hub.rotateZ(Math.PI / 2)
+    const rim = new THREE.TorusGeometry(0.29, 0.022, 6, 18); rim.rotateY(Math.PI / 2)
+    const wheelG = mergeGeometries([hub, rim])
+    const chairMat = new THREE.MeshStandardMaterial({ color: '#35507a', roughness: 0.5, metalness: 0.4 })
+    const wheelMat = new THREE.MeshStandardMaterial({ color: '#17191d', roughness: 0.7 })
+    this.frame = new THREE.InstancedMesh(frameG, chairMat, n); this.frame.castShadow = true; this.frame.frustumCulled = false
+    this.wheels = new THREE.InstancedMesh(wheelG, wheelMat, n * 2); this.wheels.castShadow = true; this.wheels.frustumCulled = false
+    for (const m of [this.frame, this.wheels]) { m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); for (let i = 0; i < m.count; i++) m.setMatrixAt(i, this.Z); scene.add(m) }
     this.ring = new THREE.InstancedMesh(ringG, ringMat, n); this.ring.frustumCulled = false; this.ring.renderOrder = 2
     this.ring.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(this.ring)
     const pick = (a: string[]) => a[Math.floor(rnd() * a.length)]
@@ -64,6 +81,7 @@ export class CrowdView {
   hide(i: number) {
     const Z = this.Z
     this.torso.setMatrixAt(i, Z); this.head.setMatrixAt(i, Z); this.hair.setMatrixAt(i, Z); this.ring.setMatrixAt(i, Z)
+    this.frame.setMatrixAt(i, Z); this.wheels.setMatrixAt(2 * i, Z); this.wheels.setMatrixAt(2 * i + 1, Z)
     for (const k of [2 * i, 2 * i + 1]) { this.arms.setMatrixAt(k, Z); this.thighs.setMatrixAt(k, Z); this.shins.setMatrixAt(k, Z) }
   }
 
@@ -104,14 +122,22 @@ export class CrowdView {
       Q.copy(P).multiply(T.makeTranslation(sg * 0.215, 0.6, 0)).multiply(R.makeRotationX(a)).multiply(S.makeRotationZ(spread))
       this.arms.setMatrixAt(2 * i + side, Q)
     }
+    if (p.chair) {
+      this.frame.setMatrixAt(i, B)
+      for (let side = 0; side < 2; side++) {
+        const sg = side ? -1 : 1
+        Q.copy(B).multiply(T.makeTranslation(sg * 0.27, 0.3, -0.08)).multiply(R.makeRotationX(p.phase * 0.9))
+        this.wheels.setMatrixAt(2 * i + side, Q)
+      }
+    } else { this.frame.setMatrixAt(i, this.Z); this.wheels.setMatrixAt(2 * i, this.Z); this.wheels.setMatrixAt(2 * i + 1, this.Z) }
   }
 
   commit() {
-    for (const m of [this.torso, this.head, this.hair, this.arms, this.thighs, this.shins, this.ring]) m.instanceMatrix.needsUpdate = true
+    for (const m of [this.torso, this.head, this.hair, this.arms, this.thighs, this.shins, this.ring, this.frame, this.wheels]) m.instanceMatrix.needsUpdate = true
     if (this.ring.instanceColor) this.ring.instanceColor.needsUpdate = true
   }
 
   dispose() {
-    for (const m of [this.torso, this.head, this.hair, this.arms, this.thighs, this.shins, this.ring]) { m.geometry.dispose(); m.removeFromParent() }
+    for (const m of [this.torso, this.head, this.hair, this.arms, this.thighs, this.shins, this.ring, this.frame, this.wheels]) { m.geometry.dispose(); m.removeFromParent() }
   }
 }
