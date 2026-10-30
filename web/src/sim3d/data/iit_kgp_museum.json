@@ -1,0 +1,422 @@
+{
+ "name": "Nehru Museum of Science & Technology, Block B, IIT Kharagpur (digitised from the posted floor-plan panel)",
+ "source": {
+  "photo": "data/maps/iit_kgp_nmst_block_b.jpg",
+  "author": "Biswarup Ganguly",
+  "license": "CC BY 3.0",
+  "url": "https://commons.wikimedia.org/wiki/File:Floor_Plan_Panel_-_NMST_-_IIT_Kharagpur_-_West_Midnapore_2015-09-28_4616.JPG"
+ },
+ "assumptions": "scale 0.06 m/px; occupancy for a busy school-visit day; widths and exits estimated from the panel",
+ "units": "m",
+ "nodes": [
+  {
+   "id": "machine",
+   "type": "room",
+   "x": 64.2,
+   "z": 4.8,
+   "w": 26,
+   "d": 5,
+   "people": 40,
+   "label": "Machine, Motion, Light and Sound"
+  },
+  {
+   "id": "mechanics",
+   "type": "room",
+   "x": 52.8,
+   "z": 15.0,
+   "w": 9,
+   "d": 13,
+   "people": 35,
+   "label": "Principles of Mechanics"
+  },
+  {
+   "id": "electricity",
+   "type": "room",
+   "x": 62.4,
+   "z": 15.0,
+   "w": 9,
+   "d": 12,
+   "people": 35,
+   "label": "Electricity and Magnetics"
+  },
+  {
+   "id": "maths",
+   "type": "room",
+   "x": 74.4,
+   "z": 16.2,
+   "w": 7,
+   "d": 13,
+   "people": 30,
+   "label": "Mathematics Gallery"
+  },
+  {
+   "id": "reception",
+   "type": "room",
+   "x": 74.4,
+   "z": 29.4,
+   "w": 8,
+   "d": 7,
+   "people": 15,
+   "label": "Reception"
+  },
+  {
+   "id": "office",
+   "type": "room",
+   "x": 65.7,
+   "z": 27.0,
+   "w": 6,
+   "d": 10,
+   "people": 8,
+   "label": "Office"
+  },
+  {
+   "id": "rail",
+   "type": "room",
+   "x": 57.0,
+   "z": 27.0,
+   "w": 9,
+   "d": 9,
+   "people": 40,
+   "label": "Rail Transport in India"
+  },
+  {
+   "id": "water",
+   "type": "room",
+   "x": 49.5,
+   "z": 27.0,
+   "w": 4,
+   "d": 9,
+   "people": 25,
+   "label": "Water Transport Gallery"
+  },
+  {
+   "id": "aviation",
+   "type": "room",
+   "x": 42.9,
+   "z": 27.0,
+   "w": 6,
+   "d": 9,
+   "people": 35,
+   "label": "Aviation and Space"
+  },
+  {
+   "id": "computing",
+   "type": "room",
+   "x": 36.6,
+   "z": 27.0,
+   "w": 6,
+   "d": 9,
+   "people": 35,
+   "label": "Computing Machines"
+  },
+  {
+   "id": "taramandal",
+   "type": "room",
+   "x": 26.4,
+   "z": 25.8,
+   "w": 11,
+   "d": 9,
+   "people": 60,
+   "label": "Taramandal"
+  },
+  {
+   "id": "study",
+   "type": "room",
+   "x": 17.4,
+   "z": 34.2,
+   "w": 4,
+   "d": 7,
+   "people": 15,
+   "label": "Study"
+  },
+  {
+   "id": "avhall",
+   "type": "room",
+   "x": 9.6,
+   "z": 33.0,
+   "w": 10,
+   "d": 7,
+   "people": 120,
+   "label": "Audiovisual Hall"
+  },
+  {
+   "id": "washroom",
+   "type": "room",
+   "x": 6.0,
+   "z": 40.2,
+   "w": 7,
+   "d": 3,
+   "people": 10,
+   "label": "Washroom / Drinking water"
+  },
+  {
+   "id": "guest",
+   "type": "room",
+   "x": 18.0,
+   "z": 40.8,
+   "w": 4,
+   "d": 4,
+   "people": 4,
+   "label": "Guest Room"
+  },
+  {
+   "id": "g1540",
+   "type": "corridor",
+   "x": 76.8,
+   "z": 31.8
+  },
+  {
+   "id": "r440",
+   "type": "corridor",
+   "x": 76.8,
+   "z": 17.4
+  },
+  {
+   "id": "r250",
+   "type": "corridor",
+   "x": 76.8,
+   "z": 6.0
+  },
+  {
+   "id": "u500",
+   "type": "corridor",
+   "x": 60.6,
+   "z": 21.0
+  },
+  {
+   "id": "g1420",
+   "type": "corridor",
+   "x": 69.6,
+   "z": 31.8
+  },
+  {
+   "id": "g1270",
+   "type": "corridor",
+   "x": 60.6,
+   "z": 31.8
+  },
+  {
+   "id": "g1130",
+   "type": "corridor",
+   "x": 52.2,
+   "z": 31.8
+  },
+  {
+   "id": "g1030",
+   "type": "corridor",
+   "x": 46.2,
+   "z": 31.8
+  },
+  {
+   "id": "g920",
+   "type": "corridor",
+   "x": 39.6,
+   "z": 31.8
+  },
+  {
+   "id": "g820",
+   "type": "corridor",
+   "x": 33.6,
+   "z": 31.8
+  },
+  {
+   "id": "g640",
+   "type": "corridor",
+   "x": 22.8,
+   "z": 31.8
+  },
+  {
+   "id": "w770",
+   "type": "corridor",
+   "x": 17.4,
+   "z": 37.2
+  },
+  {
+   "id": "w860",
+   "type": "corridor",
+   "x": 9.6,
+   "z": 42.6
+  },
+  {
+   "id": "MAIN",
+   "type": "exit",
+   "x": 79.8,
+   "z": 33.9,
+   "label": "Main entrance (by Reception)"
+  },
+  {
+   "id": "WEST",
+   "type": "exit",
+   "x": 9.6,
+   "z": 44.7,
+   "label": "West steps"
+  },
+  {
+   "id": "VER",
+   "type": "exit",
+   "x": 33.6,
+   "z": 35.4,
+   "label": "Verandah door"
+  }
+ ],
+ "edges": [
+  {
+   "from": "g1540",
+   "to": "g1420",
+   "width": 2.5
+  },
+  {
+   "from": "g1420",
+   "to": "g1270",
+   "width": 2.5
+  },
+  {
+   "from": "g1270",
+   "to": "g1130",
+   "width": 2.5
+  },
+  {
+   "from": "g1130",
+   "to": "g1030",
+   "width": 2.5
+  },
+  {
+   "from": "g1030",
+   "to": "g920",
+   "width": 2.5
+  },
+  {
+   "from": "g920",
+   "to": "g820",
+   "width": 2.5
+  },
+  {
+   "from": "g820",
+   "to": "g640",
+   "width": 2.5
+  },
+  {
+   "from": "g640",
+   "to": "w770",
+   "width": 2.5
+  },
+  {
+   "from": "w770",
+   "to": "w860",
+   "width": 2.5
+  },
+  {
+   "from": "g1540",
+   "to": "r440",
+   "width": 2.0
+  },
+  {
+   "from": "r440",
+   "to": "r250",
+   "width": 2.0
+  },
+  {
+   "from": "g1270",
+   "to": "u500",
+   "width": 2.0
+  },
+  {
+   "from": "machine",
+   "to": "r250",
+   "width": 1.5
+  },
+  {
+   "from": "maths",
+   "to": "r440",
+   "width": 1.5
+  },
+  {
+   "from": "mechanics",
+   "to": "u500",
+   "width": 1.5
+  },
+  {
+   "from": "electricity",
+   "to": "u500",
+   "width": 1.5
+  },
+  {
+   "from": "reception",
+   "to": "g1540",
+   "width": 2.0
+  },
+  {
+   "from": "office",
+   "to": "g1420",
+   "width": 1.0
+  },
+  {
+   "from": "rail",
+   "to": "g1270",
+   "width": 1.5
+  },
+  {
+   "from": "water",
+   "to": "g1130",
+   "width": 1.2
+  },
+  {
+   "from": "aviation",
+   "to": "g1030",
+   "width": 1.2
+  },
+  {
+   "from": "computing",
+   "to": "g920",
+   "width": 1.2
+  },
+  {
+   "from": "taramandal",
+   "to": "g640",
+   "width": 1.5
+  },
+  {
+   "from": "study",
+   "to": "w770",
+   "width": 1.0
+  },
+  {
+   "from": "avhall",
+   "to": "w770",
+   "width": 1.5
+  },
+  {
+   "from": "avhall",
+   "to": "w860",
+   "width": 1.2
+  },
+  {
+   "from": "washroom",
+   "to": "w860",
+   "width": 1.0
+  },
+  {
+   "from": "guest",
+   "to": "w770",
+   "width": 0.9
+  },
+  {
+   "from": "g1540",
+   "to": "MAIN",
+   "width": 2.0,
+   "kind": "door"
+  },
+  {
+   "from": "w860",
+   "to": "WEST",
+   "width": 1.5,
+   "kind": "stair"
+  },
+  {
+   "from": "g820",
+   "to": "VER",
+   "width": 1.2,
+   "kind": "door"
+  }
+ ]
+}

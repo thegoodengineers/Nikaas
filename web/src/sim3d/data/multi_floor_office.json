@@ -1,0 +1,76 @@
+{
+  "name": "Representative Multi-Floor Office (Synthetic)",
+  "description": "Representative 3-storey office building with two stairwells and ground-floor outdoor exits. Synthetic benchmark, not a measured real building.",
+  "units": "m",
+  "floors": [
+    {
+      "id": "GF",
+      "name": "Ground Floor",
+      "elevation_m": 0.0
+    },
+    {
+      "id": "F1",
+      "name": "First Floor",
+      "elevation_m": 3.5
+    },
+    {
+      "id": "F2",
+      "name": "Second Floor",
+      "elevation_m": 7.0
+    }
+  ],
+  "nodes": [
+    {"id": "exit_north", "type": "exit", "floor_id": "GF", "x": 10.0, "z": 0.0, "label": "North Exit"},
+    {"id": "exit_south", "type": "exit", "floor_id": "GF", "x": 10.0, "z": 30.0, "label": "South Exit"},
+
+    {"id": "stair_north_GF", "type": "corridor", "floor_id": "GF", "x": 10.0, "z": 5.0},
+    {"id": "corr_GF_mid", "type": "corridor", "floor_id": "GF", "x": 10.0, "z": 15.0},
+    {"id": "stair_south_GF", "type": "corridor", "floor_id": "GF", "x": 10.0, "z": 25.0},
+    {"id": "r_GF_1", "type": "room", "floor_id": "GF", "x": 4.0, "z": 10.0, "w": 6.0, "d": 5.0, "people": 30},
+    {"id": "r_GF_2", "type": "room", "floor_id": "GF", "x": 16.0, "z": 20.0, "w": 6.0, "d": 5.0, "people": 30},
+
+    {"id": "stair_north_F1", "type": "corridor", "floor_id": "F1", "x": 10.0, "z": 5.0},
+    {"id": "corr_F1_mid", "type": "corridor", "floor_id": "F1", "x": 10.0, "z": 15.0},
+    {"id": "stair_south_F1", "type": "corridor", "floor_id": "F1", "x": 10.0, "z": 25.0},
+    {"id": "r_F1_1", "type": "room", "floor_id": "F1", "x": 4.0, "z": 7.0, "w": 6.0, "d": 5.0, "people": 40},
+    {"id": "r_F1_2", "type": "room", "floor_id": "F1", "x": 16.0, "z": 7.0, "w": 6.0, "d": 5.0, "people": 40},
+    {"id": "r_F1_3", "type": "room", "floor_id": "F1", "x": 4.0, "z": 23.0, "w": 6.0, "d": 5.0, "people": 40},
+    {"id": "r_F1_4", "type": "room", "floor_id": "F1", "x": 16.0, "z": 23.0, "w": 6.0, "d": 5.0, "people": 40},
+
+    {"id": "stair_north_F2", "type": "corridor", "floor_id": "F2", "x": 10.0, "z": 5.0},
+    {"id": "corr_F2_mid", "type": "corridor", "floor_id": "F2", "x": 10.0, "z": 15.0},
+    {"id": "stair_south_F2", "type": "corridor", "floor_id": "F2", "x": 10.0, "z": 25.0},
+    {"id": "r_F2_1", "type": "room", "floor_id": "F2", "x": 4.0, "z": 7.0, "w": 6.0, "d": 5.0, "people": 45},
+    {"id": "r_F2_2", "type": "room", "floor_id": "F2", "x": 16.0, "z": 7.0, "w": 6.0, "d": 5.0, "people": 45},
+    {"id": "r_F2_3", "type": "room", "floor_id": "F2", "x": 4.0, "z": 23.0, "w": 6.0, "d": 5.0, "people": 45},
+    {"id": "r_F2_4", "type": "room", "floor_id": "F2", "x": 16.0, "z": 23.0, "w": 6.0, "d": 5.0, "people": 45}
+  ],
+  "edges": [
+    {"from": "exit_north", "to": "stair_north_GF", "width": 2.0, "length": 5.0, "kind": "corridor"},
+    {"from": "stair_north_GF", "to": "corr_GF_mid", "width": 2.0, "length": 10.0, "kind": "corridor"},
+    {"from": "corr_GF_mid", "to": "stair_south_GF", "width": 2.0, "length": 10.0, "kind": "corridor"},
+    {"from": "stair_south_GF", "to": "exit_south", "width": 2.0, "length": 5.0, "kind": "corridor"},
+    {"from": "r_GF_1", "to": "corr_GF_mid", "width": 1.2, "length": 7.8, "kind": "door"},
+    {"from": "r_GF_2", "to": "corr_GF_mid", "width": 1.2, "length": 7.8, "kind": "door"},
+
+    {"from": "stair_north_F1", "to": "corr_F1_mid", "width": 2.0, "length": 10.0, "kind": "corridor"},
+    {"from": "corr_F1_mid", "to": "stair_south_F1", "width": 2.0, "length": 10.0, "kind": "corridor"},
+    {"from": "r_F1_1", "to": "stair_north_F1", "width": 1.2, "length": 6.3, "kind": "door"},
+    {"from": "r_F1_2", "to": "stair_north_F1", "width": 1.2, "length": 6.3, "kind": "door"},
+    {"from": "r_F1_3", "to": "stair_south_F1", "width": 1.2, "length": 6.3, "kind": "door"},
+    {"from": "r_F1_4", "to": "stair_south_F1", "width": 1.2, "length": 6.3, "kind": "door"},
+
+    {"from": "stair_north_F2", "to": "corr_F2_mid", "width": 2.0, "length": 10.0, "kind": "corridor"},
+    {"from": "corr_F2_mid", "to": "stair_south_F2", "width": 2.0, "length": 10.0, "kind": "corridor"},
+    {"from": "r_F2_1", "to": "stair_north_F2", "width": 1.2, "length": 6.3, "kind": "door"},
+    {"from": "r_F2_2", "to": "stair_north_F2", "width": 1.2, "length": 6.3, "kind": "door"},
+    {"from": "r_F2_3", "to": "stair_south_F2", "width": 1.2, "length": 6.3, "kind": "door"},
+    {"from": "r_F2_4", "to": "stair_south_F2", "width": 1.2, "length": 6.3, "kind": "door"},
+
+    {"from": "stair_north_F2", "to": "stair_north_F1", "width": 1.6, "length": 6.5, "kind": "stair", "capacity_group": "stairwell_north"},
+    {"from": "stair_north_F1", "to": "stair_north_GF", "width": 1.6, "length": 6.5, "kind": "stair", "capacity_group": "stairwell_north"},
+
+    {"from": "stair_south_F2", "to": "stair_south_F1", "width": 1.2, "length": 6.5, "kind": "stair", "capacity_group": "stairwell_south"},
+    {"from": "stair_south_F1", "to": "stair_south_GF", "width": 1.2, "length": 6.5, "kind": "stair", "capacity_group": "stairwell_south"}
+  ]
+}

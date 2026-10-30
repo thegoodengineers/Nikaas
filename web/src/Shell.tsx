@@ -1,18 +1,19 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react'
 import ExitIcon from './ExitIcon.tsx'
-import Home from './Home.tsx'
-import App from './App.tsx'
-import Challenge from './Challenge.tsx'
-import Evidence from './Evidence.tsx'
-import Drill from './Drill.tsx'
 import Phone from './Phone.tsx'
 import Sign from './Sign.tsx'
-import Cam from './Cam.tsx'
 import Go from './go/Go.tsx'
 import './platform/platform.css'
 
 // the 3D simulation (three.js and its own engine) loads only when someone opens it
 const Sim3D = lazy(() => import('./sim3d/Sim3D.tsx'))
+// desktop pages (three.js, charts) load on demand: phones opening a QR code only get the small phone app
+const Home = lazy(() => import('./Home.tsx'))
+const App = lazy(() => import('./App.tsx'))
+const Challenge = lazy(() => import('./Challenge.tsx'))
+const Evidence = lazy(() => import('./Evidence.tsx'))
+const Drill = lazy(() => import('./Drill.tsx'))
+const Cam = lazy(() => import('./Cam.tsx'))
 // app pages load on demand too, so the phone app people open from a QR code stays small
 const Control = lazy(() => import('./control/Control.tsx'))
 const Buildings = lazy(() => import('./plans/Buildings.tsx'))
@@ -49,7 +50,7 @@ export default function Shell() {
   }, [])
   if (route === 'me') return <Phone /> // the judge's phone: no site chrome
   if (route === 'sign') return <Sign /> // a phone taped beside a door: a live exit sign
-  if (route === 'cam') return hasSite() ? <Suspense fallback={null}><SiteCam /></Suspense> : <Cam /> // a camera counting people (and checking for fire) in one place
+  if (route === 'cam') return <Suspense fallback={null}>{hasSite() ? <SiteCam /> : <Cam />}</Suspense> // a camera counting people (and checking for fire) in one place
   if (route === 'sim') return <Suspense fallback={<div className="page pf-muted">Loading the 3D simulation…</div>}><Sim3D /></Suspense> // full-screen, own HUD
   if (route === 'go') return <Go /> // the phone app people open from a QR code: no site chrome
   const page = PAGES[route] ?? PAGES['']

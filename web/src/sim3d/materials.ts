@@ -256,7 +256,7 @@ export function makeMats() {
     rackFront: emissivePic(rackPic, 128, 256, 2.0),
     menu: emissivePic(menuPic, 256, 128, 1.3),
     vend: emissivePic(vendPic, 128, 256, 1.5),
-    exitSign: keep(new THREE.MeshBasicMaterial({ map: tex(384, 128, exitPic), toneMapped: false, color: new THREE.Color(1.9, 1.9, 1.9) })),
+    exitSign: keep(new THREE.MeshBasicMaterial({ map: tex(384, 128, exitPic), toneMapped: false, color: new THREE.Color(1.45, 1.45, 1.45) })),
     assemblySign: keep(std({ map: tex(256, 320, assemblyPic), emissive: '#ffffff', emissiveMap: tex(256, 320, assemblyPic), emissiveIntensity: 0.55 })),
 
     // dynamic glows (the engine changes these during the alarm)
@@ -276,8 +276,8 @@ export type Mats = ReturnType<typeof makeMats>
 /** Floor lettering for a room name. */
 export function labelTex(text: string, color = 'rgba(20,32,43,0.55)') {
   return tex(1024, 160, (g, w, h) => {
-    g.fillStyle = color; g.font = `800 ${h * 0.62}px "Big Shoulders Display", "Arial Narrow", sans-serif`
-    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text.toUpperCase(), w / 2, h / 2, w - 20)
+    g.fillStyle = color; g.font = `700 ${h * 0.5}px "Atkinson Hyperlegible", "Segoe UI", sans-serif`
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(text, w / 2, h / 2, w - 20)
   })
 }
 /** Soft round sprite used by fire, smoke and dust. */
