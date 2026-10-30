@@ -34,6 +34,8 @@ export const CROWD_PROFILES: Record<CrowdProfile, { follow: number; label: strin
 export const WHEELCHAIR_SHARE = 0.06
 /** Seconds a wheelchair user with no step-free route waits before staff carry them down. */
 const ASSIST_DELAY = 40
+/** Every stair has an accessible ramp beside it (drawn by the engine), so wheelchair users keep using the stair routes. */
+const RAMPS = true
 export type Group = { exit: string; letter: string; color: [number, number, number]; css: string }
 
 // muted but distinct: teal, ochre, lilac, olive (status colours stay reserved for safe / smoke / danger)
@@ -171,7 +173,7 @@ export class Sim {
     this.hasWc = this.agents.some(a => a.wc)
     for (const e of this.exits) {
       this.D[e.id] = this.dijkstra(this.exitNode[e.id])
-      this.DA[e.id] = this.hasWc && this.plan.stairs.length ? this.dijkstra(this.exitNode[e.id], true) : this.D[e.id]
+      this.DA[e.id] = !RAMPS && this.hasWc && this.plan.stairs.length ? this.dijkstra(this.exitNode[e.id], true) : this.D[e.id]
     }
     this.stairCache.clear()
   }
@@ -579,13 +581,14 @@ export class Sim {
         let free = true
         const same = this.rails.get(`${rl.a}-${rl.b}`)
         if (same) for (const o of same) if (o !== a && o.rail && o.rail.a === rl.a && o.rail.t > rl.t && o.rail.t - rl.t < 0.62 && Math.abs(o.lane - a.lane) < 0.55) { free = false; break }
-        const v = free ? a.speed * 0.72 * (a.danger ? 1.25 : 1) : 0
+        const v = free ? a.speed * (a.chair ? 0.9 : 0.72) * (a.danger ? 1.25 : 1) : 0
         rl.t += v * dt
         a.move += ((free ? 0.85 : 0) - a.move) * Math.min(1, dt * 6)
         a.phase += v * dt * 5.2
         if (rl.t >= rl.len) { a.x = B.x; a.z = B.z; a.lf = B.level; this.decide(a, rl.b); return }
         const f = rl.t / rl.len, dx = (B.x - A.x) / rl.len, dz = (B.z - A.z) / rl.len
-        const lane = B.level !== A.level ? a.lane : a.lane * 0.4
+        const ln = a.chair ? 0 : a.lane   // wheelchairs ride the ramp down the middle of the flight
+        const lane = B.level !== A.level ? ln : ln * 0.4
         a.x = A.x + (B.x - A.x) * f - dz * lane; a.z = A.z + (B.z - A.z) * f + dx * lane
         a.lf = A.level + (B.level - A.level) * f
         a.level = Math.floor(a.lf + 1e-6)
