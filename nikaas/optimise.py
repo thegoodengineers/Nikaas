@@ -260,9 +260,10 @@ def optimise(b: Building | dict, blocked=()) -> dict:
                     continue
                 cand = {**current_plan, r: ex}
                 try:
-                    sim = simulate(b, cand, blocked, frame_every=1e9)
+                    # a candidate is only kept if it beats best_time, so its run can stop there (same decisions, less work)
+                    sim = simulate(b, cand, blocked, max_t=best_time, frame_every=1e9)
                     t = sim["total_time_s"]
-                    if t < best_time - 0.01:
+                    if t is not None and t < best_time - 0.01:
                         best_time = t
                         best_plan = cand
                         best_sim = sim
@@ -283,9 +284,9 @@ def optimise(b: Building | dict, blocked=()) -> dict:
                     if ex2 in reachable_exits[r1] and ex1 in reachable_exits[r2]:
                         cand = {**current_plan, r1: ex2, r2: ex1}
                         try:
-                            sim = simulate(b, cand, blocked, frame_every=1e9)
+                            sim = simulate(b, cand, blocked, max_t=best_time, frame_every=1e9)
                             t = sim["total_time_s"]
-                            if t < best_time - 0.01:
+                            if t is not None and t < best_time - 0.01:
                                 best_time = t
                                 best_plan = cand
                                 best_sim = sim
