@@ -197,6 +197,7 @@ from . import drill as drill_state  # noqa: E402
 class DrillStart(BaseModel):
     building: dict
     blocked: list[str] = []
+    reset: bool = False  # start over: update #1, no fires, no alerts (a clean drill before the pitch)
 
 
 @app.post("/drill")
@@ -206,7 +207,7 @@ def drill_start(req: DrillStart):
     if probs:
         raise HTTPException(422, {"problems": probs})
     try:
-        return drill_state.public(drill_state.start(req.building, req.blocked, drill_state.read()))
+        return drill_state.public(drill_state.start(req.building, req.blocked, None if req.reset else drill_state.read()))
     except (KeyError, ValueError) as e:
         raise HTTPException(422, str(e))
 

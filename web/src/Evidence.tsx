@@ -32,16 +32,16 @@ export default function Evidence() {
   }, [])
   return (
     <div className="page">
-      <h2>How we know the numbers hold</h2>
+      <h1 className="page-title">How we know the numbers hold</h1>
       <p className="lede">Every number on this site is written by a script into the project’s run files. Nothing here is typed by hand.</p>
 
-      <h3 style={{ marginTop: 40 }}>The simulator matches the fire-engineering handbook</h3>
+      <h2 className="sub" style={{ marginTop: 40 }}>The simulator matches the fire-engineering handbook</h2>
       <p>
         The SFPE Engineering Guide works one evacuation by hand: 300 people, two 32-inch doors, two stairs. It gets {val?.published_s ?? '…'} s.
         Our simulator gets {val?.ours_s ?? '…'} s ({val?.error_pct ?? '…'}% apart). The check runs as an automated test on every change.
       </p>
 
-      <h3 style={{ marginTop: 40 }}>Nikaas plan against the nearest-exit rule</h3>
+      <h2 className="sub" style={{ marginTop: 40 }}>Nikaas plan against the nearest-exit rule</h2>
       <div className="table-wrap"><table className="data">
         <thead><tr><th>Building</th><th>Blocked exit</th><th>People</th><th>Nearest exit</th><th>Nikaas plan</th><th>Saved</th><th>Fastest possible ≥</th></tr></thead>
         <tbody>{wow.map(r => (
@@ -50,7 +50,7 @@ export default function Evidence() {
       </table></div>
       <p className="sources">“Fastest possible” is a proven lower bound from a time-expanded network-flow model (Ford and Fulkerson, 1962). No plan can beat it with the same exits and widths.</p>
 
-      <h3 style={{ marginTop: 40 }}>Is the lead real, or one lucky run?</h3>
+      <h2 className="sub" style={{ marginTop: 40 }}>Is the lead real, or one lucky run?</h2>
       <p>
         A posted plan has to work on the day, not just on our numbers. We fixed both plans, then re-ran each building {mc[0]?.runs ?? '…'} times
         with every person starting after a random delay of up to {mc[0]?.premove_max_s ?? '…'} s and every room’s head count off by up to
@@ -70,7 +70,7 @@ export default function Evidence() {
         </p>))}
       <p className="sources">The delay range and occupancy spread are our assumptions (docs/METHOD.md), not measured values; scripts/monte_carlo.py, runs/monte_carlo.csv.</p>
 
-      <h3 style={{ marginTop: 40 }}>At stadium scale</h3>
+      <h2 className="sub" style={{ marginTop: 40 }}>At stadium scale</h2>
       <p>
         The representative stadium holds 14,600 people. With everyone taking the nearest gate, our run did not finish within the
         simulator’s 30-minute cap. Scaled to {stadium[0]?.people.toLocaleString('en-IN') ?? '…'} people with the same gates and widths:
@@ -83,7 +83,7 @@ export default function Evidence() {
       </table></div>
       <p className="sources">Densities are estimated from the flow model, not a spatial crowd model, and capped at 10 p/m². Thresholds and their sources are in docs/CROWD_RESEARCH.md.</p>
 
-      <h3 style={{ marginTop: 40 }}>Buildings with several floors</h3>
+      <h2 className="sub" style={{ marginTop: 40 }}>Buildings with several floors</h2>
       <p>
         Floors share stairwells, so a stair carries people from every floor above it. The simulator limits each stair flight by its
         width and lets floors take turns at the stair doors, so no floor is starved.
@@ -96,7 +96,7 @@ export default function Evidence() {
       </table></div>
       <p className="sources">On the 3-floor office the Nikaas plan ties the nearest-exit rule; the gain shows on the 5-floor tower, where the nearest exit sends everyone down one stairwell. Blocked-exit rows were run with the nearest-exit plan only.</p>
 
-      <h3 style={{ marginTop: 40 }}>Every scenario we ran</h3>
+      <h2 className="sub" style={{ marginTop: 40 }}>Every scenario we ran</h2>
       <div className="table-wrap"><table className="data">
         <thead><tr><th>Building</th><th>Blocked exit</th><th>People</th><th>Movement time</th><th>Worst jam (peak queue)</th></tr></thead>
         <tbody>{rows.map(r => (
@@ -104,7 +104,7 @@ export default function Evidence() {
             <td className="num">{r.total_time_s ? `${r.total_time_s} s` : 'did not finish in 30 min'}</td><td>{r.bottleneck} ({r.peak_queue})</td></tr>))}</tbody>
       </table></div>
 
-      <h3 style={{ marginTop: 40 }}>What the times mean</h3>
+      <h2 className="sub" style={{ marginTop: 40 }}>What the times mean</h2>
       <p>
         These are movement times: from the moment people start to move until the last person is out. A full escape time also counts
         detection, the alarm and the time people take to react (SFPE Handbook, Ch. 56; BSI PD 7974-6:2019). An exit plan does not change

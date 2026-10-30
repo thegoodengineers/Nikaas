@@ -1,3 +1,15 @@
 building,plan,blocked_exit,people,total_time_s,max_density_pm2,worst_edge,first_crush_t,lower_bound_s,commit
-stadium_gates.json (scaled),nearest,-,2001,348.5,2.69,cse-cn2,,,aacd983
-stadium_gates.json (scaled),nikaas,-,2001,203.0,1.61,cse-cn2,,107.11,aacd983
+stadium_gates.json (scaled),nearest,-,2001,348.5,2.69,cse-cn2,,,7acdbc6
+stadium_gates.json (scaled),nikaas,-,2001,203.0,1.61,cse-cn2,,107.11,7acdbc6
+stadium_gates.json (scaled),nearest,GATE_N,2001,348.5,2.69,cse-cn2,,,7acdbc6
+stadium_gates.json (scaled),nikaas,GATE_N,2001,203.0,2.19,cne-cn1,,131.47,7acdbc6
+stadium_gates.json (scaled),nearest,GATE_S,2001,203.0,1.61,cse-cn2,,,7acdbc6
+stadium_gates.json (scaled),nikaas,GATE_S,2001,203.0,1.61,cse-cn2,,112.71,7acdbc6
+stadium_gates.json (scaled),nearest,GATE_E,2001,348.5,2.69,cse-cn2,,,7acdbc6
+stadium_gates.json (scaled),nikaas,GATE_E,2001,203.0,1.61,cse-cn2,,126.2,7acdbc6
+stadium_gates.json (scaled),nearest,GATE_W,2001,505.25,2.71,cse-cn2,,,7acdbc6
+stadium_gates.json (scaled),nikaas,GATE_W,2001,231.75,1.68,cne-cn1,,126.2,7acdbc6
+stadium_gates.json (scaled),nearest,GATE_NE,2001,348.5,2.69,cse-cn2,,,7acdbc6
+stadium_gates.json (scaled),nikaas,GATE_NE,2001,203.0,1.61,cse-cn2,,117.39,7acdbc6
+stadium_gates.json (scaled),nearest,GATE_VIP,2001,348.5,2.69,cse-cn2,,,7acdbc6
+stadium_gates.json (scaled),nikaas,GATE_VIP,2001,203.0,1.61,cse-cn2,,114.59,7acdbc6

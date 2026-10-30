@@ -32,14 +32,14 @@ export default function Sign() {
   function choose(x: string) { try { localStorage.setItem('nikaas-sign', x) } catch { /* private mode */ } setExit(x) }
 
   if (!exit || !s) return (
-    <div className="phone">
+    <main className="phone">
       <div className="phone-brand"><ExitIcon color="var(--exit)" /> Nikaas exit sign</div>
       <h1>Which door is this phone next to?</h1>
       {err && <p className="phone-note">{err}</p>}
       <div className="phone-rooms">
         {Object.entries(s?.exit_labels ?? {}).map(([id, label]) => <button key={id} onClick={() => choose(id)}>{label}</button>)}
       </div>
-    </div>
+    </main>
   )
 
   const label = s.exit_labels[exit] ?? exit
@@ -48,7 +48,7 @@ export default function Sign() {
   const instead = s.instead?.[exit] // open exit with the shortest walk from this door
 
   return (
-    <div className={`sign ${fire ? 'sign-fire' : ''}`} onDoubleClick={() => choose('')}>
+    <main className={`sign ${fire ? 'sign-fire' : ''}`} onDoubleClick={() => choose('')}>
       {fire ? (
         <>
           <svg className="sign-x" viewBox="0 0 64 64" aria-hidden="true"><path d="M12 12 L52 52 M52 12 L12 52" /></svg>
@@ -64,6 +64,6 @@ export default function Sign() {
         </>
       )}
       <small>Live drill update #{s.version} · double-tap to change door</small>
-    </div>
+    </main>
   )
 }

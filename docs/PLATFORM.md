@@ -101,7 +101,7 @@ Rules:
   in waves `wave_gap_s` apart (phased evacuation, BS 9999). Single-floor buildings ignore it.
 - Divert: when one exit's estimated clearing time is over 1.5 x the best exit's and over 60 s, rooms are moved
   to other exits and their phones are told.
-- Density per room (people / floor area) and per camera node: `concern` at 2.7 p/m², `crush` at 4.0 p/m²
+- Density per room (people / floor area) and per camera node: early-warning flags `concern` at 2.7 p/m² and `crush` (warning) at 4.0 p/m²
   (`docs/CROWD_RESEARCH.md`).
 
 ```json

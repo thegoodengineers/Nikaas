@@ -35,7 +35,7 @@ export default function BeatNikaas({ api, building, blocked, startPlan }: Props)
   if (!api) return null
   return (
     <section style={{ background: 'var(--card)', border: '1px solid var(--line)', padding: 16, marginTop: 16 }}>
-      <h3 style={{ fontFamily: 'var(--serif)', fontSize: 28, margin: '0 0 4px' }}>Beat Nikaas</h3>
+      <h2 className="sub" style={{ fontFamily: 'var(--serif)', fontSize: 28, margin: '0 0 4px' }}>Beat Nikaas</h2>
       <p style={{ color: 'var(--muted)', margin: '0 0 12px' }}>Send each room to an exit yourself. Can you empty the building faster than the optimiser?</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 8 }}>
         {rooms.map(r => (

@@ -33,6 +33,13 @@ Keith Still (Crowd Risk Analysis, Manchester Metropolitan University) defines:
 **Source:** G.K. Still, "Introduction to Crowd Science", CRC Press, 2014.
 https://www.gkstill.com/Support/crowd-density/
 
+> **Correction (30 Oct 18:15, checked against the primary page).** Still's crowd-density visualisation page
+> (https://www.gkstill.com/Support/crowd-density/CrowdDensity-2.html, read 30 Oct 2026) labels
+> **5 people/m² "Maximum"** and **6 people/m² "High Risk"**. It does not give 4 p/m² as a crush threshold, and the
+> 4.5 kN/m figure in the table above is not on that page; we could not check the book. Treat the table above as
+> unverified. Our `CRUSH_THRESHOLD = 4.0` is a deliberately cautious flag of our own, set one person per square
+> metre below Still's "Maximum", not a value from Still.
+
 ## UK Guide to Safety at Sports Grounds (Green Guide, 6th ed., 2018)
 
 For stadia and spectator areas:
@@ -41,6 +48,13 @@ For stadia and spectator areas:
 
 **Source:** UK Home Office / Sports Grounds Safety Authority, *Guide to Safety at Sports Grounds*, 6th ed., 2018.
 https://sgsa.org.uk/greenguide/
+
+> **Check (30 Oct 18:20).** We could not access the Green Guide (a paid SGSA publication) or Fruin's original
+> tables, so the 2.7 p/m² "cap" and the LoS ranges above are **not checked against their primary sources**; treat
+> `CONCERN_THRESHOLD = 2.7` as our own early flag. A secondary source agrees with the order of magnitude we use:
+> Wikipedia, "Crowd collapses and crushes" (read 30 Oct 2026): at three or four people per square metre the risk
+> is low; "there is risk of a crush when crowd density exceeds about five people per square meter"; at six to
+> seven, people are pressed against each other and may be unable to move voluntarily.
 
 ## Chinnaswamy Stadium crush — 4 June 2025, Bengaluru
 
@@ -73,12 +87,12 @@ Gate South is 2.0 m wide while the south stand holds ~4 800 people. That is an a
 ## Threshold used in nikaas/crowd.py
 
 ```
-CRUSH_THRESHOLD = 4.0  # p/m²  (G. Keith Still; LoS F onset)
+CRUSH_THRESHOLD = 4.0  # p/m²  (our cautious flag, 1 p/m² below Still's 5 p/m² "Maximum")
 CONCERN_THRESHOLD = 2.7  # p/m²  (LoS E boundary; Green Guide cap)
 ```
 
 These are the values the `crush_risk` list is generated against.
-At 4.0 p/m² crowd forces can reach levels recorded in fatal crushes; we flag it as `crush`.
+At 4.0 p/m² we flag `crush` as an early warning: below Still's 5 p/m² "Maximum" and 6 p/m² "High Risk".
 At 2.7 p/m² flow begins to break down; we flag it as `concern`.
 
 The API also returns `first_crush_t` (seconds) — the earliest simulated time any edge exceeds the

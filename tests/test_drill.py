@@ -26,6 +26,14 @@ def test_drill_reroutes_rooms_when_their_exit_is_blocked():
     assert phone["blocked"] == ["MAIN"]  # the phone map marks the fire
 
 
+def test_reset_starts_a_clean_drill():
+    c = TestClient(app)
+    c.post("/drill", json={"building": B})
+    c.post("/drill", json={"building": B, "blocked": ["MAIN"]})
+    s = c.post("/drill", json={"building": B, "reset": True}).json()
+    assert s["version"] == 1 and s["blocked"] == [] and s["changed"] == []  # no stale alerts on the phones
+
+
 def test_unknown_room_is_a_clear_404():
     c = TestClient(app)
     c.post("/drill", json={"building": B})

@@ -80,7 +80,7 @@ function Legend({ data, mode, groupColor }: { data: PanelProps['data']; mode: 'c
         <>
           <li><i style={{ background: FILL.ok }} />Below {t.concern} people/m²</li>
           <li><i style={{ background: FILL.concern }} />Concern from {t.concern} p/m²</li>
-          <li><i style={{ background: FILL.crush }} />Crush risk from {t.crush} p/m²</li>
+          <li><i style={{ background: FILL.crush }} />Crush warning from {t.crush} p/m²</li>
         </>
       ) : data.exits.filter(x => x.group).map(x => (
         <li key={x.id}><i style={{ background: `${groupColor[x.group!]}40`, borderColor: groupColor[x.group!] }} />Group {x.group}: {x.label}</li>
@@ -140,7 +140,7 @@ function NodePanel({ id, data, siteId, act, onClose, onOrigin, origin }: NodePro
         </>}
         {!room && !spot && !exit && <div><dt>Camera</dt><dd>No camera here</dd></div>}
       </dl>
-      {level && level !== 'ok' && <p className={`pf-alert ${level === 'crush' ? 'bad' : 'warn'} pf-small`}>{level === 'crush' ? 'Crush risk: stop more people entering and open other routes.' : 'Crowding concern: watch this space.'}</p>}
+      {level && level !== 'ok' && <p className={`pf-alert ${level === 'crush' ? 'bad' : 'warn'} pf-small`}>{level === 'crush' ? 'Crush warning: stop more people entering and open other routes.' : 'Crowding concern: watch this space.'}</p>}
 
       {here.length > 0 && (
         <ul className="cr-node-hz">
@@ -189,7 +189,7 @@ function HazardList({ data, siteId, act, onPick }: PanelProps & { onPick: (id: s
 }
 
 export function LevelChip({ level }: { level: string }) {
-  return level === 'crush' ? <span className="pf-chip bad">Crush risk</span> : level === 'concern' ? <span className="pf-chip warn">Concern</span> : <span className="pf-chip ok">OK</span>
+  return level === 'crush' ? <span className="pf-chip bad">Crush warning</span> : level === 'concern' ? <span className="pf-chip warn">Concern</span> : <span className="pf-chip ok">OK</span>
 }
 
 export function GroupTag({ letter, color }: { letter: string | null; color: string | null }) {

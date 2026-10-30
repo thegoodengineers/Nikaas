@@ -25,7 +25,8 @@ const SOURCES = [
   // the scale story: Bhumika's representative stadium scaled to 2,001 people. Its runs are precomputed
   // (scripts/precompute_stadium.py): the optimiser takes ~13 s here, too slow for a live call.
   { id: 'stadium', label: 'Stadium gates (2,001 people)', file: 'data/stadium_scaled.json', offline: true, frameEvery: 5,
-    saved: { '': 'data/frames_stadium_nearest.json', 'nikaas:': 'data/frames_stadium_nikaas.json' } as Record<string, string> },
+    saved: { '': 'data/frames_stadium_nearest.json', 'nikaas:': 'data/frames_stadium_nikaas.json',
+      ...Object.fromEntries(['GATE_N', 'GATE_S', 'GATE_E', 'GATE_W', 'GATE_NE', 'GATE_VIP'].map(g => [`nikaas:${g}`, `data/frames_stadium_nikaas_blocked${g}.json`])) } as Record<string, string> },
   // Ayush's multi-floor engine: five floors sharing two stairwells (scripts/precompute_frames.py; totals as runs/multi_floor.csv)
   { id: 'tower', label: '5-floor tower (450 people)', file: 'data/tower.json', offline: true, frameEvery: 2,
     saved: { '': 'data/frames_tower_nearest.json', 'nikaas:': 'data/frames_tower_nikaas.json' } as Record<string, string> },
@@ -186,7 +187,7 @@ export default function App() {
 
   return (
     <div className="page">
-      <h2 style={{ marginBottom: 4 }}>The twin</h2>
+      <h1 className="page-title" style={{ marginBottom: 4 }}>The twin</h1>
       <p style={{ color: 'var(--muted)', margin: '6px 0 16px' }}>{building?.name}</p>
       <div className="ctl-row">
         <div className="ctl"><span>Building</span>
