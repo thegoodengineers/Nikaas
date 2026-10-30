@@ -322,6 +322,13 @@ def site_save(site: dict, x_control_key: str | None = Header(default=None)):
     return _call(sites.save_site, site)
 
 
+@app.delete("/sites/{sid}")
+def site_delete(sid: str, x_control_key: str | None = Header(default=None)):
+    _key(x_control_key)
+    _call(sites.delete_site, sid)
+    return {"ok": True}
+
+
 class GeoRequest(BaseModel):
     geo: dict | None = None
     assembly: list[dict] | None = None
