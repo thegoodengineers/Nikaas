@@ -116,3 +116,9 @@ body.go-mode { background: #f6f7f9; }
 .go-find-map .plan { min-width: 560px; }
 .go-find-map .plan-room.is-click rect { fill: #fff; }
 .go-find-map .plan-room.is-click:active rect { fill: #dcfce7; stroke: var(--exit); }
+
+/* help under the test alert */
+.go-help-box { border: 1px solid var(--rule); border-radius: 12px; padding: 10px 14px; background: #fff; font-size: 14px; line-height: 1.45; }
+.go-help-box summary { cursor: pointer; font-weight: 700; }
+.go-help-box p { margin: 8px 0 4px; }
+.go-help-box ol { margin: 0; padding-left: 20px; display: grid; gap: 4px; }

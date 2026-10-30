@@ -8,7 +8,7 @@ import {
   ALARM_LABEL, API, ApiError, api, directionsUrl, fmtTime, hashQuery, haversine, mapEmbedUrl, saved, token,
   type Me, type Route, type Site, type SiteSummary,
 } from '../platform/api.ts'
-import { enablePush, pushSupport, registerWorker, siren, unlockAudio, type PushState } from './alerts.ts'
+import { enablePush, pushSupport, registerWorker, siren, unlockAudio, waitForPush, type PushState } from './alerts.ts'
 import './go.css'
 
 const TODO: Record<string, string> = {
@@ -310,14 +310,19 @@ function Register({ site, tok, roomParam, onDone, onPush, onCancel }: { site: Si
 // ---------- registered, no emergency ----------
 function Registered({ me, pushState, onPush, onTest, onRoom, onChangeNumber, onUnregister, busy }: { me: Me; pushState: PushState | null; onPush: () => void; onTest: () => Promise<unknown>; onRoom: (r: string) => void; onChangeNumber: () => void; onUnregister: () => void; busy: boolean }) {
   const [rooms, setRooms] = useState(false)
-  const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null)
+  const [test, setTest] = useState<{ ok: boolean; text: string; help?: boolean } | null>(null)
   const [testing, setTesting] = useState(false)
   const p = me.person
   const pushOn = pushState === 'on' || (p.push && pushState !== 'denied')
   const sendTest = async () => {
     setTesting(true); setTest(null)
-    try { await onTest(); setTest({ ok: true, text: 'Test alert sent. It should pop up on this phone in a few seconds.' }) }
-    catch (e) { setTest({ ok: false, text: e instanceof Error ? e.message : String(e) }) } finally { setTesting(false) }
+    const arrived = waitForPush('test', 20000)
+    try { await onTest() } catch (e) { setTest({ ok: false, text: e instanceof Error ? e.message : String(e) }); setTesting(false); return }
+    setTest({ ok: true, text: 'Sent. Waiting for it to reach this phone…' })
+    const ok = await arrived
+    setTesting(false)
+    setTest(ok ? { ok: true, text: 'The test alert reached this phone.', help: true }
+      : { ok: false, text: 'Sent, but it has not reached this phone after 20 seconds. Check the internet connection, then turn alerts off and on (Unregister, then scan again).', help: true })
   }
   return (
     <section className="go-stack">
@@ -331,6 +336,18 @@ function Registered({ me, pushState, onPush, onTest, onRoom, onChangeNumber, onU
             : 'Turn on alerts below, or keep this page open while you are in the building.'}</span>
         {pushOn && <button className="pf-btn primary" onClick={() => void sendTest()} disabled={testing}>{testing ? 'Sending…' : 'Send a test alert'}</button>}
         {test && <div className={`pf-alert ${test.ok ? 'ok' : 'bad'}`} role="status">{test.text}</div>}
+        {test?.help && (
+          <details className="go-help-box" open={!test.ok}>
+            <summary>No pop-up on the screen?</summary>
+            <p>The alert reached the browser, so the phone is hiding it. Check:</p>
+            <ol>
+              <li><b>Chrome:</b> ⋮ → Settings → Site settings → Notifications: this site is <b>Allowed</b>.</li>
+              <li><b>Android:</b> Settings → Apps → Chrome → Notifications: <b>on</b>, including <b>Sites</b>.</li>
+              <li>Do Not Disturb, Focus mode and battery saver are <b>off</b>.</li>
+              <li>On iPhone, open Nikaas from the Home Screen icon (Share → Add to Home Screen).</li>
+            </ol>
+          </details>
+        )}
         <div className="pf-row">
           <button className="pf-btn" onClick={onChangeNumber}>{p.phone ? `Text messages: ${p.phone}` : 'Also get text messages'}</button>
           <button className="pf-btn ghost" onClick={onUnregister} disabled={busy}>Unregister</button>

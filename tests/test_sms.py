@@ -218,3 +218,16 @@ def test_alarm_notification_always_names_an_exit(client, monkeypatch):
     label = ex.get("label", ex["id"])
     assert f"Do not use {label}" in without
     assert client.get(f"/sites/office/me?token={T2}").json()["blocked_exits"] == [ex["id"]]
+
+
+def test_event_feed_says_how_many_phones_were_notified(client, monkeypatch):
+    monkeypatch.setattr(push, "send", lambda sub, msg, ttl=600: 201)
+    client.post("/sites/office/alarm", json={"type": "fire"})
+    texts = [e["text"] for e in client.get("/sites/office/control").json()["events"]]
+    assert any("no phone in this building has notifications on" in t for t in texts)
+    client.delete("/sites/office/alarm")
+    client.post("/sites/office/checkin", json={"token": T1, "room": None})
+    client.post("/sites/office/push", json={"token": T1, "subscription": {"endpoint": "https://push.example/z", "keys": {"p256dh": "x", "auth": "y"}}})
+    client.post("/sites/office/alarm", json={"type": "fire"})
+    texts = [e["text"] for e in client.get("/sites/office/control").json()["events"]]
+    assert any(t == "Alarm: notification sent to 1 phone" for t in texts)
