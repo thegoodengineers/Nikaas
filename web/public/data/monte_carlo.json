@@ -1,0 +1,32 @@
+[
+ {
+  "building": "iit_kgp_museum.json",
+  "runs": 200.0,
+  "premove_max_s": 60.0,
+  "occupancy_spread": 0.2,
+  "nearest_p50_s": 149.0,
+  "nearest_p95_s": 158.0,
+  "nikaas_p50_s": 134.0,
+  "nikaas_p95_s": 140.5,
+  "nikaas_faster": 193.0,
+  "ties": 0.0,
+  "nikaas_slower": 7.0,
+  "median_saving_s": 13.75,
+  "commit": "be5bf7b"
+ },
+ {
+  "building": "lab_block.json",
+  "runs": 200.0,
+  "premove_max_s": 60.0,
+  "occupancy_spread": 0.2,
+  "nearest_p50_s": 308.25,
+  "nearest_p95_s": 333.75,
+  "nikaas_p50_s": 178.0,
+  "nikaas_p95_s": 187.25,
+  "nikaas_faster": 200.0,
+  "ties": 0.0,
+  "nikaas_slower": 0.0,
+  "median_saving_s": 130.25,
+  "commit": "be5bf7b"
+ }
+]
