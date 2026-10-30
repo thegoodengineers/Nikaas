@@ -67,9 +67,10 @@ optimiser at start-up, so every route would fail.
 Settings (stack `nikaas`, region) are in `samconfig.toml`, so no prompts.
 
 ## Platform (sites, check-in, alerts, control room)
-The stack also has a DynamoDB table (`LiveTable`, live state with a 24 h TTL on check-ins), CloudFront in front of the
-website bucket (`WebHttpsUrl` output: phones only allow push alerts, GPS and the camera on https), and Rekognition
-access for confirming camera fire/smoke. The control-room key is an SSM parameter, made once and never touched by a
+The stack also has a DynamoDB table (`LiveTable`, live state with a 24 h TTL on check-ins) and Rekognition access for
+confirming camera fire/smoke. Phones only allow push alerts, GPS and the camera on https pages, so share the bucket's
+https address, `WebHttpsUrl` in the outputs: https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html
+(the S3 website address is http only; CloudFront needs this AWS account verified by AWS Support first). The control-room key is an SSM parameter, made once and never touched by a
 redeploy:
 ```bash
 aws ssm put-parameter --name /nikaas/control-key --type SecureString --value "<a long random string>" --region ap-south-1
