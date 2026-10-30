@@ -1,7 +1,13 @@
 """SMS: emergency texts and phone-number verification.
 
 Providers (NIKAAS_SMS): "sns" (Amazon SNS, the default on AWS), "fast2sms" (FAST2SMS_API_KEY, Indian Quick SMS route),
-"twilio" (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM), or "log" (local runs and tests: messages go to OUTBOX).
+"twilio" (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM), "smsgate" (an Android phone running the open-source
+SMS Gateway for Android app sends the texts from its own SIM through api.sms-gate.app), or "log" (local runs and tests:
+messages go to OUTBOX).
+
+SMS Gateway credentials come from NIKAAS_SMSGATE ("username:password", optionally "username:password@https://server")
+or from the SSM SecureString named by NIKAAS_SMSGATE_PARAM (read at most once a minute, so storing the parameter is
+enough: no redeploy). When they are present they are used in place of Amazon SNS.
 
 Amazon SNS starts every account in the SMS sandbox: it only texts numbers verified with a one-time code, at most 10,
 under a USD 1 monthly spend limit, until AWS Support moves the account to production. Registration uses that
@@ -28,11 +34,42 @@ class SmsError(Exception):
     """A problem the person can act on (shown to them)."""
 
 
+UNAVAILABLE = "Text messages cannot be sent right now. Tap Continue without a phone number: alerts will reach this phone while the page is open."
+
+
+_gate_cache: tuple[float, tuple[str, str, str] | None] = (0.0, None)
+GATE_URL = "https://api.sms-gate.app"
+
+
+def gateway() -> tuple[str, str, str] | None:
+    """(server, username, password) for SMS Gateway for Android, or None."""
+    global _gate_cache
+    raw = os.environ.get("NIKAAS_SMSGATE")
+    if not raw and os.environ.get("NIKAAS_SMSGATE_PARAM"):
+        if time.time() - _gate_cache[0] < 60:
+            return _gate_cache[1]
+        try:
+            import boto3
+
+            raw = boto3.client("ssm").get_parameter(Name=os.environ["NIKAAS_SMSGATE_PARAM"], WithDecryption=True)["Parameter"]["Value"]
+        except Exception:
+            raw = None
+    g = None
+    if raw and ":" in raw:
+        cred, _, url = raw.strip().partition("@")
+        user, _, pw = cred.partition(":")
+        if user and pw:
+            g = ((url or GATE_URL).rstrip("/"), user, pw)
+    if not os.environ.get("NIKAAS_SMSGATE"):
+        _gate_cache = (time.time(), g)
+    return g
+
+
 def provider() -> str:
-    p = os.environ.get("NIKAAS_SMS")
-    if p:
-        return p
-    return "sns" if os.environ.get("AWS_LAMBDA_FUNCTION_NAME") else "log"
+    p = os.environ.get("NIKAAS_SMS") or ("sns" if os.environ.get("AWS_LAMBDA_FUNCTION_NAME") else "log")
+    if p in ("sns", "auto") and gateway():
+        return "smsgate"
+    return "sns" if p == "auto" else p
 
 
 def normalize(phone: str, default_cc: str = "91") -> str:
@@ -115,6 +152,16 @@ def send(phone: str, text: str) -> dict:
             with urllib.request.urlopen(req, timeout=10) as r:
                 j = json.loads(r.read())
             return {"ok": bool(j.get("return")), "id": j.get("request_id"), "error": None if j.get("return") else str(j.get("message"))}
+        if p == "smsgate":
+            url, user, pw = gateway() or ("", "", "")
+            if not url:
+                return {"ok": False, "error": "SMS gateway is not set up"}
+            body = json.dumps({"textMessage": {"text": text}, "phoneNumbers": [phone]}).encode()
+            auth = base64.b64encode(f"{user}:{pw}".encode()).decode()
+            req = urllib.request.Request(f"{url}/3rdparty/v1/messages", data=body, method="POST",
+                                         headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return {"ok": True, "id": (json.loads(r.read() or b"{}") or {}).get("id")}
         if p == "twilio":
             sid = os.environ["TWILIO_ACCOUNT_SID"]
             data = urllib.parse.urlencode({"To": phone, "From": os.environ["TWILIO_FROM"], "Body": text}).encode()
@@ -153,6 +200,7 @@ def start_verify(phone: str, token: str, site_name: str) -> dict:
             _sns().create_sms_sandbox_phone_number(PhoneNumber=phone, LanguageCode="en-US")
         except Exception as e:
             name = type(e).__name__
+            print(f"[sms] sandbox code to {mask(phone)} failed: {name}: {str(e)[:200]}", flush=True)
             if "OptedOut" in name or "OptedOut" in str(e):
                 raise SmsError("This number has opted out of SMS. Reply START to the sender to opt back in.")
             if "Limit" in name or "limit" in str(e).lower():
@@ -161,12 +209,13 @@ def start_verify(phone: str, token: str, site_name: str) -> dict:
                 raise SmsError("That number could not be used for SMS. Check it and try again.")
             if "Throttl" in name:
                 raise SmsError("Too many codes sent just now. Wait a minute and try again.")
-            raise SmsError("Could not send the code right now. Try again in a minute.")
+            raise SmsError(UNAVAILABLE)
         return {"method": "sandbox"}
     code = f"{secrets.randbelow(1_000_000):06d}"
     r = send(phone, f"Nikaas code {code} for emergency alerts at {site_name[:40]}. It expires in 10 minutes.")
     if not r["ok"]:
-        raise SmsError("Could not send the code right now. Try again in a minute.")
+        print(f"[sms] code to {mask(phone)} failed: {r.get('error')}", flush=True)
+        raise SmsError(UNAVAILABLE)
     return {"method": "code", "hash": code_hash(token, code)}
 
 

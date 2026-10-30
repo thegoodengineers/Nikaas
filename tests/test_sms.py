@@ -141,3 +141,44 @@ def test_test_sms_from_the_control_room(client):
     sms.OUTBOX.clear()
     r = client.post("/sites/office/sms/test", json={"person": short}).json()
     assert r == {"sent": 1, "failed": 0} and sms.OUTBOX[0]["text"].startswith("Test from Block C")
+
+
+class FakeGate:
+    """Stands in for api.sms-gate.app: records each request."""
+    def __init__(self):
+        self.sent = []
+
+    def __call__(self, req, timeout=10):
+        import base64 as b64
+        import io
+        import json as js
+        assert req.full_url == "https://api.sms-gate.app/3rdparty/v1/messages"
+        assert req.get_header("Authorization") == "Basic " + b64.b64encode(b"user1:pass1").decode()
+        body = js.loads(req.data)
+        self.sent.append((body["phoneNumbers"][0], body["textMessage"]["text"]))
+        r = io.BytesIO(js.dumps({"id": f"g{len(self.sent)}", "state": "Pending"}).encode())
+        r.__enter__ = lambda *a: r
+        r.__exit__ = lambda *a: None
+        return r
+
+
+def test_android_gateway_sends_codes_and_alarm_texts(client, monkeypatch):
+    gate = FakeGate()
+    monkeypatch.setenv("NIKAAS_SMS", "sns")
+    monkeypatch.setenv("NIKAAS_SMSGATE", "user1:pass1")
+    monkeypatch.setattr(sms.urllib.request, "urlopen", gate)
+    assert sms.provider() == "smsgate"
+    r = client.post("/sites/office/register", json={"token": T1, "phone": "98765 43210"})
+    assert r.status_code == 200 and r.json()["verify"] == "code"
+    to, text = gate.sent[-1]
+    code = re.search(r"\d{6}", text).group()
+    assert to == "+919876543210"
+    assert client.post("/sites/office/verify", json={"token": T1, "code": code}).status_code == 200
+    assert client.post("/sites/office/alarm", json={"kind": "fire"}).status_code == 200
+    assert "FIRE ALARM" in gate.sent[-1][1] and "/r/" in gate.sent[-1][1]
+
+
+def test_when_texts_cannot_be_sent_people_are_told_to_continue_without_a_number(client, monkeypatch):
+    monkeypatch.setenv("NIKAAS_SMS", "twilio")  # no credentials: every send fails
+    r = client.post("/sites/office/register", json={"token": T1, "phone": "98765 43210"})
+    assert r.status_code in (400, 422) and r.json()["detail"].startswith("Text messages cannot be sent")
