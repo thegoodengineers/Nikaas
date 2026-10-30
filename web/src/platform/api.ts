@@ -50,7 +50,7 @@ export type Control = {
   version: number
   thresholds: { concern: number; crush: number; heat_c: number }
   server_time?: number
-  sms?: { provider: string; sandbox: boolean | null; registered: number; verified: number; sandbox_limit: number | null; last: { kind: string; sent: number; failed: number; at: number } | null }
+  push?: { on: number; total: number }; sms?: { provider: string; sandbox: boolean | null; registered: number; verified: number; sandbox_limit: number | null; last: { kind: string; sent: number; failed: number; at: number } | null }
 }
 
 export class ApiError extends Error {

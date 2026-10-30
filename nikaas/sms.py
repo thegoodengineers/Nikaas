@@ -34,7 +34,7 @@ class SmsError(Exception):
     """A problem the person can act on (shown to them)."""
 
 
-UNAVAILABLE = "Text messages cannot be sent right now. Tap Continue without a phone number: alerts will reach this phone while the page is open."
+UNAVAILABLE = "Text messages cannot be sent right now. Use notifications instead: they work without a phone number."
 
 
 _gate_cache: tuple[float, tuple[str, str, str] | None] = (0.0, None)

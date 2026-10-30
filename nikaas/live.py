@@ -219,6 +219,28 @@ def test_sms(sid: str, short_id: str) -> dict:
     return _text_people(sid, [p], lambda q: f"Test from {_ascii(site['name'])[:40]}: emergency texts will reach this phone.", "test")
 
 
+def test_push(sid: str, token: str) -> dict:
+    """The phone asks for a test notification to itself (at most one every 10 s)."""
+    _check_token(token)
+    site = _site(sid)
+    p = _person(sid, token)
+    if p is None:
+        raise KeyError("not checked in")
+    if not p.get("push"):
+        raise ValueError("Alerts are not turned on for this phone yet.")
+    if time.time() - p.get("push_test_at", 0) < 10:
+        raise ValueError("A test alert was sent a moment ago.")
+    p["push_test_at"] = time.time()
+    code = push.send(p["push"], {"title": f"Test alert · {site['name']}", "body": "Alerts work on this phone. In a real alarm, tap the notification for your exit route.",
+                                 "tag": "test", "url": f"/#/go?site={sid}"}, ttl=120)
+    if code in (404, 410):
+        p["push"] = None
+    _save_person(sid, p)
+    if not 200 <= code < 300:
+        raise ValueError("The test alert could not be delivered. Turn alerts off and on again." if code in (404, 410) else "The test alert could not be sent. Try again in a minute.")
+    return {"ok": True}
+
+
 def _ascii(s: str) -> str:
     return s.encode("ascii", "ignore").decode().strip() or "the building"
 
@@ -979,6 +1001,7 @@ def control(sid: str) -> dict:
         "sensors": sens, "cameras": list(cam_by_node.values()), "events": ev, "version": (a or {}).get("version", 0),
         "thresholds": {"concern": CONCERN, "crush": CRUSH, "heat_c": HEAT_C},
         "server_time": time.time(),
+        "push": {"on": sum(1 for p in ppl if p.get("push")), "total": len(ppl)},
         "sms": {"provider": sms.provider(), "sandbox": sms.sandbox(), "registered": sum(1 for p in ppl if p.get("phone")),
                 "verified": sum(1 for p in ppl if p.get("phone_verified")), "sandbox_limit": 10 if sms.sandbox() else None,
                 "last": store().get(pk(sid), "SMSLAST")},

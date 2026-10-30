@@ -10,9 +10,11 @@ export default function SmsPanel({ data, siteId, act }: PanelProps) {
   return (
     <section className="pf-card cr-sms" aria-labelledby="cr-sms-h">
       <div className="cr-card-head">
-        <h2 id="cr-sms-h">Emergency texts</h2>
-        <span className={`pf-chip ${s.verified ? 'ok' : ''}`}>{s.verified} verified</span>
+        <h2 id="cr-sms-h">Phone alerts</h2>
+        <span className={`pf-chip ${data.push?.on ? 'ok' : ''}`}>{data.push?.on ?? 0} with notifications</span>
       </div>
+      <p className="pf-small"><b>{data.push?.on ?? 0}</b> of {data.push?.total ?? data.people.length} checked-in phones get a notification the moment you start the alarm, even with the browser closed.
+        {s.verified > 0 && <> <b>{s.verified}</b> also get a text message.</>}</p>
       <p className="pf-small pf-muted">Starting the alarm texts every verified phone a link to its own route; All clear texts them too. Sent with {provider}.</p>
       {s.sandbox && (
         <p className="pf-alert warn pf-small">Amazon SNS test mode: texts reach only numbers verified with a code (at most {s.sandbox_limit}), with a USD 1 monthly budget.
