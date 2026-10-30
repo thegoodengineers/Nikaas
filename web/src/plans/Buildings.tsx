@@ -96,8 +96,7 @@ function BuildingList({ onEdit, onImport, onBlank, opening, err }: { onEdit: (id
       {err && <div className="pf-alert bad" role="alert">Could not open that building: {err}</div>}
       {loadErr && <div className="pf-alert bad" role="alert">Could not load buildings: {loadErr}</div>}
       {!sites && !loadErr && <p className="pf-empty">Loading buildings…</p>}
-      {sites && sites.length === 0 && <div className="pf-card pf-empty">No buildings yet. Import a floor plan to start.</div>}
-      {sites && sites.length > 0 && (
+      {sites && (
         <div className="pl-grid">
           {sites.map(s => (
             <article key={s.id} className="pf-card pl-site">
@@ -115,6 +114,17 @@ function BuildingList({ onEdit, onImport, onBlank, opening, err }: { onEdit: (id
               </div>
             </article>
           ))}
+          <article className="pf-card pl-site">
+            <BuildingArt id="tirumala" />
+            <div className="pl-site-title">
+              <h2>Tirumala Venkateswara Temple</h2>
+              <span className="pf-chip info">Demo</span>
+            </div>
+            <p className="pl-facts">1 floor · 5 zones · 3 exits · 194 people</p>
+            <div className="pl-site-actions">
+              <a className="pf-btn primary" href="#/sim?file=data/tirumala_temple.json">3D view</a>
+            </div>
+          </article>
         </div>
       )}
       {ask && (

@@ -384,6 +384,7 @@ function BuildingPicker({ source, plan }: { source: Source; plan: Plan }) {
   const opts: { key: string; label: string }[] = [{ key: 'demo', label: 'Demo block (3 storeys)' }]
   if (sites?.length) for (const s of sites) opts.push({ key: `site:${s.id}`, label: `${s.name}${s.floors ? ` (${s.floors} ${s.floors === 1 ? 'floor' : 'floors'})` : ''}` })
   else for (const f of BUNDLED_FILES) opts.push({ key: `file:${f.path}`, label: f.label })
+  if (!opts.some(o => o.key === 'file:data/tirumala_temple.json')) opts.push({ key: 'file:data/tirumala_temple.json', label: 'Tirumala Venkateswara Temple' })
   if (!opts.some(o => o.key === cur)) opts.push({ key: cur, label: plan.name })
   return (
     <div className="d-field">
