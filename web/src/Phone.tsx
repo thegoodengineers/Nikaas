@@ -28,7 +28,7 @@ export default function Phone() {
     // judges often scan before the presenter starts the drill: keep checking until the room list appears
     let alive = true, id = 0
     const load = () => fetch(`${API}/drill`).then(r => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((s: State) => { if (alive) { setRooms(s.room_labels); setErr(''); clearInterval(id) } })
+      .then((s: State | null) => { if (!s) throw new Error('no drill yet'); if (alive) { setRooms(s.room_labels); setErr(''); clearInterval(id) } })
       .catch(() => { if (alive) setErr('No drill is running yet. Keep this page open; it starts in a moment.') })
     load(); id = window.setInterval(load, 2000)
     return () => { alive = false; clearInterval(id) }

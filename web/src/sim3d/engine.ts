@@ -63,7 +63,10 @@ export class DrillEngine {
   private cinematic = true; private roofOn = false; private flash = true
   private tween: { p0: any; p1: any; t0: any; t1: any; k: number; dur: number } | null = null
   private shake = 0; private quakeUntil = -1
-  private fires: { h: Hazard; fx: Fire; level: number }[] = []
+  private fires: { h: Hazard; fx: Fire; level: number; light?: any }[] = []
+  // three.js builds a shader per number of visible lights: a hidden floor's lamps or a new fire's light used to
+  // rebuild every shader (a 2-6 s freeze). So lamps and fire lights stay in the scene and are dimmed instead.
+  private lampRigs: any[] = []; private fireLights: any[] = []
   private collapses: Collapse[] = []
   private barriers: Record<string, any[]> = {}
   private beacons: Record<string, Beacon> = {}
@@ -171,6 +174,12 @@ export class DrillEngine {
     this.world = plan.key.endsWith('tirumala_temple.json') ? buildTempleWorld(this.M, plan.geo?.seats ?? []) : plan.geo ? buildGraphWorld(this.M, plan.geo) : buildWorld(this.M)
     scene.add(this.root, this.world.site)
     for (const g of this.world.levels) this.root.add(g)
+    this.lampRigs = this.world.levels.map((_: any, L: number) => {
+      const rig = new THREE.Group(); this.root.add(rig)
+      for (const l of this.world.lights[L] ?? []) rig.add(l) // moves the lamp out of the floor, which may be hidden
+      return rig
+    })
+    for (let k = 0; k < 3; k++) { const l = new THREE.PointLight('#ff7a2a', 0, 16, 1.6); this.root.add(l); this.fireLights.push(l) }
     for (const g of this.world.flights) this.root.add(g)
     this.world.roof.visible = false; this.root.add(this.world.roof); this.applyGlass()
     this.loadOverlays()
@@ -252,8 +261,9 @@ export class DrillEngine {
     this.incidentStarted = true
     const label = this.placeName(level, x, z)
     const h = this.sim.addHazard({ kind: 'fire', level, x, z, r: 1.0, rMax: 4.2, grow: 0.07, label })
-    const fx = new Fire(x, z, this.plan.fh - 0.3); this.world.levels[level].add(fx.group)
-    this.fires.push({ h, fx, level })
+    const light = this.fireLights.shift() // none left (a fourth fire): the fire brings its own
+    const fx = new Fire(x, z, this.plan.fh - 0.3, light); this.world.levels[level].add(fx.group)
+    this.fires.push({ h, fx, level, light })
     this.labels.push({ el: this.tag('fire', `<b>Fire</b><span>${esc(label)}</span>`), at: () => [x, this.floorY(level) + 3.2, z] })
     this.addLog('danger', `Fire reported: ${label}, ${this.levelName(level)}`)
     this.incidents++; this.reason = `fire in ${label}`; this.replanPending = true
@@ -669,6 +679,7 @@ export class DrillEngine {
     this.step.value = FH * (1 + this.explode * 1.15)
     this.maxLevel.value = this.focus
     this.world.levels.forEach((g: any, L: number) => { g.position.y = this.floorY(L); g.visible = L <= this.focus })
+    this.lampRigs.forEach((g: any, L: number) => { g.position.y = this.floorY(L) })
     this.world.flights.forEach((g: any, L: number) => { g.position.y = this.floorY(L); g.scale.y = this.step.value / FH; g.visible = L + 1 <= this.focus })
     if (!this.world.seeThrough) this.world.roof.position.y = this.floorY(LV); this.world.roof.visible = this.roofOn && this.focus === LV - 1
     for (const e of this.plan.exits) if (e.level) this.beacons[e.id].group.position.y = this.floorY(e.level)
@@ -705,17 +716,21 @@ export class DrillEngine {
     const strobe = alarm && (t * 1.25) % 1 < 0.1
     this.M.strobe.emissiveIntensity = strobe ? 3.5 : alarm ? 0.3 : 0
     const warm = this.warm, red = this.red
-    for (const ls of this.world.lights) for (const l of ls) {
+    this.world.lights.forEach((ls: any[], L: number) => { for (const l of ls) {
       if (alarm) { l.color.copy(warm).lerp(red, 0.3 + 0.2 * pulse); l.intensity = 12 + 4 * pulse }
       else { l.color.copy(warm); l.intensity = 14 }
-    }
+      if (L > this.focus) l.intensity = 0 // floor hidden: lamp off (not removed, see lampRigs)
+    } })
     const eg = alarm ? 1.3 + 0.6 * pulse : 1
     this.M.egress.color.setRGB(0.12 * eg, 0.62 * eg, 0.34 * eg)
     if (this.lights) this.lights.hemi.intensity = alarm ? 0.68 + 0.05 * pulse : 0.8
     this.bloom.strength = alarm ? 0.3 + 0.05 * pulse : 0.26
     // incidents
     let fireSize = 0
-    for (const f of this.fires) { f.fx.update(Math.min(0.1, sdt), t, f.h.r); fireSize += f.h.r / 4 }
+    for (const f of this.fires) {
+      f.fx.update(Math.min(0.1, sdt), t, f.h.r); fireSize += f.h.r / 4
+      if (f.light) { const p = f.fx.group.position; f.light.position.set(p.x, this.floorY(f.level) + 1.4, p.z); if (f.level > this.focus) f.light.intensity = 0 }
+    }
     this.sound.fire(fireSize)
     for (const c of this.collapses) c.update(Math.min(0.05, sdt))
     for (const b of Object.values(this.beacons)) b.update(rdt, t)

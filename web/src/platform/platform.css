@@ -72,6 +72,8 @@
 .plan-hazard .plan-hazard-glow { fill: rgba(220, 38, 38, .18); }
 .plan-you circle { fill: var(--evac); }
 .plan-you .plan-you-ring { fill: rgba(240, 90, 34, .18); }
+/* markers drawn over the plan must not swallow clicks meant for the room, walkway or exit under them */
+.plan-hazard, .plan-you, .plan-route, .plan-step, .plan-target-label { pointer-events: none; }
 @media (prefers-reduced-motion: no-preference) {
   .plan-hazard-glow { animation: plan-pulse 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
   .plan-you-ring { animation: plan-pulse 2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }

@@ -73,11 +73,13 @@ export class Fire {
   private scorch: any
   private acc = 0; private accS = 0
   private ceil: number
-  constructor(x: number, z: number, ceiling = WALL_H) {
+  /** `light`: a point light already in the scene for the engine to place (adding one rebuilds every shader) */
+  constructor(x: number, z: number, ceiling = WALL_H, light?: any) {
     this.ceil = ceiling
     this.group.position.set(x, 0, z)
     this.group.add(this.flames.points, this.smoke.points)
-    this.light = new THREE.PointLight('#ff7a2a', 60, 16, 1.6); this.light.position.y = 1.4; this.group.add(this.light)
+    this.light = light ?? new THREE.PointLight('#ff7a2a', 60, 16, 1.6)
+    if (!light) { this.light.position.y = 1.4; this.group.add(this.light) }
     const disc = new THREE.PlaneGeometry(1, 1); disc.rotateX(-Math.PI / 2)
     this.scorch = new THREE.Mesh(disc, new THREE.MeshBasicMaterial({ map: radialTex('rgba(10,6,4,0.95)', 'rgba(10,6,4,0)'), transparent: true, depthWrite: false }))
     this.scorch.position.y = 0.03; this.group.add(this.scorch)

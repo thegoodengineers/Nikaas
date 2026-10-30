@@ -1,7 +1,7 @@
 // Simulated heat and smoke detectors for the demo: sliders post readings like a real IoT detector would.
 import { useEffect, useRef, useState } from 'react'
 import { ago, api, type Control } from '../platform/api.ts'
-import { floorName, nodeGroups, nodeLabel, type PanelProps } from './util.ts'
+import { floorName, nodeGroups, nodeLabel, useBusy, type PanelProps } from './util.ts'
 
 const T_MIN = 20, T_MAX = 90, SMOKE_AT = 0.5
 type Sensor = Control['sensors'][number]
@@ -11,14 +11,15 @@ export default function SensorsPanel({ data, siteId, act }: PanelProps) {
   const groups = nodeGroups(b)
   const [node, setNode] = useState(() => b.nodes.find(n => n.type === 'room')?.id ?? groups[0]?.nodes[0]?.id ?? '')
   const heat = data.thresholds.heat_c
+  const [busy, run] = useBusy()
 
   const add = () => {
     if (!node) return
     let k = 1
     const ids = new Set(data.sensors.map(s => s.sensor_id))
     while (ids.has(`sim-${node}-${k}`)) k++
-    act(() => api.post(`/sites/${encodeURIComponent(siteId)}/sensors`, { sensor_id: `sim-${node}-${k}`, node, temp_c: 22, smoke: 0 }, true),
-      `Sensor added in ${nodeLabel(b, node)}.`)
+    void run('add', () => act(() => api.post(`/sites/${encodeURIComponent(siteId)}/sensors`, { sensor_id: `sim-${node}-${k}`, node, temp_c: 22, smoke: 0 }, true),
+      `Sensor added in ${nodeLabel(b, node)}.`))
   }
 
   return (
@@ -38,7 +39,7 @@ export default function SensorsPanel({ data, siteId, act }: PanelProps) {
             ))}
           </select>
         </label>
-        <button type="submit" className="pf-btn">Add sensor</button>
+        <button type="submit" className="pf-btn" disabled={!!busy}>{busy ? 'Adding…' : 'Add sensor'}</button>
       </form>
       {data.sensors.length === 0 ? <p className="pf-empty">No sensors yet.</p> : (
         <ul className="cr-list cr-sensors">

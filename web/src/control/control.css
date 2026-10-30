@@ -288,9 +288,9 @@
 .cr-qr { display: block; line-height: 0; }
 .cr-qr svg { width: 100%; height: auto; display: block; }
 .cr-poster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 280px)); gap: 16px; margin-top: 14px; }
-.cr-poster-preview { container-type: inline-size; display: grid; gap: 8px; }
+.cr-poster-preview { container-type: inline-size; } /* block, not grid: a grid track would clip the poster to its A4 ratio when the text needs more */
 .cr-poster-actions { display: flex; justify-content: center; }
-.cr-poster { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .9em; padding: 2.4em 2em; background: #fff; border: 1px solid var(--rule); border-radius: 10px; aspect-ratio: 210 / 297; font-size: 7px; font-size: 2.6cqi; color: #15191e; overflow: hidden; }
+.cr-poster { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .9em; padding: 2.4em 2em; background: #fff; border: 1px solid var(--rule); border-radius: 10px; aspect-ratio: 210 / 297; font-size: 7px; font-size: 2.6cqi; color: #15191e; }
 .cr-poster > * { margin: 0 !important; max-width: none; }
 .cr-poster-brand { display: flex; align-items: center; gap: .45em; font: 700 2.6em/1 var(--display); }
 .cr-poster-mark { width: 1.35em; height: 1.35em; padding: .17em; background: var(--exit); border-radius: .22em; display: inline-flex; print-color-adjust: exact; -webkit-print-color-adjust: exact; }

@@ -1,5 +1,5 @@
 // Shared helpers for the control room: map data from the building, labels, clocks, printing.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Building, Control, MapEdge, MapNode } from '../platform/api.ts'
 
 export type Ctl = Control
@@ -8,6 +8,19 @@ export type Act = <T = Control>(fn: () => Promise<T>, ok?: string | ((r: T) => s
 export type Notify = (kind: 'ok' | 'bad' | 'info' | 'warn', text: string) => void
 /** Props every live panel gets. */
 export type PanelProps = { data: Control; siteId: string; act: Act; notify: Notify }
+
+/** Control actions take a few seconds while the server re-plans: `run(key, fn)` runs one at a time and `busy`
+ * says which, so its button can show it is working and a second click cannot send it twice. */
+export function useBusy() {
+  const [busy, setBusy] = useState<string | null>(null)
+  const running = useRef(false)
+  const run = async (key: string, fn: () => Promise<unknown>) => {
+    if (running.current) return
+    running.current = true; setBusy(key)
+    try { await fn() } finally { running.current = false; setBusy(null) }
+  }
+  return [busy, run] as const
+}
 
 export const ALARM_TYPES = ['fire', 'earthquake', 'collapse', 'gas', 'drill', 'other'] as const
 export const HAZARD_KINDS = ['fire', 'smoke', 'heat', 'collapse', 'blocked'] as const

@@ -77,3 +77,13 @@ def test_occupancy_without_a_drill_is_a_clear_404(monkeypatch):
     monkeypatch.setattr(drill, "_memory", {})
     r = TestClient(app).post("/occupancy", json={"room": "study", "count": 3})
     assert r.status_code == 404 and "no drill running" in r.text
+
+
+def test_no_drill_yet_is_null_for_the_pollers_and_404_for_a_room(monkeypatch):
+    from nikaas import drill
+
+    monkeypatch.setattr(drill, "_memory", {})
+    c = TestClient(app)
+    r = c.get("/drill")
+    assert r.status_code == 200 and r.json() is None
+    assert c.get("/drill", params={"room": "study"}).status_code == 404

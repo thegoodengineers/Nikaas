@@ -40,10 +40,13 @@ export default function SiteCam() {
   useEffect(() => { saved.set('nikaas-camera-id', camId.current) }, [])
   useEffect(() => { api.get<SiteSummary[]>('/sites').then(setSites).catch(() => {}) }, [])
   useEffect(() => {
-    api.get<Site>(`/sites/${siteId}`).then(s => {
+    let live = true // a slow answer for the previous building must not replace the one picked after it
+    api.get<Site>(`/sites/${encodeURIComponent(siteId)}`).then(s => {
+      if (!live) return
       setSite(s)
       if (!s.building.nodes.some(n => n.id === nodeRef.current)) setNode(s.building.nodes.find(n => n.type === 'room')?.id ?? '')
-    }).catch(e => setErr(String(e.message ?? e)))
+    }).catch(e => { if (live) setErr(String(e.message ?? e)) })
+    return () => { live = false }
   }, [siteId])
   useEffect(() => () => stop(), [])
 
@@ -100,8 +103,9 @@ export default function SiteCam() {
     setPhase('loading')
     try {
       const [model, s] = await Promise.all([getDetector(), navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'environment' }, audio: false })])
+      const v = video.current
+      if (!v) { s.getTracks().forEach(t => t.stop()); return } // left the page while the detector loaded: camera off
       stream.current = s
-      const v = video.current!
       v.srcObject = s; await v.play()
       begin(model, v)
     } catch (e) {

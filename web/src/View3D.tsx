@@ -30,6 +30,14 @@ const WALL_H = 1.7, WALL_T = 0.2
 const EXPLODE = 2
 const STATE_COLOR: Record<string, string> = { walking: '#f05a22', queuing: '#c8321a', stairs: '#2563eb', inside: '#e0763f' }
 
+// free the GPU memory of everything under a scene node (geometry, materials and their textures)
+function disposeTree(root: any) {
+  root.traverse((o: any) => {
+    o.geometry?.dispose()
+    for (const m of [o.material].flat()) if (m) { m.map?.dispose(); m.dispose() }
+  })
+}
+
 export default function View3D({ building, frame, blocked, routes, edgeLoad, bottleneck, peakQueue, height = 560, cameraT, wallRise = 1, showcase = false, onExit }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const api = useRef<any>({})
@@ -277,7 +285,12 @@ export default function View3D({ building, frame, blocked, routes, edgeLoad, bot
     ro.observe(el)
 
     api.current = { ...api.current, scene, body, head, exitMeshes, routeGroup, byId, Y, slope, N, strips, marker, tagCanvas, tagTex, fires, rise, camera, controls, cx, cz, span, cur: [], target: undefined }
-    return () => { cancelAnimationFrame(raf); ro.disconnect(); renderer.dispose(); el.removeChild(renderer.domElement) }
+    return () => {
+      cancelAnimationFrame(raf); ro.disconnect()
+      disposeTree(scene)
+      renderer.dispose(); renderer.forceContextLoss() // free the WebGL context now: browsers keep only ~16 alive
+      el.removeChild(renderer.domElement)
+    }
   }, [building, height, showcase])
 
   useEffect(() => { api.current.onExit = onExit }, [onExit])
@@ -296,6 +309,7 @@ export default function View3D({ building, frame, blocked, routes, edgeLoad, bot
   useEffect(() => {
     const { routeGroup, byId, Y, slope } = api.current
     if (!routeGroup) return
+    disposeTree(routeGroup) // the old ribbons' geometry stays on the GPU until disposed
     routeGroup.clear()
     const m = new THREE.MeshBasicMaterial({ color: '#22c55e', transparent: true, opacity: 0.7, depthWrite: false })
     for (const paths of Object.values(routes ?? {})) for (const path of paths) {

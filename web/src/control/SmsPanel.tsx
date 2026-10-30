@@ -1,9 +1,10 @@
 // Emergency texts: who is registered, whether texts can reach them, and a test message.
 import { ago, api } from '../platform/api.ts'
-import type { PanelProps } from './util.ts'
+import { useBusy, type PanelProps } from './util.ts'
 
 export default function SmsPanel({ data, siteId, act }: PanelProps) {
   const s = data.sms
+  const [busy, run] = useBusy()
   const phones = data.people.filter(p => p.phone)
   if (!s) return null
   const provider = { sns: 'Amazon SNS', fast2sms: 'Fast2SMS', twilio: 'Twilio', smsgate: 'an Android phone (SMS Gateway for Android)', log: 'Local test outbox' }[s.provider] ?? s.provider
@@ -31,7 +32,7 @@ export default function SmsPanel({ data, siteId, act }: PanelProps) {
                 {!p.phone_verified ? <span className="pf-chip warn">not verified</span>
                   : p.sms_last ? <span className={`pf-chip ${p.sms_last.ok ? 'ok' : 'bad'}`} title={p.sms_last.error ?? undefined}>{p.sms_last.ok ? 'sent' : 'failed'}: {p.sms_last.kind}</span>
                     : <span className="pf-chip ok">ready</span>}
-                {p.phone_verified && <button type="button" className="pf-btn cr-btn-s" onClick={() => act(() => api.post(`/sites/${encodeURIComponent(siteId)}/sms/test`, { person: p.token }, true), r => (r as { failed?: number }).failed ? 'The test text failed: see the event feed' : `Test text sent to ${p.phone}`)}>Test</button>}
+                {p.phone_verified && <button type="button" className="pf-btn cr-btn-s" disabled={!!busy} onClick={() => run(p.token, () => act(() => api.post(`/sites/${encodeURIComponent(siteId)}/sms/test`, { person: p.token }, true), r => (r as { failed?: number }).failed ? 'The test text failed: see the event feed' : `Test text sent to ${p.phone}`))}>{busy === p.token ? 'Sending…' : 'Test'}</button>}
               </span>
             </li>
           ))}

@@ -42,7 +42,8 @@ export default function Cam() {
 
   useEffect(() => {
     fetch('data/iit_kgp_museum.json').then(r => r.json()).then(b => { setBuilding(b); setRooms(b.nodes.filter((n: Node) => n.type === 'room')) })
-    fetch(`${API}/drill`).then(r => { setNoDrill(r.status === 404); return r.ok ? r.json() : undefined }).then(s => s && setState(s)).catch(() => {})
+    fetch(`${API}/drill`).then(r => (r.status === 404 ? null : r.ok ? r.json() : undefined)) // no drill yet: null (older APIs: 404)
+      .then(s => { if (s === undefined) return; setNoDrill(!s); if (s) setState(s) }).catch(() => {})
     return () => stop() // leaving the page: the room goes back to the floor-plan number (no stale LIVE count)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -78,8 +79,9 @@ export default function Cam() {
     setPhase('loading')
     try {
       const [model, s] = await Promise.all([getDetector(), navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480, facingMode: 'user' }, audio: false })])
+      const v = video.current
+      if (!v) { s.getTracks().forEach(t => t.stop()); return } // left the page while the detector loaded: camera off
       stream.current = s
-      const v = video.current!
       v.srcObject = s; await v.play()
       last.current = { value: -1, at: 0, inFlight: false }; hist.current = []
       setPhase('on')
