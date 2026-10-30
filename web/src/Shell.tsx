@@ -8,6 +8,7 @@ import Drill from './Drill.tsx'
 import Sim3D from './sim3d/Sim3D.tsx'
 import Phone from './Phone.tsx'
 import Sign from './Sign.tsx'
+import Cam from './Cam.tsx'
 
 // Hash routes so the site works from a plain S3 bucket with no server rewrites.
 const PAGES: Record<string, { label: string; render: () => React.ReactElement }> = {
@@ -36,6 +37,7 @@ export default function Shell() {
   }, [])
   if (route === 'me') return <Phone /> // the judge's phone: no site chrome
   if (route === 'sign') return <Sign /> // a phone taped beside a door: a live exit sign
+  if (route === 'cam') return <Cam /> // Nikaas Live: a laptop camera counting the people in one room
   if (route === 'sim') return <Sim3D /> // full-screen 3D evacuation game with its own HUD
   const page = PAGES[route] ?? PAGES['']
   return (

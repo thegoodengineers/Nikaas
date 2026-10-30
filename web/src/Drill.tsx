@@ -6,7 +6,8 @@ const API = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/,
 type Node = { id: string; type: string; label?: string }
 type Building = { name: string; nodes: Node[]; edges: unknown[] }
 type Room = { exit: string; exit_label: string; distance_m: number; walk_s: number }
-type State = { version: number; blocked: string[]; blocked_labels: string[]; total_time_s: number; room_labels: Record<string, string>; rooms: Record<string, Room>; changed: string[] }
+type State = { version: number; blocked: string[]; blocked_labels: string[]; total_time_s: number; room_labels: Record<string, string>; rooms: Record<string, Room>; changed: string[]
+  people?: Record<string, number>; live?: Record<string, { count: number; design: number }> }
 
 // Presenter screen for the Live Drill: judges scan the code, pick their room, and follow their phone.
 export default function Drill() {
@@ -18,7 +19,12 @@ export default function Drill() {
   const qr = useMemo(() => { const q = qrcode(0, 'M'); q.addData(phoneUrl); q.make(); return q.createSvgTag({ cellSize: 8, margin: 2, scalable: true }) }, [phoneUrl])
 
   useEffect(() => { fetch('data/iit_kgp_museum.json').then(r => r.json()).then(setBuilding) }, [])
-  useEffect(() => { fetch(`${API}/drill`).then(r => (r.ok ? r.json() : undefined)).then(s => s && setState(s)).catch(() => {}) }, [])
+  // poll: a camera (#/cam) can change a room's count and re-plan while this screen is open
+  useEffect(() => {
+    const load = () => fetch(`${API}/drill`).then(r => (r.ok ? r.json() : undefined)).then(s => s && setState(old => (old?.version === s.version ? old : s))).catch(() => {})
+    load(); const id = setInterval(load, 2000)
+    return () => clearInterval(id)
+  }, [])
 
   async function push(blocked: string[]) {
     if (!building) return
@@ -42,6 +48,7 @@ export default function Drill() {
           <div className="drill-qr" dangerouslySetInnerHTML={{ __html: qr }} aria-label={`QR code for ${phoneUrl}`} />
           <p className="sources">{phoneUrl}</p>
           <p className="sources">Phones taped beside the doors become live exit signs: open {phoneUrl.replace('#/me', '#/sign')}</p>
+          <p className="sources">Nikaas Live: point a laptop camera at a room and the plan uses the people really there: open <a href="#/cam">{phoneUrl.replace('#/me', '#/cam')}</a></p>
         </div>
         <div className="drill-panel">
           {!state ? (
@@ -63,9 +70,10 @@ export default function Drill() {
               {state.changed.length > 0 && <p className="drill-changed">{state.changed.length} rooms were just re-routed. Their phones are vibrating.</p>}
               <div className="table-wrap" style={{ marginTop: 16 }}>
                 <table className="data">
-                  <thead><tr><th>Room</th><th>Exit</th><th>Walk</th></tr></thead>
+                  <thead><tr><th>Room</th><th>People</th><th>Exit</th><th>Walk</th></tr></thead>
                   <tbody>{Object.entries(state.rooms).map(([r, x]) => (
-                    <tr key={r} className={state.changed.includes(r) ? 'changed' : ''}><td>{state.room_labels[r] ?? r}</td><td>{x.exit_label}</td><td className="num">{x.distance_m} m</td></tr>))}</tbody>
+                    <tr key={r} className={state.changed.includes(r) ? 'changed' : ''}><td>{state.room_labels[r] ?? r}</td>
+                    <td className="num">{state.people?.[r] ?? ''}{state.live?.[r] && <span className="live-badge" title={`Camera count; floor plan says ${state.live[r].design}`}>LIVE</span>}</td><td>{x.exit_label}</td><td className="num">{x.distance_m} m</td></tr>))}</tbody>
                 </table>
               </div>
             </>

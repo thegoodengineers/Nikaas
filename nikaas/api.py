@@ -206,7 +206,7 @@ def drill_start(req: DrillStart):
     if probs:
         raise HTTPException(422, {"problems": probs})
     try:
-        return drill_state.start(req.building, req.blocked, drill_state.read())
+        return drill_state.public(drill_state.start(req.building, req.blocked, drill_state.read()))
     except (KeyError, ValueError) as e:
         raise HTTPException(422, str(e))
 
@@ -218,9 +218,33 @@ def drill_get(room: str | None = None, since: int = 0):
     s = drill_state.read()
     if not s:
         raise HTTPException(404, "no drill running")
+    s = drill_state.public(s)
     if room is None:
         return s
     if room not in s["rooms"]:
         raise HTTPException(404, f"unknown room {room}")
     return {"version": s["version"], "updated": s["version"] > since, "room": room, "room_label": s["room_labels"].get(room, room),
-            "blocked": s["blocked"], "blocked_labels": s["blocked_labels"], "alert": room in s["changed"], "map": s.get("map"), **s["rooms"][room]}
+            "blocked": s["blocked"], "blocked_labels": s["blocked_labels"], "alert": room in s["changed"], "map": s.get("map"),
+            "people": s.get("people", {}).get(room), "live": s.get("live", {}).get(room), **s["rooms"][room]}
+
+
+class Occupancy(BaseModel):
+    room: str
+    count: int | None = None  # people the camera sees; null = go back to the floor-plan number
+
+
+@app.post("/occupancy")
+def occupancy(req: Occupancy):
+    """Nikaas Live: a camera's head count for one room. The drill re-plans with it (only when it changed).
+    The video never leaves the camera's browser; this is the only thing sent."""
+    if req.count is not None and not 0 <= req.count <= 5000:
+        raise HTTPException(422, "count must be between 0 and 5000")
+    try:
+        state, replanned = drill_state.occupancy(req.room, req.count)
+    except LookupError as e:
+        if isinstance(e, KeyError):
+            raise HTTPException(404, f"unknown room {req.room}")
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    return {"replanned": replanned, **drill_state.public(state)}

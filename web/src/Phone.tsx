@@ -7,6 +7,7 @@ type Me = {
   version: number; updated: boolean; room: string; room_label: string; exit: string; exit_label: string
   distance_m: number; walk_s: number; path: string[]; alert: boolean; blocked: string[]; blocked_labels: string[]
   map?: { nodes: MapNode[]; edges: [string, string][] }
+  people?: number; live?: { count: number; design: number } | null // live = counted by a camera (Nikaas Live)
 }
 type State = { room_labels: Record<string, string>; version: number }
 
@@ -75,6 +76,7 @@ export default function Phone() {
             <div><span>Your exit</span><b>{me.exit_label}</b></div>
           </div>
           <p className="phone-walk">{me.distance_m} m · about {me.walk_s} s walking</p>
+          {me.live && <p className="phone-note"><span className="live-badge">LIVE</span> Planned for the {me.live.count} people a camera counts in this room (floor plan: {me.live.design}).</p>}
           {me.blocked_labels.length > 0 && !flash && <p className="phone-note">Avoid: {me.blocked_labels.join(', ')} (blocked)</p>}
           {me.map && <MiniMap me={me} />}
         </>
