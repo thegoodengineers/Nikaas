@@ -165,4 +165,5 @@ subprocess.run(["ffmpeg", "-v", "error", "-y", "-loop", "1", "-i", str(tmp / "ba
                 "-filter_complex", vf, "-map", "[out]", "-t", f"{total:.2f}", "-c:v", "libx264", "-crf", "18", "-preset", "slow",
                 "-movflags", "+faststart", str(out)], check=True)
 shutil.rmtree(tmp, ignore_errors=True)
+(OUT / "film_segments.json").write_text(__import__("json").dumps([round(x, 2) for x in segs]))  # for video/voiceover.py
 print(out, f"{total:.1f} s", [f"{x:.1f}" for x in segs])
