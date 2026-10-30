@@ -1,0 +1,87 @@
+# Every push to main: run the tests, then deploy the API (SAM) and the website (S3) to the live AWS site.
+# GitHub signs in to AWS through the role nikaas-github-deploy (OpenID Connect): no AWS keys are stored here,
+# and only this repository's main branch can use the role. A failing test stops the deploy.
+# Run it by hand from the Actions tab with "Run workflow".
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency: # one deploy at a time; a newer push waits for the running one
+  group: deploy-aws
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # sign in to AWS
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  AWS_ROLE: arn:aws:iam::431578779465:role/nikaas-github-deploy
+  STACK: nikaas
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11', cache: pip }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm, cache-dependency-path: web/package-lock.json }
+      - name: Python tests
+        run: |
+          pip install -r requirements.txt
+          python -m pytest -q -p no:faulthandler
+      - name: Website type-check and build
+        working-directory: web
+        run: |
+          npm ci
+          npx tsc -b
+          npm run build
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22', cache: npm, cache-dependency-path: web/package-lock.json }
+      - uses: aws-actions/setup-sam@v2
+        with: { use-installer: true }
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: API (Lambda + API Gateway)
+        run: |
+          python scripts/build_lambda.py
+          sam build
+          sam deploy --no-fail-on-empty-changeset --no-progressbar
+
+      - name: Website (S3)
+        run: |
+          cd web && npm ci && npm run build && cd ..
+          b="s3://$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='WebBucketName'].OutputValue" --output text)"
+          # hashed assets first, then the never-cached files. No --delete: tabs open on the previous build keep working.
+          aws s3 sync web/dist "$b" --exclude index.html --exclude sw.js --exclude manifest.webmanifest --cache-control "public,max-age=300" --only-show-errors
+          aws s3 cp web/dist/fonts "$b/fonts" --recursive --content-type font/woff2 --cache-control "public,max-age=300" --only-show-errors
+          aws s3 cp web/dist/sw.js "$b/sw.js" --cache-control no-cache --content-type text/javascript --only-show-errors
+          aws s3 cp web/dist/manifest.webmanifest "$b/manifest.webmanifest" --cache-control no-cache --content-type application/manifest+json --only-show-errors
+          aws s3 cp web/dist/index.html "$b/index.html" --cache-control no-cache --content-type text/html --only-show-errors
+
+      - name: Check the live site
+        run: |
+          api="$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" --output text)"
+          web="$(aws cloudformation describe-stacks --stack-name "$STACK" --query "Stacks[0].Outputs[?OutputKey=='WebHttpsUrl'].OutputValue" --output text)"
+          curl -fsS "$api/health" > /dev/null
+          curl -fsS "$web" | grep -q '<div id="root">'
+          echo "### Deployed ${GITHUB_SHA::7}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Live: $web" >> "$GITHUB_STEP_SUMMARY"

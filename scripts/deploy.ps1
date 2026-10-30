@@ -1,5 +1,5 @@
 # Deploy what is checked out to the live AWS site: the API (Lambda, via SAM) and the website (S3).
-# Nothing deploys on its own when main changes: run this after merging.
+# Pushes to main deploy themselves (.github/workflows/deploy.yml); this is the by-hand fallback.
 #
 #   git checkout main; git pull
 #   powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1            # API + website
