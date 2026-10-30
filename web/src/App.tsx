@@ -15,7 +15,7 @@ type Run = {
 // Live API (AWS). Without it the page falls back to saved runs, so ?demo=1 and offline demos still work.
 const API = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
 const DEMO = new URLSearchParams(location.search).has('demo')
-// The same museum floor digitised by hand and read from the photo by Amazon Nova Pro (nikaas/vision.py), plus a stadium
+// The same museum floor digitised by hand and read from the photo by Amazon Nova Pro (nikaas/vision.py), plus a stadium and a tower
 const SOURCES = [
   { id: 'hand', label: 'Hand-digitised', file: 'data/iit_kgp_museum.json',
     saved: { '': 'data/frames_iit_kgp_nearest.json', MAIN: 'data/frames_iit_kgp_blockedMAIN.json',
@@ -26,6 +26,9 @@ const SOURCES = [
   // (scripts/precompute_stadium.py): the optimiser takes ~13 s here, too slow for a live call.
   { id: 'stadium', label: 'Stadium gates (2,001 people)', file: 'data/stadium_scaled.json', offline: true, frameEvery: 5,
     saved: { '': 'data/frames_stadium_nearest.json', 'nikaas:': 'data/frames_stadium_nikaas.json' } as Record<string, string> },
+  // Ayush's multi-floor engine: five floors sharing two stairwells (scripts/precompute_frames.py; totals as runs/multi_floor.csv)
+  { id: 'tower', label: '5-floor tower (450 people)', file: 'data/tower.json', offline: true, frameEvery: 2,
+    saved: { '': 'data/frames_tower_nearest.json', 'nikaas:': 'data/frames_tower_nikaas.json' } as Record<string, string> },
 ]
 
 const STATE_VAR: Record<string, string> = { walking: '--walk', queuing: '--queue', stairs: '--stairs', inside: '--inside' }
@@ -259,7 +262,7 @@ export default function App() {
           <Stat label="Bottleneck (peak queue)" value={run ? `${run.bottleneck} (${run.peak_queue})` : '…'} />
           <Stat label="People per exit" value={run ? Object.entries(run.per_exit).map(([k, v]) => `${k} ${v}`).join(' · ') : '…'} />
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12 }}>
-            {!API || DEMO ? 'Saved runs (demo mode).' : source.offline && !blocked.length ? 'Precomputed run (scripts/precompute_stadium.py); blocking a gate simulates it live on AWS.' : 'Live: simulated on AWS for every change.'} Simulator validated against the SFPE handbook example.
+            {!API || DEMO ? 'Saved runs (demo mode).' : source.offline && !blocked.length ? 'Precomputed run (saved from the simulator); blocking an exit simulates it live on AWS.' : 'Live: simulated on AWS for every change.'} Simulator validated against the SFPE handbook example.
           </div>
         </aside>
       </div>
