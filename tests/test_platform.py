@@ -197,6 +197,18 @@ def test_saved_site_and_geo(client):
     assert client.post("/sites", json={"name": "Broken", "building": {"nodes": [], "edges": []}}).status_code == 422
 
 
+def test_delete_site(client, monkeypatch):
+    b = sites.get_site("museum")["building"]
+    client.post("/sites", json={"name": "Test Hall", "building": b})
+    assert client.delete("/sites/test-hall").json() == {"ok": True}
+    assert all(x["id"] != "test-hall" for x in client.get("/sites").json())
+    assert client.delete("/sites/test-hall").status_code == 404
+    assert client.delete("/sites/museum").status_code == 422  # demo buildings stay
+    monkeypatch.setattr(api, "CONTROL_KEY", "k3y")
+    client.post("/sites", json={"name": "Test Hall", "building": b}, headers={"x-control-key": "k3y"})
+    assert client.delete("/sites/test-hall").status_code == 401
+
+
 def test_control_key(client, monkeypatch):
     monkeypatch.setattr(api, "CONTROL_KEY", "k3y")
     assert client.get("/sites/office/control").status_code == 401

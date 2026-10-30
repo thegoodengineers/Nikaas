@@ -2,9 +2,11 @@
 // plan editor. #/buildings?edit=<id> opens a site straight in the editor.
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { api, ApiError, hashQuery, type Site, type SiteSummary } from '../platform/api.ts'
+import BuildingArt from './BuildingArt.tsx'
 import Editor from './Editor.tsx'
 import Icon from './Icon.tsx'
 import ImportPlans from './ImportPlans.tsx'
+import Modal from './Modal.tsx'
 import type { WallGrid } from '../platform/walls.ts'
 import { floorId, floorName, type Doc, type Origin, type Underlay } from './model.ts'
 import './plans.css'
@@ -70,6 +72,9 @@ export default function Buildings() {
 function BuildingList({ onEdit, onImport, onBlank, opening, err }: { onEdit: (id: string) => void; onImport: () => void; onBlank: () => void; opening: string | null; err: string }) {
   const [sites, setSites] = useState<SiteSummary[] | null>(null)
   const [loadErr, setLoadErr] = useState('')
+  const [ask, setAsk] = useState<SiteSummary | null>(null) // the building to delete, while confirming
+  const [busy, setBusy] = useState(false)
+  const [delErr, setDelErr] = useState('')
   useEffect(() => {
     let live = true
     api.get<SiteSummary[]>('/sites').then(s => { if (live) setSites(s) }).catch(e => { if (live) setLoadErr(e instanceof ApiError ? e.message : String(e)) })
@@ -81,7 +86,7 @@ function BuildingList({ onEdit, onImport, onBlank, opening, err }: { onEdit: (id
         <div className="pf-grow">
           <p className="pf-eyebrow">Buildings</p>
           <h1>Your buildings</h1>
-          <p className="pf-muted">Each building is a floor-by-floor map of rooms, walkways, stairs and exits. Import a floor plan or draw one, then open its control room.</p>
+          <p className="pf-muted">Import a floor plan or draw one, then open its control room.</p>
         </div>
         <div className="pl-head-actions">
           <button className="pf-btn primary" onClick={onImport}><Icon d="M12 16V4m0 0-4 4m4-4 4 4M4 20h16" />Import a floor plan</button>
@@ -96,17 +101,13 @@ function BuildingList({ onEdit, onImport, onBlank, opening, err }: { onEdit: (id
         <div className="pl-grid">
           {sites.map(s => (
             <article key={s.id} className="pf-card pl-site">
-              <div className="pf-row">
-                <h2 className="pf-grow">{s.name}</h2>
-                {s.demo && <span className="pf-chip info">Demo</span>}
+              <BuildingArt id={s.id} />
+              <div className="pl-site-title">
+                <h2>{s.name}</h2>
+                {s.demo ? <span className="pf-chip info">Demo</span>
+                  : <button className="pf-btn ghost pl-del" onClick={() => { setDelErr(''); setAsk(s) }} aria-label={`Delete ${s.name}`} title="Delete this building"><Icon d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13" /></button>}
               </div>
-              <p className="pf-muted pf-small pl-addr">{s.address || 'No address yet'}</p>
-              <dl className="pl-stats">
-                <div><dt>Floors</dt><dd>{s.floors}</dd></div>
-                <div><dt>Rooms</dt><dd>{s.rooms}</dd></div>
-                <div><dt>Exits</dt><dd>{s.exits}</dd></div>
-                <div><dt>People</dt><dd>{s.people}</dd></div>
-              </dl>
+              <p className="pl-facts">{count(s.floors, 'floor')} · {count(s.rooms, 'room')} · {count(s.exits, 'exit')} · {count(s.people, 'person', 'people')}</p>
               <div className="pl-site-actions">
                 <a className="pf-btn primary" href={`#/control?site=${encodeURIComponent(s.id)}`}>Open control room</a>
                 <a className="pf-btn" href={`#/sim?site=${encodeURIComponent(s.id)}`}>3D view</a>
@@ -116,6 +117,20 @@ function BuildingList({ onEdit, onImport, onBlank, opening, err }: { onEdit: (id
           ))}
         </div>
       )}
+      {ask && (
+        <Modal title={`Delete ${ask.name}?`} submit="Delete building" busy={busy} onCancel={() => setAsk(null)} onSubmit={async () => {
+          setBusy(true); setDelErr('')
+          try {
+            await api.del(`/sites/${encodeURIComponent(ask.id)}`, true)
+            setSites(list => list && list.filter(x => x.id !== ask.id)); setAsk(null)
+          } catch (e) { setDelErr(e instanceof ApiError ? e.message : String(e)) } finally { setBusy(false) }
+        }}>
+          <p>This removes the building and its floor plans from Nikaas for everyone, and its printed QR codes stop working. It cannot be undone.</p>
+          {delErr && <div className="pf-alert bad" role="alert">Could not delete it: {delErr}</div>}
+        </Modal>
+      )}
     </div>
   )
 }
+
+const count = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`

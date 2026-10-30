@@ -40,6 +40,15 @@ def list_sites() -> list[dict]:
     return [summary(get_site(i)) for i in ids]
 
 
+def delete_site(site_id: str) -> None:
+    """Remove a building made or imported here. The demo buildings ship with the code and stay."""
+    if site_id in _BUILTIN:
+        raise ValueError("the demo buildings cannot be deleted")
+    if store().get(PK, site_id) is None:
+        raise KeyError(f"unknown site {site_id}")
+    store().delete(PK, site_id)
+
+
 def summary(s: dict) -> dict:
     b = s["building"]
     nodes = b["nodes"]
