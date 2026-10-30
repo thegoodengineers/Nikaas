@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import View3D from './View3D.tsx'
-import BeatNikaas from './BeatNikaas.tsx'
 
 type Node = { id: string; type: 'room' | 'corridor' | 'exit'; x: number; z: number; w?: number; d?: number; label?: string }
 type Building = { name: string; nodes: Node[]; edges: { from: string; to: string; width: number }[] }
@@ -364,7 +363,6 @@ export default function App() {
           </div>
         </aside>
       </div>
-      {building && !DEMO && <BeatNikaas api={API} building={building} blocked={blocked} startPlan={plan === 'nearest' ? run?.plan : undefined} />}
       {compareResults.length > 0 && (
         <div style={{ marginTop: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>

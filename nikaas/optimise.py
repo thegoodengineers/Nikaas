@@ -311,26 +311,3 @@ def optimise(b: Building | dict, blocked=()) -> dict:
         "lower_bound_s": lb,
     }
 
-
-def beat_nikaas_score(b: Building | dict, judge_plan: dict, blocked=()) -> dict:
-    """Evaluate a user/judge's custom exit plan against Nikaas' optimised plan."""
-    if not isinstance(b, Building):
-        b = load(b)
-    blocked = set(blocked)
-
-    judge_sim = simulate(b, judge_plan, blocked, frame_every=1e9)
-    opt_res = optimise(b, blocked)
-
-    judge_time = judge_sim["total_time_s"]
-    nikaas_time = opt_res["total_time_s"]
-    gap = round(judge_time - nikaas_time, 2)
-
-    return {
-        "judge_plan": judge_plan,
-        "judge_time_s": judge_time,
-        "nikaas_plan": opt_res["plan"],
-        "nikaas_time_s": nikaas_time,
-        "lower_bound_s": opt_res["lower_bound_s"],
-        "gap_s": gap,
-        "beat_nikaas": judge_time < nikaas_time,
-    }

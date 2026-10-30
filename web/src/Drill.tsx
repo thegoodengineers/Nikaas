@@ -39,48 +39,93 @@ export default function Drill() {
   const blocked = state?.blocked ?? []
   const toggle = (id: string) => push(blocked.includes(id) ? blocked.filter(x => x !== id) : [...blocked, id])
 
+  const [copied, setCopied] = useState(false)
+  const copy = () => { void navigator.clipboard?.writeText(phoneUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }) }
+  const open = exits.length - blocked.length
+  const base = `${location.origin}${location.pathname}`
+
   return (
     <div className="page drill">
-      <div className="drill-grid">
+      <header className="drill-head">
         <div>
+          <p className="pf-eyebrow">Tools · presenter screen</p>
           <h1 className="page-title">Live drill</h1>
-          <p className="lede">Scan with your phone and choose the room you are in. Your phone shows your own way out, and changes it the moment an exit is blocked.</p>
-          <div className="drill-qr" role="img" dangerouslySetInnerHTML={{ __html: qr }} aria-label={`QR code for ${phoneUrl}`} />
-          <p className="sources">{phoneUrl}</p>
-          <p className="sources">Phones taped beside the doors become live exit signs: open {phoneUrl.replace('#/me', '#/sign')}</p>
-          <p className="sources">Nikaas Live: point a laptop camera at a room and the plan uses the people really there: open <a href="#/cam">{phoneUrl.replace('#/me', '#/cam')}</a></p>
+          <p className="lede">Put this on the big screen. Judges scan the code, choose their room, and their phone shows their own way out. Set a fire here and every phone heading that way is re-routed.</p>
         </div>
-        <div className="drill-panel">
+        <span className={`pf-chip drill-state ${state ? 'ok' : ''}`}><span className="pf-dot" />{state ? `Running · update ${state.version}` : 'Not started'}</span>
+      </header>
+
+      <div className="drill-grid">
+        <section className="pf-card drill-join" aria-labelledby="drill-join-h">
+          <p className="pf-eyebrow" id="drill-join-h">Join from your phone</p>
+          <div className="drill-qr" role="img" dangerouslySetInnerHTML={{ __html: qr }} aria-label={`QR code for ${phoneUrl}`} />
+          <ol className="drill-steps">
+            <li><span>1</span>Scan the code with the phone camera</li>
+            <li><span>2</span>Choose the room you are in</li>
+            <li><span>3</span>Follow the arrows to your exit</li>
+          </ol>
+          <div className="drill-url"><code>{phoneUrl}</code><button type="button" className="pf-btn" onClick={copy}>{copied ? 'Copied' : 'Copy link'}</button></div>
+        </section>
+
+        <section className="drill-main">
           {!state ? (
-            <button className="cta" disabled={busy || !building} onClick={() => push([])}>{busy ? 'Starting…' : 'Start the drill'}</button>
+            <div className="pf-card drill-start">
+              <h2>Ready when you are</h2>
+              <p className="pf-muted">Starting the drill plans every room of the IIT Kharagpur museum floor to its fastest exit. Phones that have joined get their route straight away.</p>
+              <button className="pf-btn go drill-big" disabled={busy || !building} onClick={() => push([])}>{busy ? 'Starting…' : !building ? 'Loading the building…' : 'Start the drill'}</button>
+            </div>
           ) : (
             <>
-              <div className="drill-status">
-                <div><span>Everyone out in</span><b>{state.total_time_s} s</b></div>
-                <div><span>Drill update</span><b>#{state.version}</b></div>
+              <div className="drill-stats">
+                <div className="pf-card"><span>Everyone out in</span><b>{state.total_time_s}<small> s</small></b></div>
+                <div className="pf-card"><span>Exits open</span><b className={blocked.length ? 'bad' : ''}>{open}<small> of {exits.length}</small></b></div>
+                <div className="pf-card"><span>Rooms just re-routed</span><b className={state.changed.length ? 'warn' : ''}>{state.changed.length}</b></div>
               </div>
-              <h2 className="sub" style={{ marginTop: 20 }}>Set a fire</h2>
-              <div className="drill-exits">
-                {exits.map(x => (
-                  <button key={x.id} className={blocked.includes(x.id) ? 'fire' : ''} disabled={busy || (!blocked.includes(x.id) && blocked.length + 1 >= exits.length)} onClick={() => toggle(x.id)}>
-                    <ExitIcon color={blocked.includes(x.id) ? '#fff' : 'var(--exit)'} />{blocked.includes(x.id) ? `Fire at ${x.label ?? x.id}` : x.label ?? x.id}
-                  </button>
-                ))}
+
+              <div className="pf-card">
+                <div className="drill-row-head">
+                  <h2>Set a fire</h2>
+                  <button className="pf-btn" disabled={busy} onClick={() => push([], true)}>Start over</button>
+                </div>
+                <p className="pf-muted pf-small">Tap an exit to block it, tap again to reopen it. At least one exit stays open.</p>
+                <div className="drill-exits">
+                  {exits.map(x => {
+                    const fire = blocked.includes(x.id)
+                    return (
+                      <button key={x.id} className={fire ? 'fire' : ''} aria-pressed={fire} disabled={busy || (!fire && blocked.length + 1 >= exits.length)} onClick={() => toggle(x.id)}>
+                        <ExitIcon color={fire ? '#fff' : 'var(--exit)'} />
+                        <span><b>{x.label ?? x.id}</b><small>{fire ? 'Fire: blocked' : 'Open'}</small></span>
+                      </button>
+                    )
+                  })}
+                </div>
+                {state.changed.length > 0 && <p className="pf-alert warn drill-changed" role="status">{state.changed.length} rooms were just re-routed. Their phones are vibrating.</p>}
               </div>
-              <button className="quiet" disabled={busy} onClick={() => push([], true)} style={{ marginTop: 10 }}>Start over (clear fires and alerts)</button>
-              {state.changed.length > 0 && <p className="drill-changed">{state.changed.length} rooms were just re-routed. Their phones are vibrating.</p>}
-              <div className="table-wrap" style={{ marginTop: 16 }}>
-                <table className="data">
-                  <thead><tr><th>Room</th><th>People</th><th>Exit</th><th>Walk</th></tr></thead>
-                  <tbody>{Object.entries(state.rooms).map(([r, x]) => (
-                    <tr key={r} className={state.changed.includes(r) ? 'changed' : ''}><td>{state.room_labels[r] ?? r}</td>
-                    <td className="num">{state.people?.[r] ?? ''}{state.live?.[r] && <span className="live-badge" title={`Camera count; floor plan says ${state.live[r].design}`}>LIVE</span>}</td><td>{x.exit_label}</td><td className="num">{x.distance_m} m</td></tr>))}</tbody>
-                </table>
+
+              <div className="pf-card">
+                <h2>Rooms and their exits</h2>
+                <div className="table-wrap">
+                  <table className="data drill-table">
+                    <thead><tr><th>Room</th><th className="num">People</th><th>Exit</th><th className="num">Walk</th></tr></thead>
+                    <tbody>{Object.entries(state.rooms).map(([r, x]) => (
+                      <tr key={r} className={state.changed.includes(r) ? 'changed' : ''}>
+                        <td>{state.room_labels[r] ?? r}</td>
+                        <td className="num">{state.people?.[r] ?? ''}{state.live?.[r] && <span className="live-badge" title={`Camera count; floor plan says ${state.live[r].design}`}>LIVE</span>}</td>
+                        <td><span className="drill-exit-tag"><ExitIcon color="var(--exit)" />{x.exit_label}</span></td>
+                        <td className="num">{x.distance_m} m</td>
+                      </tr>))}</tbody>
+                  </table>
+                </div>
               </div>
             </>
           )}
-          {err && <p role="alert" style={{ color: 'var(--alarm)' }}>{err}</p>}
-        </div>
+          {err && <p className="pf-alert bad" role="alert">{err}</p>}
+        </section>
+      </div>
+
+      <div className="drill-more">
+        <a className="pf-card" href="#/sign"><b>Exit sign phones</b><span>Tape a phone beside each door: it shows a live green or red exit sign. {base}#/sign</span></a>
+        <a className="pf-card" href="#/cam"><b>Room camera</b><span>Point a laptop camera at a room: the drill uses the people really there.</span></a>
       </div>
     </div>
   )

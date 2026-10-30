@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from nikaas.api import app
 from nikaas.building import load, nearest_plan
-from nikaas.optimise import beat_nikaas_score, lower_bound, optimise
+from nikaas.optimise import lower_bound, optimise
 from nikaas.sim import simulate
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -93,16 +93,6 @@ def test_optimise_beats_nearest_on_iit_kgp_museum():
     # Nearest was 145.25s; optimised drops off the narrow verandah door to ~124s
     assert opt["total_time_s"] < near_time
     assert opt["total_time_s"] <= 126.0
-
-
-def test_beat_nikaas_scoring():
-    b = load(ROOT / "data/sample_floor.json")
-    # A judge who uses nearest exit
-    judge_plan = nearest_plan(b)
-    res = beat_nikaas_score(b, judge_plan)
-    assert res["judge_time_s"] > res["nikaas_time_s"]
-    assert res["gap_s"] > 0
-    assert res["beat_nikaas"] is False
 
 
 def test_api_optimise_endpoint():
