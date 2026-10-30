@@ -115,7 +115,7 @@ function DrillRun({ opts, onRestart }: { opts: Opts; onRestart: (o: Opts) => voi
         </ol>
         <div className="d-clock">
           <div className="d-clock-n">{hud?.elapsed != null ? `T+${fmt(hud.elapsed)}` : hud?.clock ?? '09:41:12'}</div>
-          <div className="d-clock-l">{hud?.elapsed != null ? 'since alarm' : 'local time'}</div>
+          <div className="d-clock-l">{hud?.elapsed != null ? 'since alarm · illustration' : 'local time'}</div>
         </div>
       </header>
 
@@ -263,7 +263,12 @@ function DrillRun({ opts, onRestart }: { opts: Opts; onRestart: (o: Opts) => voi
         <div className="d-overlay soft">
           <div className="d-card d-sum">
             <div className={`d-kicker ${hud.summary.trapped ? 'warn' : 'good'}`}>{hud.summary.trapped ? 'Evacuation ended' : 'Building clear'}</div>
-            <div className="d-sum-time">{fmt(hud.summary.time)}<span>from alarm to the last person out</span></div>
+            <div className="d-sum-time">{fmt(hud.summary.time)}<span>from alarm to the last person out, in this illustration</span></div>
+            {/* this view walks free agents with no door or stair flow limits; judges must not mistake its times for ours */}
+            <p className="d-sum-note">
+              Illustration: free walkers with no door or stair flow limits. Validated evacuation times are on
+              the <a href="#/twin">Twin</a> and <a href="#/evidence">Evidence</a> pages.
+            </p>
             <div className="d-sum-grid">
               <div><b>{hud.summary.out}</b><span>of {hud.summary.total} out safely</span></div>
               <div className={hud.summary.trapped ? 'bad' : ''}><b>{hud.summary.trapped}</b><span>waiting for rescue</span></div>
