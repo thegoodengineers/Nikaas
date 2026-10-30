@@ -31,7 +31,7 @@ ap.add_argument("--voice", default="Brian", help="name of an ElevenLabs voice in
 ap.add_argument("--model", default="eleven_multilingual_v2")
 a = ap.parse_args()
 
-key = os.environ.get("ELEVENLABS_API_KEY") or (pathlib.Path.home() / ".elevenlabs_key").read_text(encoding="utf-8").strip()
+key = os.environ.get("ELEVENLABS_API_KEY") or (pathlib.Path.home() / ".elevenlabs_key").read_text(encoding="utf-8-sig").strip()
 H = {"xi-api-key": key, "content-type": "application/json"}
 
 
