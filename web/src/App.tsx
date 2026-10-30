@@ -12,6 +12,8 @@ type Run = {
   plan?: Record<string, string>; compliance?: number; profile?: string
 }
 
+type CompareResult = { label: string; compliance: number; run: Run }
+
 const PROFILES: { id: string; label: string; compliance: number; desc: string }[] = [
   { id: 'guidance', label: 'Guided (90%)', compliance: 0.9, desc: '9 in 10 follow the plan' },
   { id: 'mixed',    label: 'Mixed (65%)',  compliance: 0.65, desc: '35% take the familiar exit' },
@@ -83,6 +85,8 @@ export default function App() {
   const [plan, setPlan] = useState<'nearest' | 'nikaas'>('nearest')
   const [compliance, setCompliance] = useState(1.0)
   const [qa, setQa] = useState<{ score: number; status: string; warnings: { severity: string; message: string }[] }>()
+  const [comparing, setComparing] = useState(false)
+  const [compareResults, setCompareResults] = useState<CompareResult[]>([])
   useEffect(() => { fetch('data/vision_nova_pro_qa.json').then(r => r.json()).then(setQa).catch(() => {}) }, [])
   const canvas = useRef<HTMLCanvasElement>(null)
 
@@ -242,6 +246,29 @@ export default function App() {
               {' '}The Nikaas plan routes the remaining {Math.round(compliance * 100)}% to compensate.
             </div>
           )}
+          <button
+            disabled={comparing || !building || !API}
+            style={{ marginTop: 10, padding: '7px 16px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13, opacity: comparing || !API ? 0.6 : 1 }}
+            onClick={async () => {
+              if (!building) return
+              setComparing(true); setCompareResults([])
+              try {
+                const scenarios = [
+                  { label: 'Panic (30%)', compliance: 0.3 },
+                  { label: 'Guided (90%)', compliance: 0.9 },
+                  { label: 'Full plan (100%)', compliance: 1.0 },
+                ]
+                const results = await Promise.all(
+                  scenarios.map(s => fetchRun(building, blocked, source, plan, s.compliance).then(run => ({ ...s, run })))
+                )
+                setCompareResults(results)
+              } catch (e) { setError(String((e as Error).message ?? e)) }
+              finally { setComparing(false) }
+            }}
+          >
+            {comparing ? 'Running comparison…' : 'Compare Panic / Guided / Full side by side'}
+          </button>
+          {!API && <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 10 }}>Live API required</span>}
         </div>
       </div>
       <div className="ctl-row">
@@ -307,6 +334,60 @@ export default function App() {
         </aside>
       </div>
       {building && !DEMO && <BeatNikaas api={API} building={building} blocked={blocked} startPlan={plan === 'nearest' ? run?.plan : undefined} />}
+      {compareResults.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <h2 style={{ fontFamily: 'var(--serif)', fontSize: 22, margin: 0 }}>Side-by-side comparison</h2>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>Same building · Same plan · Same blocked exits</span>
+            <button className="quiet" style={{ marginLeft: 'auto' }} onClick={() => setCompareResults([])}>✕ Close</button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${compareResults.length}, 1fr)`, gap: 12 }}>
+            {compareResults.map((cr, idx) => {
+              const best = compareResults.reduce((a, b) => a.run.total_time_s < b.run.total_time_s ? a : b)
+              const isBest = cr === best
+              const worstTime = Math.max(...compareResults.map(r => r.run.total_time_s))
+              const pct = worstTime > 0 ? (cr.run.total_time_s / worstTime) * 100 : 100
+              return (
+                <div key={idx} style={{ background: isBest ? '#ecfdf3' : 'var(--card)', border: `2px solid ${isBest ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 10, padding: 16 }}>
+                  <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{cr.label}</div>
+                  {isBest && <div style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600, marginBottom: 8 }}>✓ Fastest evacuation</div>}
+                  <div style={{ fontFamily: 'var(--serif)', fontSize: 42, lineHeight: 1, color: isBest ? 'var(--accent)' : 'var(--ink)', marginBottom: 4 }}>
+                    {fmt(cr.run.total_time_s)}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>total evacuation time</div>
+                  <div style={{ height: 6, background: 'var(--line)', borderRadius: 3, marginBottom: 12 }}>
+                    <div style={{ height: 6, width: `${pct}%`, background: isBest ? 'var(--accent)' : 'var(--queue)', borderRadius: 3 }} />
+                  </div>
+                  {cr.run.p95_time_s !== undefined && (
+                    <div style={{ marginBottom: 6 }}>
+                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>95th-percentile movement time</div>
+                      <div style={{ fontFamily: 'var(--mono)', fontSize: 15 }}>{cr.run.p95_time_s} s</div>
+                    </div>
+                  )}
+                  <div style={{ marginBottom: 6 }}>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>Peak queue size</div>
+                    <div style={{ fontFamily: 'var(--mono)', fontSize: 15 }}>{cr.run.peak_queue}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>People per exit</div>
+                    <div style={{ fontFamily: 'var(--mono)', fontSize: 12, lineHeight: 1.6 }}>
+                      {Object.entries(cr.run.per_exit).map(([k, v]) => <div key={k}>{k}: {v}</div>)}
+                    </div>
+                  </div>
+                  {idx > 0 && (() => {
+                    const diff = compareResults[0].run.total_time_s - cr.run.total_time_s
+                    return diff !== 0 ? (
+                      <div style={{ marginTop: 10, fontSize: 13, color: diff > 0 ? 'var(--accent)' : 'var(--queue)', fontWeight: 600 }}>
+                        {diff > 0 ? `${diff.toFixed(1)} s faster` : `${Math.abs(diff).toFixed(1)} s slower`} than Panic
+                      </div>
+                    ) : null
+                  })()}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
