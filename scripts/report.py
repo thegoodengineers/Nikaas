@@ -50,15 +50,15 @@ st = Path("runs/stadium_results.csv")
 if st.exists():
     srows = list(csv.DictReader(st.open(encoding="utf-8")))
     extra = ["", "## Stadium, scaled to ~2,000 people (`runs/stadium_results.csv`)", "",
-             "| Plan | People | Evacuation time (s) | Peak density (p/m²) | Worst edge | Lower bound (s) | Commit |",
-             "|---|---|---|---|---|---|---|"]
-    extra += [f"| {r['plan']} | {r['people']} | {r['total_time_s']} | {r['max_density_pm2']} | {r['worst_edge']} | {r['lower_bound_s'] or '-'} | {r.get('commit', '-')} |" for r in srows]
+             "| Plan | Blocked gate | People | Evacuation time (s) | Peak density (p/m²) | Worst edge | Lower bound (s) | Commit |",
+             "|---|---|---|---|---|---|---|---|"]
+    extra += [f"| {r['plan']} | {r['blocked_exit']} | {r['people']} | {r['total_time_s']} | {r['max_density_pm2']} | {r['worst_edge']} | {r['lower_bound_s'] or '-'} | {r.get('commit', '-')} |" for r in srows]
     md = Path("docs/RESULTS.md")
     md.write_text(md.read_text(encoding="utf-8") + NL.join(extra) + NL, encoding="utf-8")
     if web.exists():
         json.dump([{"plan": r["plan"], "people": int(r["people"]), "total_time_s": float(r["total_time_s"]),
                     "max_density": float(r["max_density_pm2"]), "worst_edge": r["worst_edge"],
-                    "lower_bound_s": float(r["lower_bound_s"]) if r["lower_bound_s"] else None} for r in srows],
+                    "lower_bound_s": float(r["lower_bound_s"]) if r["lower_bound_s"] else None} for r in srows if r["blocked_exit"] == "-"],
                   (web / "stadium.json").open("w"), indent=1)
     print(NL.join(extra))
 

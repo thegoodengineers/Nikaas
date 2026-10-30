@@ -86,6 +86,22 @@ def main():
                      crowd["max_density"], crowd["worst_edge"], crowd.get("first_crush_t", ""),
                      "" if bound is None else round(bound, 2), commit])
 
+    # ── one gate blocked at a time: the Nikaas plan is precomputed so a gate click in the Twin is instant on stage
+    #    (live, optimise() takes 8-18 s per gate on AWS, close to the 29 s API limit with a cold start)
+    for gate in b.exits:
+        bl = {gate}
+        near = simulate(b, nearest_plan(b, bl), bl, max_t=2000, frame_every=5)
+        opt = optimise(b, bl)
+        sim = simulate(b, opt["plan"], bl, max_t=2000, frame_every=5)
+        sim.update(plan=opt["plan"], lower_bound_s=round(opt["lower_bound_s"], 2), nearest_s=near["total_time_s"])
+        sim["crowd"] = crowd_analyse(sim, scaled)
+        (WEB / f"frames_stadium_nikaas_blocked{gate}.json").write_text(json.dumps(sim), encoding="utf-8")
+        print(f"{gate} blocked: nearest {near['total_time_s']} s, Nikaas {sim['total_time_s']} s")
+        for name, run, bound in (("nearest", near, None), ("nikaas", sim, opt["lower_bound_s"])):
+            crowd = crowd_analyse(run, scaled) if name == "nearest" else sim["crowd"]
+            rows.append(["stadium_gates.json (scaled)", name, gate, actual_total, run["total_time_s"], crowd["max_density"],
+                         crowd["worst_edge"], crowd.get("first_crush_t", ""), "" if bound is None else round(bound, 2), commit])
+
     # ── headline CSV ──────────────────────────────────────────────────────────
     csv_out = RUNS / "stadium_results.csv"
     with csv_out.open("w", newline="") as f:
