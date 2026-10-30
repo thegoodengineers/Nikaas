@@ -8,10 +8,12 @@
 - **44.6% faster** evacuation movement time on the demo lab block: nearest-exit rule 301 s → Nikaas plan 167 s, saving 134 s for 528 people (`runs/wow.csv`).
 - **Within 3.71 s of a proven lower bound** — no plan can move everyone out faster than 163.04 s with the same exits and widths, and Nikaas reaches 166.75 s (`runs/wow.csv`).
 - **Validated against SFPE Handbook Example 1**: 245.25 s vs the published 245.2 s (0.05 s error, `tests/test_sim.py`).
+- **Multi-floor buildings with shared stairwells**: on a 5-floor tower with 450 people, the nearest-exit rule sends everyone down one stairwell (375.25 s); the Nikaas plan uses both and gets everyone out in 206.0 s, 26.27 s above the proven lower bound (`runs/multi_floor.csv`). On the 3-floor office test building the plan ties the nearest-exit rule.
+- **Scales to a stadium**: a representative stadium scaled to 2,001 people, 348.5 s → 203.0 s with the same gates (`runs/stadium_results.csv`).
 - **Crowd mode (opt-in)**: `POST /simulate` with `crowd: true` flags corridor and door edges above the density thresholds researched in `docs/CROWD_RESEARCH.md` (concern 2.7 p/m², crush 4 p/m²). Densities are estimated from a flow model, not a spatial crowd model, and are capped at 10 p/m².
 - **Live drill**: judges scan a QR code, pick their room, and their phone shows their own exit; block an exit and every affected phone flashes red with its new route (and vibrates on Android). Phones taped beside doors become live exit signs that turn red and point to the nearest open exit.
 
-Live site: **http://nikaas-webbucket-hbkfctr0cw8s.s3-website.ap-south-1.amazonaws.com** (Home, Twin, Beat Nikaas, Live drill, Evidence; on phones `#/me` and `#/sign`) · API: https://4kzez16ucj.execute-api.ap-south-1.amazonaws.com/health · Demo video: *(fill before submission)*
+Live site: **http://nikaas-webbucket-hbkfctr0cw8s.s3-website.ap-south-1.amazonaws.com** (Home, Twin, 3D Sim, Beat Nikaas, Live drill, Evidence; on phones `#/me` and `#/sign`). The 3D Sim page is an illustration with its own simple walkers; the validated times are on the Twin and Evidence pages · API: https://4kzez16ucj.execute-api.ap-south-1.amazonaws.com/health · Demo video: *(fill before submission)*
 
 ---
 
