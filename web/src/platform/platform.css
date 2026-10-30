@@ -89,6 +89,6 @@
 .platform-card:hover { border-color: #b8c0c8; box-shadow: 0 6px 20px rgba(21, 25, 30, .06); }
 .platform-card h3 { font: 700 18px/1.25 var(--display); margin: 0; }
 .platform-card p { margin: 0; color: var(--text-2); font-size: 15px; line-height: 1.5; }
-.platform-card span { font-weight: 700; font-size: 14px; color: var(--exit); margin-top: 4px; }
+.platform-card span { font-weight: 700; font-size: 14px; color: #187a43; margin-top: 4px; } /* deeper than --exit: 5.4:1 on white */
 @media (max-width: 1000px) { .platform-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .platform-grid { grid-template-columns: 1fr; } }
