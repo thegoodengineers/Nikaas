@@ -62,10 +62,10 @@ export default function LiveHero() {
         bottleneck={run?.bottleneck} peakQueue={run?.peak_queue} height={h} showcase onExit={burn} />}
       <div className="lh-copy">
         <h1>Photograph the exit map. <span className="runner"><ExitIcon /></span> Get everyone out faster.</h1>
-        <p>Nikaas turns the evacuation map on a wall into a live model of the building, and plans everyone’s way out.</p>
+        <p>Nikaas turns the evacuation map on a wall into a live model of the building. People check in with their phone, get their own way out in an emergency, and the control room sees who is safe.</p>
         <div className="cta-row" style={{ justifyContent: 'flex-start' }}>
-          <a className="cta" href="#/drill">Run a live drill</a>
-          <a className="cta quiet" href="#film">See how it works</a>
+          <a className="cta" href="#/control">Open the control room</a>
+          <a className="cta quiet" href="#/go?site=office">Try the phone app</a>
         </div>
       </div>
       <div className="lh-live" aria-live="polite">
@@ -74,7 +74,7 @@ export default function LiveHero() {
       <div className={`lh-hint ${fire ? 'on-fire' : ''}`}>
         {busy ? 'Re-planning every room…'
           : fire ? <>Fire at {fireLabel}. Everyone was re-routed. <button onClick={() => burn(fire)}>Put it out</button></>
-          : <><i className="pulse" /> Tap a green exit sign to start a fire</>}
+          : <><i className="pulse" /> Select an exit to simulate a fire there</>}
       </div>
     </section>
   )

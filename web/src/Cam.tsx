@@ -1,15 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import ExitIcon from './ExitIcon.tsx'
+import { getDetector, median, type Box } from './camera/detector.ts'
 
 // Nikaas Live: a laptop camera counts the people in one room and the drill re-plans with that number.
 // The person detector (COCO-SSD, TensorFlow.js) runs in this browser tab: video never leaves the laptop,
 // only the head count is sent to POST /occupancy.
 
 const API = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
-const BASE = import.meta.env.BASE_URL
-type Box = { bbox: [number, number, number, number]; class: string; score: number }
-type Detector = { detect: (v: HTMLVideoElement, maxBoxes?: number, minScore?: number) => Promise<Box[]> }
-declare global { interface Window { cocoSsd?: { load: (o: { base: string; modelUrl: string }) => Promise<Detector> } } }
 type Room = { exit: string; exit_label: string; distance_m: number }
 type State = {
   version: number; total_time_s: number; room_labels: Record<string, string>; rooms: Record<string, Room>; changed: string[]
@@ -21,25 +18,6 @@ const SMOOTH_MS = 2000 // median of the last 2 s of counts: one missed or double
 const HOLD_MS = 1500 // a new count must hold this long before it is sent
 const MIN_GAP_MS = 3000 // at most one re-plan every 3 s (each takes 1.5-4 s on AWS)
 
-function loadScript(src: string) {
-  return new Promise<void>((ok, fail) => {
-    if (document.querySelector(`script[src="${src}"]`)) return ok()
-    const s = document.createElement('script')
-    s.src = src; s.onload = () => ok(); s.onerror = () => fail(new Error(`Could not load ${src}`))
-    document.head.appendChild(s)
-  })
-}
-let detector: Promise<Detector> | undefined
-function getDetector() {
-  detector ??= (async () => {
-    await loadScript(`${BASE}vendor/tfjs/tf.min.js`)
-    await loadScript(`${BASE}vendor/coco-ssd/coco-ssd.min.js`)
-    return window.cocoSsd!.load({ base: 'lite_mobilenet_v2', modelUrl: `${BASE}vendor/coco-ssd/model.json` })
-  })()
-  detector.catch(() => { detector = undefined })
-  return detector
-}
-const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : 0 }
 
 export default function Cam() {
   const [rooms, setRooms] = useState<Node[]>([])
