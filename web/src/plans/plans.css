@@ -11,10 +11,11 @@
 /* building list */
 .pl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .pl-site { display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
-/* the card's picture: the building as a white massing model (BuildingArt.tsx) on a light grid */
+/* the card's picture: the building's 3D render, or its white massing model (BuildingArt.tsx) on a light grid */
 .pl-art { height: 190px; margin: -16px -18px 6px; border-bottom: 1px solid var(--pf-line); background-color: #f6f7f9;
   background-image: linear-gradient(#eceff2 1px, transparent 1px), linear-gradient(90deg, #eceff2 1px, transparent 1px); background-size: 16px 16px; }
 .pl-art svg { display: block; width: 100%; height: 100%; padding: 14px 12px 10px; overflow: visible; }
+.pl-art img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .bm polygon { vector-effect: non-scaling-stroke; stroke-width: .75px; stroke-linejoin: round; }
 .bm .slab { fill: #fbfbf9; stroke: #b3b9b0; }
 .bm .slab-edge { fill: #e4e7e1; stroke: #b3b9b0; }
