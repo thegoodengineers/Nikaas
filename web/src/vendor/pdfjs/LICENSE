@@ -1,0 +1,4 @@
+pdf.js 4.10.38 (pdfjs-dist, legacy build), Copyright 2024 Mozilla Foundation, Apache License 2.0.
+Files pdf.mjs and pdf.worker.min.mjs copied unchanged from https://unpkg.com/pdfjs-dist@4.10.38/legacy/build/
+Vendored because the npm registry is blocked on the venue network (same as src/vendor/three and src/vendor/qrcode).
+Full licence text: https://www.apache.org/licenses/LICENSE-2.0

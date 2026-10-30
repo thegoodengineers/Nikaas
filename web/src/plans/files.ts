@@ -29,7 +29,7 @@ export const dataUrlBytes = (src: string) => Math.floor((src.length - src.indexO
 
 /** Every page of a PDF as a PNG, one per floor. */
 export async function pdfPages(file: File, onPage?: (done: number, total: number) => void): Promise<PlanImage[]> {
-  const [pdfjs, worker] = await Promise.all([import('pdfjs-dist/legacy/build/pdf.mjs'), import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')])
+  const [pdfjs, worker] = await Promise.all([import('../vendor/pdfjs/pdf.mjs'), import('../vendor/pdfjs/pdf.worker.min.mjs?url')])
   pdfjs.GlobalWorkerOptions.workerSrc = worker.default
   const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise
   const out: PlanImage[] = []
