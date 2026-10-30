@@ -74,3 +74,5 @@
 
 - **17:50** Regression check of `?demo=1` after the Twin control changes: Home, then the Twin at ~4 s; captions in order (nearest exit at 8.8 s, Nikaas plan at 47.2 s, main entrance blocked at 81.1 s); no page errors.
 - **17:55** Live Drill "Start over": the live drill was left at update #8 from testing, so the presenter page opened with "11 rooms were just re-routed". `POST /drill` now takes `reset: true` (update #1, no fires, no alerts on phones) and the presenter page has a "Start over" button. Test added; checked in the browser (update #1, no stale message).
+- **17:59** Pitch script v2 (`docs/PITCH.md`): unsupported claims removed (stadium = Chinnaswamy, crush threshold crossed, a "failed" gate, other tools miss density), Live Drill and exit sign added, every number tied to a file in runs/, plus a "Do not say" list and a step 0 checklist.
+

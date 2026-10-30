@@ -1,89 +1,99 @@
-﻿# Nikaas — 3-minute pitch script
-*Draft by 17:00 · Final by 06:00 · Mark who says each line*
+﻿# Nikaas — 3-minute pitch script (v2)
+*v2 by Chirag at 18:00, rebuilt from Bhumika's draft: same structure and speakers, claims corrected, Live Drill added.
+Every number below is in `runs/` (list at the end). Speakers marked "decide" are open; final by 06:00.*
 
 ---
 
-## 0:00 – 0:15 · Problem  *(Bhumika)*
+## Before going on stage (step 0)
 
-> "On the 4th of June 2025, 11 people died outside Chinnaswamy Stadium in Bengaluru.
-> They were trying to leave through a single narrow gate.
-> No one knew the crowd was about to crush — because no building in India has a tool
-> that tells you in advance."
-
----
-
-## 0:15 – 0:30 · Product name  *(Chirag)*
-
-> "We built Nikaas — Hindi for 'exit'.
-> Nikaas is a real-time evacuation simulator that tells you:
-> how long your building takes to evacuate, where the dangerous bottlenecks are,
-> and — new today — where the crowd will get dense enough to kill."
+- On the laptop, open the Live drill page (`#/drill`) and press **Start over**, so no phone shows an old alert.
+- Have a second tab on Home (`#/`) and a third on the Twin (`#/twin`).
+- One phone taped beside the classroom door, open on `#/sign`, door chosen: the live exit sign.
+- If the Wi-Fi fails: open the site with `?demo=1` (saved runs, no network) and skip the Live Drill.
 
 ---
 
-## 0:30 – 1:30 · Live demo  *(Chirag drives, Bhumika narrates)*
+## 0:00 – 0:20 · Problem  *(Bhumika)*
 
-**Step 1 — Load the IIT KGP museum building**
-> "This is the National Museum of Science and Technology at IIT Kharagpur — 507 people, 3 exits.
-> Nikaas simulates their full evacuation in under a second."
-
-**Step 2 — Play the animation**
-> "Watch: orange is walking, red is queuing.
-> Evacuation movement time: 145 seconds.  Bottleneck: corridor g820 to the VER exit, peak queue 104."
-
-**Step 3 — Block the MAIN exit**
-> "Now I close the main exit — a fire blocks it.
-> Movement time jumps to 318 seconds.  The VER corridor hits 226 people queuing."
-
-**Step 4 — Show Crowd mode**  *(if live by demo time)*
-> "Crowd mode overlays density.  Red means above 4 people per square metre —
-> that is the threshold at which crowd forces reach fatal levels, per G. Keith Still.
-> You can see exactly which corridor becomes a crush hazard, and at what time."
+> "Twenty-two students died in the 2019 Surat coaching-centre fire after the escape stair burned.
+> Twenty-three people died on one overloaded footbridge at Elphinstone Road in Mumbai.
+> On the 4th of June 2025, eleven people were killed outside Chinnaswamy Stadium in Bengaluru.
+> Every building has an evacuation map on the wall. It says one thing: go to the nearest exit.
+> When everyone does, one door jams while the others stand empty."
 
 ---
 
-## 1:30 – 1:45 · Validation  *(Chirag)*
+## 0:20 – 0:35 · Product  *(Chirag)*
 
-> "We didn't guess these numbers.
-> The SFPE Handbook of Fire Protection Engineering publishes a worked example —
-> a real building, hand-calculated.  Our simulator reproduces it to within 0.05 seconds:
-> 245.25 s versus 245.2 s.
-> Same hydraulic model.  Same constants.  We just made it interactive."
+> "We built Nikaas, Hindi for 'exit'. Photograph the exit map on the wall, and Nikaas turns it into a live
+> model of the building, simulates every person, and gives every room the exit that gets everyone out fastest."
 
 ---
 
-## 1:45 – 2:15 · Wow number  *(Bhumika, from runs/wow.csv)*
+## 0:35 – 1:35 · Live demo  *(Chirag drives, Bhumika narrates)*
 
-> "On the lab block — 528 people, 3 exits —
-> nearest-exit rule: 301 seconds.  Nikaas optimal plan: 167 seconds.
-> 134 seconds faster.  44.6% reduction in evacuation movement time.
-> And Nikaas's plan is within 3.71 seconds of the mathematically proven lower bound —
-> you cannot do better with this building and these exits.
-> That is the kind of insight a fire safety engineer cannot get from a static floor plan."
+**Step 1: Home, already evacuating.** Tap the green sign at the main entrance.
+> "This is the IIT Kharagpur Nehru Museum, 507 people. A fire blocks the main entrance.
+> Nikaas re-plans every room in seconds. With today's rule, everyone is out in 318 seconds;
+> with the Nikaas plan, 223.5."
 
----
+**Step 2: Live Drill.** Show the QR code on `#/drill`.
+> "Now it is your turn. Scan this and pick the room you are in. Your phone now shows your own exit
+> and how far it is."
 
-## 2:15 – 2:45 · Crowd mode  *(Bhumika)*
-
-> "Crowd mode adds a layer the existing tools miss entirely.
-> You give us a building.  We tell you which corridor exceeds the crush threshold
-> — 4 people per square metre — and at what time.
-> For Chinnaswamy, our stadium model shows Gate South, the narrow metro-side gate,
-> exceeds that threshold within the first 60 seconds of a panic evacuation.
-> That is the gate that failed on June 4th."
+Press **Set a fire** at West steps.
+> "A fire at the West steps. Every phone that was going that way just turned red and got a new route.
+> And the sign on that door"  *(point at the taped phone)*  "now says: do not use, go to the Verandah door."
 
 ---
 
-## 2:45 – 3:00 · Close  *(Chirag)*
+## 1:35 – 2:15 · Proof  *(speaker: decide)*
 
-> "Nikaas is open source, runs in a browser, and calls a single API endpoint.
-> Any fire safety consultant, any stadium operator, any college building can use it today.
-> We are Nikaas — and we want to make sure no one dies because the exit was in the wrong place."
+> "We did not guess these numbers. The SFPE fire-engineering handbook works one evacuation out by hand:
+> 245.2 seconds. Our simulator: 245.25.
+> On a 528-person lab block, the nearest-exit rule takes 301 seconds and the Nikaas plan 167, 44.6 percent faster,
+> and within 3.7 seconds of a proven lower bound: no plan can do better with those doors.
+> Is that one lucky run? We fixed the plans and re-ran the museum 200 times with random start delays and
+> head counts. Nikaas was faster in 193 of 200. In the other seven, fewer people turned up, and it lost about four seconds."
 
 ---
 
-*Numbers to verify before final version:*
-- *145.25 s nearest / 124.0 s Nikaas / 318.0 s blocked MAIN — from docs/RESULTS.md ✓*
-- *301.25 s → 166.75 s (134.5 s, 44.6%) — from runs/wow.csv ✓*
-- *245.25 s vs 245.2 s — from tests/test_sim.py ✓*
-- *Stadium Gate South timing — run stadium_gates.json through /simulate before demo*
+## 2:15 – 2:40 · Scale  *(Bhumika)*
+
+> "It scales. On a five-floor tower that shares two stairwells, the nearest-exit rule sends all 450 people down one;
+> Nikaas uses both: 375 seconds down to 206.
+> On a representative stadium with 2,001 people, 348.5 seconds down to 203. And blocking the narrow metro-side gate
+> makes even the nearest-exit rule faster, because that gate is where the jam forms. The Nikaas plan never uses it."
+
+---
+
+## 2:40 – 3:00 · Close  *(Chirag)*
+
+> "Nikaas is live on AWS, its code is public on GitHub, and it starts from the map that is already on the wall.
+> Photograph the exit map. Get everyone out faster."
+
+---
+
+## Do not say (we cannot back these)
+
+- That our stadium is Chinnaswamy, or which gate "failed" on 4 June 2025. Our stadium is a representative building.
+- That any corridor in our runs crosses the crush threshold: the stadium's peak is 2.69 p/m² with the nearest-exit rule,
+  1.61 with the Nikaas plan, both below the 4 p/m² line. Densities come from a flow model, not a spatial crowd model.
+- That other tools miss crowd density: commercial tools such as MassMotion and LEGION draw density maps. Our difference is
+  starting from the photo on the wall and giving every room a plan.
+- "Real-time crush prediction", "safe building", or a full escape time: our times are movement times (`docs/METHOD.md`).
+- The 3D Sim page's times: it is an illustration; the validated numbers are the Twin and Evidence pages.
+
+---
+
+## Where each number comes from
+
+| Said | Value | File |
+|---|---|---|
+| Museum, main entrance blocked: nearest / Nikaas | 318.0 s / 223.5 s | `runs/wow.csv` |
+| SFPE worked example: published / ours | 245.2 s / 245.25 s | `runs/validation.csv` |
+| Lab block: nearest / Nikaas / lower bound gap | 301.25 s / 166.75 s / 3.71 s (44.6%) | `runs/wow.csv` |
+| Museum, 200 random runs: Nikaas faster / median loss in the others | 193 of 200 / 4.25 s | `runs/monte_carlo_summary.csv`, `docs/RESULTS.md` |
+| Tower: nearest / Nikaas | 375.25 s / 206.0 s | `runs/multi_floor.csv` |
+| Stadium (2,001): nearest / Nikaas; Gate South blocked, nearest | 348.5 s / 203.0 s; 203.0 s | `runs/stadium_results.csv` |
+| Incidents (22, 23, 11) | Surat 2019, Elphinstone Road 2017, Chinnaswamy 2025 | Home page sources |
