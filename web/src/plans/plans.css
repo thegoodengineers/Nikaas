@@ -10,14 +10,30 @@
 
 /* building list */
 .pl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
-.pl-site { display: flex; flex-direction: column; gap: 10px; }
-.pl-site h2 { margin: 0; font-size: 18px; }
-.pl-addr { margin: -6px 0 0; }
-.pl-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0; padding: 10px 0; border-top: 1px solid var(--pf-line); border-bottom: 1px solid var(--pf-line); }
-.pl-stats div { display: grid; gap: 2px; }
-.pl-stats dt { font: 700 11px/1.2 var(--text); letter-spacing: .06em; text-transform: uppercase; color: var(--pf-dim); }
-.pl-stats dd { margin: 0; font: 700 24px/1 var(--num); font-variant-numeric: tabular-nums; }
-.pl-site-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+.pl-site { display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+/* the card's picture: the building as a white massing model (BuildingArt.tsx) on a light grid */
+.pl-art { height: 190px; margin: -16px -18px 6px; border-bottom: 1px solid var(--pf-line); background-color: #f6f7f9;
+  background-image: linear-gradient(#eceff2 1px, transparent 1px), linear-gradient(90deg, #eceff2 1px, transparent 1px); background-size: 16px 16px; }
+.pl-art svg { display: block; width: 100%; height: 100%; padding: 14px 12px 10px; overflow: visible; }
+.bm polygon { vector-effect: non-scaling-stroke; stroke-width: .75px; stroke-linejoin: round; }
+.bm .slab { fill: #fbfbf9; stroke: #b3b9b0; }
+.bm .slab-edge { fill: #e4e7e1; stroke: #b3b9b0; }
+.bm .slab-edge.dark, .bm .side.dark { fill: #d3d7cf; }
+.bm .walk { stroke: #d2d6ce; stroke-linecap: round; }
+.bm .top { fill: #fff; stroke: var(--text-1); }
+.bm .side { fill: #eceee9; stroke: var(--text-1); }
+.bm .p { fill: var(--evac); }
+.bm .exit { fill: #0e8a4a; stroke: #fff; stroke-width: .9px; vector-effect: non-scaling-stroke; }
+.bm .stair { fill: rgba(37, 99, 235, .14); stroke: var(--stairs); }
+.bm-floor { transition: transform .45s cubic-bezier(.2, .7, .2, 1); }
+.pl-site:hover .bm-floor, .pl-site:focus-within .bm-floor { transform: translateY(calc(var(--i) * -3px)); }
+@media (prefers-reduced-motion: reduce) { .bm-floor { transition: none; } }
+.pl-site-title { display: flex; gap: 10px; align-items: flex-start; justify-content: space-between; }
+.pl-site h2 { margin: 0; font-size: 18px; line-height: 1.25; }
+.pl-facts { margin: 0; color: var(--pf-dim); font-size: 14px; }
+.pl-site-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: auto; padding-top: 6px; }
+.pl-site .pl-del { padding: 6px; margin: -4px -6px 0 0; color: var(--bad); flex: none; }
+.pl-site .pl-del:hover { background: var(--bad-bg); border-color: transparent; }
 .pl-site-actions .pf-btn { padding: 8px 12px; font-size: 14px; }
 
 /* import */
