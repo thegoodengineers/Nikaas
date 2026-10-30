@@ -310,5 +310,5 @@ export function buildTempleWorld(M: Mats, seats: Seat[] = []): World {
   glow.position.set(0, 4, -15); lights[0].push(glow); level.add(glow)
 
   b.flush(level); H.flush(level, false); R.flush(roof)
-  return { levels: [level], flights: [], roof, site, seats, picks, lights, seeThrough: glass }
+  return { levels: [level], flights: [], roof, site, seats: seats.map(s => ({ ...s, sit: false })), picks, lights, seeThrough: glass }
 }
