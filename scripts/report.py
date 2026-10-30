@@ -81,3 +81,20 @@ if mf.exists():
                     "lower_bound_s": float(r["lower_bound_s"])} for r in mrows], (web / "multi_floor.json").open("w"), indent=1)
     print(NL.join(extra))
 
+# robustness (scripts/monte_carlo.py -> runs/monte_carlo_summary.csv): random pre-movement and occupancy
+mc = Path("runs/monte_carlo_summary.csv")
+if mc.exists():
+    crows = list(csv.DictReader(mc.open(encoding="utf-8")))
+    extra = ["", "## Under uncertainty (`runs/monte_carlo_summary.csv`)", "",
+             "Times from the alarm (pre-movement uniform in [0, max] s per person, room occupancy scaled by 1 ± spread); plans fixed beforehand.", "",
+             "| Building | Runs | Pre-movement max (s) | Occupancy ± | Nearest p50 / p95 (s) | Nikaas p50 / p95 (s) | Nikaas faster | Ties | Nikaas slower | Median saving (s) | Commit |",
+             "|---|---|---|---|---|---|---|---|---|---|---|"]
+    extra += [f"| {r['building']} | {r['runs']} | {r['premove_max_s']} | {r['occupancy_spread']} | {r['nearest_p50_s']} / {r['nearest_p95_s']} | "
+              f"{r['nikaas_p50_s']} / {r['nikaas_p95_s']} | {r['nikaas_faster']} | {r['ties']} | {r['nikaas_slower']} | {r['median_saving_s']} | {r['commit']} |" for r in crows]
+    md = Path("docs/RESULTS.md")
+    md.write_text(md.read_text(encoding="utf-8") + NL.join(extra) + NL, encoding="utf-8")
+    if web.exists():
+        json.dump([{k: (v if k in ("building", "commit") else float(v)) for k, v in r.items()} for r in crows],
+                  (web / "monte_carlo.json").open("w"), indent=1)
+    print(NL.join(extra))
+

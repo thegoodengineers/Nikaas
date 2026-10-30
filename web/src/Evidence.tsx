@@ -4,6 +4,7 @@ type Result = { building: string; plan: string; blocked: string; people: number;
 type Wow = { building: string; blocked: string; people: number; nearest_s: number; nikaas_s: number; saved_s: number; pct_saved: number; lower_bound_s: number; gap_s: number }
 type Stadium = { plan: string; people: number; total_time_s: number; max_density: number; worst_edge: string; lower_bound_s: number | null }
 type MultiFloor = { scenario: string; floors: number; people: number; blocked: string; nearest_s: number; nikaas_s: number | null; lower_bound_s: number }
+type Robust = { building: string; runs: number; premove_max_s: number; occupancy_spread: number; nearest_p50_s: number; nearest_p95_s: number; nikaas_p50_s: number; nikaas_p95_s: number; nikaas_faster: number; ties: number; nikaas_slower: number; median_saving_s: number }
 type Validation = { case: string; published_s: number; ours_s: number; error_pct: number; commit: string }
 
 const NAMES: Record<string, string> = {
@@ -20,12 +21,14 @@ export default function Evidence() {
   const [val, setVal] = useState<Validation>()
   const [stadium, setStadium] = useState<Stadium[]>([])
   const [mf, setMf] = useState<MultiFloor[]>([])
+  const [mc, setMc] = useState<Robust[]>([])
   useEffect(() => {
     fetch('data/results.json').then(r => r.json()).then(setRows).catch(() => {})
     fetch('data/wow.json').then(r => r.json()).then(setWow).catch(() => {})
     fetch('data/validation.json').then(r => r.json()).then(setVal).catch(() => {})
     fetch('data/stadium.json').then(r => r.json()).then(setStadium).catch(() => {})
     fetch('data/multi_floor.json').then(r => r.json()).then(setMf).catch(() => {})
+    fetch('data/monte_carlo.json').then(r => r.json()).then(setMc).catch(() => {})
   }, [])
   return (
     <div className="page">
@@ -46,6 +49,20 @@ export default function Evidence() {
             <td className="num">{r.nearest_s} s</td><td className="num">{r.nikaas_s} s</td><td className="num">{r.pct_saved}%</td><td className="num">{r.lower_bound_s} s</td></tr>))}</tbody>
       </table></div>
       <p className="sources">“Fastest possible” is a proven lower bound from a time-expanded network-flow model (Ford and Fulkerson, 1962). No plan can beat it with the same exits and widths.</p>
+
+      <h3 style={{ marginTop: 40 }}>Is the lead real, or one lucky run?</h3>
+      <p>
+        A posted plan has to work on the day, not just on our numbers. We fixed both plans, then re-ran each building {mc[0]?.runs ?? '…'} times
+        with every person starting after a random delay of up to {mc[0]?.premove_max_s ?? '…'} s and every room’s head count off by up to
+        ±{mc[0] ? Math.round(mc[0].occupancy_spread * 100) : '…'}%. Times here are from the alarm.
+      </p>
+      <div className="table-wrap"><table className="data">
+        <thead><tr><th>Building</th><th>Nearest exit, median / 95th pct</th><th>Nikaas plan, median / 95th pct</th><th>Nikaas faster in</th><th>Median saving</th></tr></thead>
+        <tbody>{mc.map(r => (
+          <tr key={r.building}><td>{name(r.building)}</td><td className="num">{r.nearest_p50_s} s / {r.nearest_p95_s} s</td><td className="num">{r.nikaas_p50_s} s / {r.nikaas_p95_s} s</td>
+            <td className="num">{r.nikaas_faster} of {r.runs} runs</td><td className="num">{r.median_saving_s} s</td></tr>))}</tbody>
+      </table></div>
+      <p className="sources">The delay range and occupancy spread are our assumptions (docs/METHOD.md), not measured values; scripts/monte_carlo.py, runs/monte_carlo.csv.</p>
 
       <h3 style={{ marginTop: 40 }}>At stadium scale</h3>
       <p>

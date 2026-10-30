@@ -22,3 +22,13 @@ rather than guess them. When we say "the Nikaas plan is X s faster", X is a diff
 
 **What we do not claim.** We do not claim a total RSET or that a building is "safe". Pre-movement time can be
 added per room through `simulate(..., premove=(min_s, max_s))` once real alarm and drill data are available.
+
+## Robustness check (`scripts/monte_carlo.py`)
+
+To test whether the Nikaas plan's lead is more than one lucky run, both plans are fixed and each building is
+re-simulated 200 times with random conditions. **These are our assumptions, not measured values:** every
+person's pre-movement delay is uniform in [0, 60] s, and every room's occupancy is scaled by a factor uniform in
+[0.8, 1.2]. Times in that table are from the alarm (pre-movement + movement), so they are not comparable with the
+movement times elsewhere. Real pre-movement distributions depend on the building type and alarm system (BSI
+PD 7974-6:2019); with drill data the same script can be re-run with measured ranges.
+
