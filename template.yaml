@@ -17,6 +17,9 @@ Globals:
       "GET /drill": # every judge's phone polls this during Live Drill (cheap: one small S3 read)
         ThrottlingRateLimit: 30
         ThrottlingBurstLimit: 60
+      "GET /sites/{sid}/me": # every checked-in phone polls its route every 3-8 s during an alarm (one DynamoDB query)
+        ThrottlingRateLimit: 100
+        ThrottlingBurstLimit: 200
 
 Resources:
   # FastAPI app (nikaas/api.py) wrapped by Mangum. Every path and method goes to it.
@@ -32,6 +35,10 @@ Resources:
           PHOTO_BUCKET: !Ref PhotoBucket
           # Live Drill state (drill/state.json) is shared by all Lambda instances through S3 (nikaas/drill.py)
           NIKAAS_DRILL_BUCKET: !Ref PhotoBucket
+          # platform state (sites, check-ins, alarms, hazards): docs/PLATFORM.md
+          NIKAAS_TABLE: !Ref LiveTable
+          # control-room key lives in SSM so a redeploy never resets it (nikaas/api.py reads it once per instance)
+          NIKAAS_CONTROL_KEY_PARAM: /nikaas/control-key
       Policies:
         - Statement:
             - Effect: Allow
@@ -45,6 +52,15 @@ Resources:
               Resource: !GetAtt PhotoBucket.Arn
         - S3WritePolicy:
             BucketName: !Ref PhotoBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref LiveTable
+        - Statement:
+            - Effect: Allow # second opinion on a camera's suspected fire or smoke (nikaas/detect.py)
+              Action: [rekognition:DetectLabels]
+              Resource: "*"
+            - Effect: Allow
+              Action: [ssm:GetParameter]
+              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nikaas/control-key"
       Events:
         Api:
           Type: HttpApi # no Path = catch-all $default route; FastAPI does routing and CORS
@@ -53,6 +69,26 @@ Resources:
           Properties:
             Path: /drill
             Method: GET
+        PhonePoll:
+          Type: HttpApi # phones poll their route: own route for its own rate limit
+          Properties:
+            Path: /sites/{sid}/me
+            Method: GET
+
+  # Live state of the platform: one partition per site (pk SITE#<id>), people expire through the `exp` TTL.
+  LiveTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - { AttributeName: pk, AttributeType: S }
+        - { AttributeName: sk, AttributeType: S }
+      KeySchema:
+        - { AttributeName: pk, KeyType: HASH }
+        - { AttributeName: sk, KeyType: RANGE }
+      TimeToLiveSpecification:
+        AttributeName: exp
+        Enabled: true
 
   # Floor-plan photos sent to POST /vision and what vision made of them (photos/, results/). Private.
   PhotoBucket:
@@ -94,13 +130,40 @@ Resources:
             Action: s3:GetObject
             Resource: !Sub "${WebBucket.Arn}/*"
 
+  # HTTPS in front of the website bucket: phones only allow push alerts, GPS and the camera on https pages.
+  WebCdn:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: Nikaas website over HTTPS
+        DefaultRootObject: index.html
+        HttpVersion: http2
+        PriceClass: PriceClass_200 # includes edge locations in India
+        Origins:
+          - Id: web
+            DomainName: !Select [2, !Split ["/", !GetAtt WebBucket.WebsiteURL]]
+            CustomOriginConfig:
+              OriginProtocolPolicy: http-only # S3 website endpoints only speak http; viewers get https
+        DefaultCacheBehavior:
+          TargetOriginId: web
+          ViewerProtocolPolicy: redirect-to-https
+          Compress: true
+          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized: follows each file's Cache-Control
+
 Outputs:
   ApiUrl:
     Description: Public API URL (try /health)
     Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
   WebUrl:
-    Description: Public website URL
+    Description: Public website URL (http, S3)
     Value: !GetAtt WebBucket.WebsiteURL
+  WebHttpsUrl:
+    Description: "Public website URL over HTTPS. Use this one: push alerts, GPS and the camera need it"
+    Value: !Sub "https://${WebCdn.DomainName}"
+  LiveTableName:
+    Description: DynamoDB table with the platform's live state
+    Value: !Ref LiveTable
   WebBucketName:
     Description: Bucket to upload the web build to
     Value: !Ref WebBucket

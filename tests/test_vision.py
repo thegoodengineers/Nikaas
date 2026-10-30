@@ -143,3 +143,25 @@ def test_vision_endpoint_reports_bedrock_failure_as_502(monkeypatch):
     monkeypatch.setattr(vision, "_client", lambda region: Down())
     r = c.post("/vision", json={"image": b64})
     assert r.status_code == 502 and "AccessDenied" in r.text
+
+
+def test_stair_landings_are_marked_and_photo_frame_is_reported():
+    g = json.loads(json.dumps(REPLY))
+    g["points"].append({"id": "st", "at": [300, 350], "stair": True, "label": "North stair"})
+    g["links"].append({"from": "st", "to": "p1", "width": 2.0, "kind": "corridor"})
+    b = to_building(g, width_m=40, size=(1000, 500))
+    st = next(n for n in b["nodes"] if n["id"] == "st")
+    assert st["type"] == "corridor" and st["stair"] is True and st["label"] == "North stair"
+    assert not any(n.get("stair") for n in b["nodes"] if n["id"] != "st")
+    # drawing spans grid x 100..500 (40 m, so 0.1 m per grid unit) and starts at grid y 100 (height ratio 0.5)
+    assert b["photo_m"] == [-10.0, -5.0, 100.0, 50.0]
+
+
+def test_read_map_lists_stairs_and_photo_frame():
+    reply = json.loads(json.dumps(REPLY))
+    reply["points"].append({"id": "stair_1", "at": [450, 350], "stair": "true"})
+    fake = FakeBedrock(json.dumps(reply))
+    b, probs = read_map(PHOTO.read_bytes(), "jpeg", width_m=81, client=fake)
+    assert probs == [] and b["vision"]["stairs"] == ["stair_1"]
+    assert "photo_m" not in b and len(b["vision"]["photo_m"]) == 4
+    assert validate(b) == []

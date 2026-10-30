@@ -248,3 +248,221 @@ def occupancy(req: Occupancy):
     except ValueError as e:
         raise HTTPException(422, str(e))
     return {"replanned": replanned, **drill_state.public(state)}
+
+
+# ---------- platform: sites, check-in, alerts, control room (docs/PLATFORM.md) ----------
+from fastapi import Header  # noqa: E402
+
+from . import live, sites  # noqa: E402
+from .push import vapid_keys  # noqa: E402
+
+CONTROL_KEY = os.environ.get("NIKAAS_CONTROL_KEY", "")
+_key_loaded = False
+
+
+def _control_key() -> str:
+    """The deployment's control-room key: NIKAAS_CONTROL_KEY, or the SSM parameter named in
+    NIKAAS_CONTROL_KEY_PARAM (read once per Lambda instance). Empty = open (local runs)."""
+    global CONTROL_KEY, _key_loaded
+    if not CONTROL_KEY and not _key_loaded and os.environ.get("NIKAAS_CONTROL_KEY_PARAM"):
+        _key_loaded = True
+        try:
+            import boto3
+
+            CONTROL_KEY = boto3.client("ssm").get_parameter(Name=os.environ["NIKAAS_CONTROL_KEY_PARAM"], WithDecryption=True)["Parameter"]["Value"]
+        except Exception:
+            CONTROL_KEY = "locked: key not readable"  # the key exists in config but could not be read: fail closed
+    return CONTROL_KEY
+
+
+def _key(x_control_key: str | None):
+    """Control endpoints need the deployment's key; local runs without one are open."""
+    key = _control_key()
+    if key and x_control_key != key:
+        raise HTTPException(401, "control key required")
+
+
+def _call(fn, *a, **kw):
+    try:
+        return fn(*a, **kw)
+    except KeyError as e:
+        raise HTTPException(404, str(e).strip("'"))
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
+@app.get("/sites")
+def sites_list():
+    return sites.list_sites()
+
+
+@app.get("/sites/{sid}")
+def site_get(sid: str):
+    s = sites.get_site(sid)
+    if s is None:
+        raise HTTPException(404, f"unknown site {sid}")
+    return {**s, "assembly": sites.assembly_points(s)}
+
+
+@app.post("/sites")
+def site_save(site: dict, x_control_key: str | None = Header(default=None)):
+    _key(x_control_key)
+    return _call(sites.save_site, site)
+
+
+class GeoRequest(BaseModel):
+    geo: dict | None = None
+    assembly: list[dict] | None = None
+
+
+@app.post("/sites/{sid}/geo")
+def site_geo(sid: str, req: GeoRequest, x_control_key: str | None = Header(default=None)):
+    _key(x_control_key)
+    s = _call(sites.set_geo, sid, req.geo, req.assembly)
+    return {**s, "assembly": sites.assembly_points(s)}
+
+
+class LinkRequest(BaseModel):
+    building: dict
+    tolerance_m: float = 4.0
+
+
+@app.post("/plans/link-floors")
+def plans_link(req: LinkRequest):
+    b, links = sites.link_floors(req.building, req.tolerance_m)
+    return {"building": b, "links": links, "problems": validate(b)}
+
+
+class CheckinRequest(BaseModel):
+    token: str
+    room: str | None = None
+    gate: str | None = None
+
+
+@app.post("/sites/{sid}/checkin")
+def site_checkin(sid: str, req: CheckinRequest):
+    return _call(live.checkin, sid, req.token, req.room, req.gate)
+
+
+class TokenRequest(BaseModel):
+    token: str
+
+
+@app.post("/sites/{sid}/checkout")
+def site_checkout(sid: str, req: TokenRequest):
+    _call(live.checkout, sid, req.token)
+    return {"ok": True}
+
+
+@app.get("/sites/{sid}/me")
+def site_me(sid: str, token: str):
+    return _call(live.me, sid, token)
+
+
+class StatusRequest(BaseModel):
+    token: str
+    status: str
+    need: str | None = None
+    lat: float | None = None
+    lng: float | None = None
+    accuracy: float | None = None
+
+
+@app.post("/sites/{sid}/status")
+def site_status(sid: str, req: StatusRequest):
+    return _call(live.set_status, sid, req.token, req.status, req.need, req.lat, req.lng, req.accuracy)
+
+
+class PushRequest(BaseModel):
+    token: str
+    subscription: dict
+
+
+@app.post("/sites/{sid}/push")
+def site_push(sid: str, req: PushRequest):
+    _call(live.save_push, sid, req.token, req.subscription)
+    return {"ok": True}
+
+
+@app.get("/push/key")
+def push_key():
+    return {"public_key": vapid_keys()[1]}
+
+
+class AlarmRequest(BaseModel):
+    type: str = "fire"
+    message: str = ""
+    origin: str | None = None
+    phased: bool = False
+    wave_gap_s: float = 60
+
+
+@app.post("/sites/{sid}/alarm")
+def site_alarm(sid: str, req: AlarmRequest, x_control_key: str | None = Header(default=None)):
+    _key(x_control_key)
+    _call(live.start_alarm, sid, req.type, req.message, req.origin, req.phased, req.wave_gap_s)
+    return live.control(sid)
+
+
+@app.delete("/sites/{sid}/alarm")
+def site_alarm_stop(sid: str, x_control_key: str | None = Header(default=None)):
+    _key(x_control_key)
+    _call(live.stop_alarm, sid)
+    return live.control(sid)
+
+
+class HazardRequest(BaseModel):
+    kind: str
+    node: str
+    source: str = "manual"
+    confidence: float | None = None
+
+
+@app.post("/sites/{sid}/hazards")
+def site_hazard(sid: str, req: HazardRequest, x_control_key: str | None = Header(default=None)):
+    _key(x_control_key)
+    h = _call(live.add_hazard, sid, req.kind, req.node, req.source, req.confidence)
+    return {"hazard": h["id"], **live.control(sid)}
+
+
+@app.delete("/sites/{sid}/hazards/{hid}")
+def site_hazard_clear(sid: str, hid: str, x_control_key: str | None = Header(default=None)):
+    _key(x_control_key)
+    _call(live.remove_hazard, sid, hid)
+    return live.control(sid)
+
+
+class SensorRequest(BaseModel):
+    sensor_id: str
+    node: str
+    temp_c: float | None = None
+    smoke: float | None = None
+
+
+@app.post("/sites/{sid}/sensors")
+def site_sensor(sid: str, req: SensorRequest, x_control_key: str | None = Header(default=None)):
+    _key(x_control_key)
+    hid = _call(live.sensor_reading, sid, req.sensor_id, req.node, req.temp_c, req.smoke)
+    return {"hazard": hid, **live.control(sid)}
+
+
+class CameraRequest(BaseModel):
+    camera_id: str
+    node: str
+    people: int | None = None
+    fire: float = 0
+    smoke: float = 0
+    image: str | None = None  # one JPEG still, sent only when the browser suspects fire or smoke
+
+
+@app.post("/sites/{sid}/cameras")
+def site_camera(sid: str, req: CameraRequest, x_control_key: str | None = Header(default=None)):
+    _key(x_control_key)
+    out = _call(live.camera_report, sid, req.camera_id, req.node, req.people, req.fire, req.smoke, req.image)
+    return {**out, **live.control(sid)}
+
+
+@app.get("/sites/{sid}/control")
+def site_control(sid: str, x_control_key: str | None = Header(default=None)):
+    _key(x_control_key)
+    return _call(live.control, sid)
