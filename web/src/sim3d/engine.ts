@@ -220,7 +220,7 @@ export class DrillEngine {
   setExplode(on: boolean) { this.explodeTarget = on ? 1 : 0 }
   setCinematic(on: boolean) { this.cinematic = on; if (!on) { this.tween = null; this.controls.autoRotate = false } }
   setRoof(on: boolean) { this.roofOn = on; this.applyGlass() }
-  private applyGlass() { const g = this.world?.seeThrough; if (g) { g.opacity = this.roofOn ? 1 : 0.2; g.transparent = !this.roofOn; g.depthWrite = this.roofOn; g.needsUpdate = true } }
+  private applyGlass() { const g = this.world?.seeThrough; if (g) { g.opacity = this.roofOn ? 1 : 0.5; g.transparent = !this.roofOn; g.depthWrite = this.roofOn; g.needsUpdate = true } }
   setMuted(m: boolean) { this.sound.setMuted(m) }
   setFlash(f: boolean) { this.flash = f }
   setOverlay(on: boolean) { this.overlayOn = on; for (const m of this.world?.overlays ?? []) m.visible = on && !!m.material.map; this.emitHud() }
