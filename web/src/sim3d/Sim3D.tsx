@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { DrillEngine, type HudState, type Scenario, type Tool } from './engine.ts'
 import type { Plan } from './plan.ts'
-import { BUNDLED_FILES, listSites, loadPlan, parseKey, sourceFromHash, sourceHash, sourceKey, type SiteItem, type Source } from './load.ts'
+import { BUNDLED_FILES, isTemple, listSites, loadPlan, parseKey, sourceFromHash, sourceHash, sourceKey, type SiteItem, type Source } from './load.ts'
 import './sim3d.css'
 
 type Opts = { scenario: Scenario; startRoom: string }
@@ -236,7 +236,7 @@ function DrillRun({ plan, source, opts, onRestart }: { plan: Plan; source: Sourc
           )}
           <div className="d-seg" role="group" aria-label="View options">
             {LV > 1 && <button className={hud?.explode ? 'on' : ''} aria-pressed={!!hud?.explode} onClick={() => e?.setExplode(!hud?.explode)} title="Separate the floors (X)">Separate floors</button>}
-            <button className={hud?.roof ? 'on' : ''} aria-pressed={!!hud?.roof} onClick={() => e?.setRoof(!hud?.roof)}>{plan.key.endsWith('tirumala_temple.json') ? 'Solid roof & walls' : 'Roof'}</button>
+            <button className={hud?.roof ? 'on' : ''} aria-pressed={!!hud?.roof} onClick={() => e?.setRoof(!hud?.roof)}>{isTemple(plan.key) ? 'Solid roof & walls' : 'Roof'}</button>
             {hud?.overlay != null && <button className={hud.overlay ? 'on' : ''} aria-pressed={hud.overlay} onClick={() => e?.setOverlay(!hud.overlay)} title="The evacuation plan picture on the floor (P)">Plan overlay</button>}
             <button className={hud?.cinematic ? 'on' : ''} aria-pressed={!!hud?.cinematic} onClick={() => e?.setCinematic(!hud?.cinematic)} title="Automatic camera (C)">Auto camera</button>
           </div>
@@ -384,7 +384,7 @@ function BuildingPicker({ source, plan }: { source: Source; plan: Plan }) {
   const opts: { key: string; label: string }[] = [{ key: 'demo', label: 'Demo block (3 storeys)' }]
   if (sites?.length) for (const s of sites) opts.push({ key: `site:${s.id}`, label: `${s.name}${s.floors ? ` (${s.floors} ${s.floors === 1 ? 'floor' : 'floors'})` : ''}` })
   else for (const f of BUNDLED_FILES) opts.push({ key: `file:${f.path}`, label: f.label })
-  if (!opts.some(o => o.key === 'file:data/tirumala_temple.json')) opts.push({ key: 'file:data/tirumala_temple.json', label: 'Tirumala Venkateswara Temple' })
+  if (!opts.some(o => o.key === 'site:tirumala' || o.key === 'file:data/tirumala_temple.json')) opts.push({ key: 'file:data/tirumala_temple.json', label: 'Tirumala Venkateswara Temple' })
   if (!opts.some(o => o.key === cur)) opts.push({ key: cur, label: plan.name })
   return (
     <div className="d-field">

@@ -14,6 +14,8 @@ export function sourceFromHash(hash = location.hash): Source {
   if (file) return { kind: 'file', path: file }
   return { kind: 'demo' }
 }
+/** The Tirumala temple scene: the bundled file or the built-in demo site. */
+export const isTemple = (key: string) => key.endsWith('tirumala_temple.json') || key === 'site:tirumala'
 export const sourceKey = (s: Source) => (s.kind === 'demo' ? 'demo' : s.kind === 'site' ? `site:${s.id}` : `file:${s.path}`)
 export const sourceHash = (s: Source) => (s.kind === 'demo' ? '#/sim' : s.kind === 'site' ? `#/sim?site=${encodeURIComponent(s.id)}` : `#/sim?file=${encodeURIComponent(s.path)}`)
 export function parseKey(k: string): Source {
