@@ -232,3 +232,23 @@ body.phone-mode { background: #fff; }
 .faq details[open] summary::after { content: '−'; }
 .faq p { margin: 12px 0 0; color: var(--text-2); max-width: 64ch; }
 
+/* twin controls: what-if choices on top, playback in a player bar under the stage */
+.ctl-row { display: flex; flex-wrap: wrap; gap: 14px 32px; margin-bottom: 14px; }
+.ctl > span { display: block; font-size: 13px; color: var(--text-2); margin-bottom: 6px; }
+.ctl { min-width: 0; max-width: 100%; }
+.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; background: #eceff2; border-radius: 20px; max-width: 100%; }
+.seg button { border: 0; background: transparent; padding: 7px 14px; }
+.seg button.on { background: #fff; color: var(--text-1); box-shadow: 0 1px 3px rgba(21, 25, 30, 0.18); }
+.seg.small button { padding: 5px 10px; font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chips button.fire { background: var(--alarm); border-color: var(--alarm); color: #fff; }
+button.quiet { background: transparent; border-color: transparent; color: var(--text-2); }
+button.quiet:hover { color: var(--text-1); }
+.player { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; padding: 8px 10px; background: var(--deck); border: 1px solid var(--rule); border-radius: 14px; }
+.player .play { width: 40px; height: 40px; padding: 0; background: var(--text-1); color: #fff; border-color: var(--text-1); font-size: 13px; }
+.player .t { font: 600 15px/1 var(--num); min-width: 44px; text-align: center; }
+.player input[type=range] { flex: 1; min-width: 120px; accent-color: var(--exit); }
+@media (max-width: 640px) {
+  .player { gap: 8px; }
+  .player input[type=range] { order: 9; flex-basis: 100%; }  /* the timeline gets its own full-width row on phones */
+}

@@ -185,13 +185,14 @@ export default function App() {
     <div className="page">
       <h2 style={{ marginBottom: 4 }}>The twin</h2>
       <p style={{ color: 'var(--muted)', margin: '6px 0 16px' }}>{building?.name}</p>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-        <span style={{ color: 'var(--muted)' }}>Plan:</span>
-        <button className={plan === 'nearest' ? 'on' : ''} onClick={() => setPlan('nearest')}>Today: nearest exit</button>
-        <button className={plan === 'nikaas' ? 'on' : ''} onClick={() => setPlan('nikaas')}>Nikaas plan</button>
-        <span style={{ width: 12 }} />
-        <span style={{ color: 'var(--muted)' }}>Building:</span>
-        {SOURCES.map(src => <button key={src.id} className={src.id === source.id ? 'on' : ''} onClick={() => setSource(src)}>{src.label}</button>)}
+      <div className="ctl-row">
+        <div className="ctl"><span>Building</span>
+          <div className="seg">{SOURCES.map(src => <button key={src.id} className={src.id === source.id ? 'on' : ''} onClick={() => setSource(src)}>{src.label}</button>)}</div></div>
+        <div className="ctl"><span>Plan</span>
+          <div className="seg">
+            <button className={plan === 'nearest' ? 'on' : ''} onClick={() => setPlan('nearest')}>Today: nearest exit</button>
+            <button className={plan === 'nikaas' ? 'on' : ''} onClick={() => setPlan('nikaas')}>Nikaas plan</button>
+          </div></div>
       </div>
       {source.id === 'vision' && building && (
         <div style={{ background: '#fff8e6', border: '1px solid #e8c56a', padding: '8px 12px', marginBottom: 12, fontSize: 14 }}>
@@ -204,16 +205,12 @@ export default function App() {
           </div>}
         </div>
       )}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 12 }}>
-        <span style={{ color: 'var(--muted)' }}>Block an exit (tap it on the map):</span>
-        {exits.map(n => <button key={n.id} className={blocked.includes(n.id) ? 'on' : ''} onClick={() => toggleExit(n.id)}>{n.label ?? n.id}</button>)}
-        {blocked.length > 0 && <button onClick={() => setBlocked([])}>Reset</button>}
-        <span style={{ flex: 1 }} />
-        <button className={mode3d ? 'on' : ''} onClick={() => setMode3d(true)}>3D</button>
-        <button className={mode3d ? '' : 'on'} onClick={() => setMode3d(false)}>2D</button>
-        <button onClick={() => setPlaying(p => !p)}>{playing ? 'Pause' : 'Play'}</button>
-        {[1, 2, 4, 8].map(v => <button key={v} className={v === speed ? 'on' : ''} onClick={() => setSpeed(v)}>{v}×</button>)}
-        <button onClick={() => setI(0)}>Restart</button>
+      <div className="ctl-row">
+        <div className="ctl"><span>Block an exit (or tap one on the map)</span>
+          <div className="chips">
+            {exits.map(n => <button key={n.id} className={blocked.includes(n.id) ? 'fire' : ''} aria-pressed={blocked.includes(n.id)} onClick={() => toggleExit(n.id)}>{n.label ?? n.id}</button>)}
+            {blocked.length > 0 && <button className="quiet" onClick={() => setBlocked([])}>Clear fires</button>}
+          </div></div>
       </div>
       {DEMO && caption && <div style={{ background: '#111417', color: '#fff', padding: '12px 16px', marginBottom: 12, fontSize: 20 }}>{caption}</div>}
       {error && <div role="alert" style={{ background: '#fdecec', border: '1px solid var(--queue)', padding: '8px 12px', marginBottom: 12 }}>{error}</div>}
@@ -224,6 +221,19 @@ export default function App() {
             : <canvas ref={canvas} width={1000} height={560} onClick={onCanvasClick}
                 style={{ width: '100%', background: 'var(--card)', border: '1px solid var(--line)', cursor: 'pointer' }} />}
           {!run && !error && <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', color: 'var(--muted)' }}>Simulating {building?.nodes.reduce((n, x) => n + ((x as { people?: number }).people ?? 0), 0) ?? ''} people…</div>}
+          <div className="player">
+            <button className="play" onClick={() => setPlaying(p => !p)} aria-label={playing ? 'Pause' : 'Play'}>{playing ? '❚❚' : '▶'}</button>
+            <button className="quiet" onClick={() => setI(0)}>Restart</button>
+            <span className="t">{fmt(f?.t ?? 0)}</span>
+            <input type="range" min={0} max={Math.max(0, (run?.frames.length ?? 1) - 1)} value={i} aria-label="Evacuation timeline" disabled={!run}
+              onChange={e => { setPlaying(false); setI(Number(e.target.value)) }} />
+            <span className="t">{run ? fmt(run.total_time_s) : '--:--'}</span>
+            <div className="seg small">{[1, 2, 4, 8].map(v => <button key={v} className={v === speed ? 'on' : ''} onClick={() => setSpeed(v)}>{v}×</button>)}</div>
+            <div className="seg small">
+              <button className={mode3d ? 'on' : ''} onClick={() => setMode3d(true)}>3D</button>
+              <button className={mode3d ? '' : 'on'} onClick={() => setMode3d(false)}>2D</button>
+            </div>
+          </div>
         </div>
         <aside style={{ background: 'var(--card)', border: '1px solid var(--line)', padding: 16 }}>
           <div style={{ fontFamily: 'var(--serif)', fontSize: 56, lineHeight: 1 }}>{fmt(f?.t ?? 0)}</div>
@@ -253,14 +263,6 @@ export default function App() {
           </div>
         </aside>
       </div>
-      {run && (
-        <label style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12, fontFamily: 'var(--mono)', fontSize: 13 }}>
-          <span>{fmt(f?.t ?? 0)}</span>
-          <input type="range" min={0} max={run.frames.length - 1} value={i} aria-label="Evacuation timeline"
-            onChange={e => { setPlaying(false); setI(Number(e.target.value)) }} style={{ flex: 1, accentColor: 'var(--accent)' }} />
-          <span>{fmt(run.total_time_s)}</span>
-        </label>
-      )}
       {building && !DEMO && <BeatNikaas api={API} building={building} blocked={blocked} startPlan={plan === 'nearest' ? run?.plan : undefined} />}
     </div>
   )
