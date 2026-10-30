@@ -1,26 +1,28 @@
-// Headcount tiles and the per-floor table.
+// The headcount strip (checked in, inside, safe, need help, with a bar of the three) and the per-floor table.
 import type { Control } from '../platform/api.ts'
 
 export default function Kpis({ data }: { data: Control }) {
-  const c = data.counts
-  const a = data.alarm
-  const pct = (n: number) => (c.checked_in ? `${Math.round((n / c.checked_in) * 100)}% of checked in` : 'No one checked in')
-  const tiles: { label: string; value: string; note: string; tone?: string }[] = [
-    { label: 'Checked in', value: String(c.checked_in), note: 'Phones on site' },
-    { label: 'Inside', value: String(c.inside), note: a ? 'Not yet out' : 'In the building' },
-    { label: 'Safe', value: String(c.safe), note: a ? pct(c.safe) : 'Marked safe outside', tone: c.safe ? 'ok' : undefined },
-    { label: 'Need help', value: String(c.help), note: c.help ? 'Send a responder' : 'No requests', tone: c.help ? 'bad' : undefined },
-    { label: 'Missing', value: a ? String(c.missing) : '–', note: a ? 'Not confirmed safe' : 'Counts during an alarm', tone: a && c.missing ? 'warn' : undefined },
+  const c = data.counts, a = !!data.alarm
+  const all = c.inside + c.safe + c.help
+  const pc = (n: number) => `${all ? (n / all) * 100 : 0}%`
+  const cells = [
+    { k: 'all', n: c.checked_in, label: 'Checked in', note: 'phones on site' },
+    { k: 'in', n: c.inside, label: a ? 'Still inside' : 'Inside', note: a ? 'not yet marked safe' : 'in the building' },
+    { k: 'safe', n: c.safe, label: 'Safe', note: a ? 'at an assembly point' : 'counts during an alarm' },
+    { k: 'help', n: c.help, label: 'Need help', note: c.help ? 'send a responder' : 'no requests' },
   ]
   return (
-    <section className="cr-kpis cr-gap" aria-label="Headcount">
-      {tiles.map(t => (
-        <div key={t.label} className={`cr-kpi ${t.tone ?? ''}`}>
-          <p className="cr-kpi-label">{t.label}</p>
-          <p className="cr-kpi-num">{t.value}</p>
-          <p className="cr-kpi-note">{t.note}</p>
-        </div>
-      ))}
+    <section className="cr-count" aria-label="Headcount">
+      <div className="cr-count-cells">
+        {cells.map(x => (
+          <div key={x.k} className={`cr-cell ${x.k} ${x.k === 'help' && x.n ? 'on' : ''}`}>
+            <b className="pf-num">{x.n}</b><span>{x.label}<small>{x.note}</small></span>
+          </div>
+        ))}
+      </div>
+      <div className="cr-count-bar" role="img" aria-label={`${c.safe} safe, ${c.help} need help, ${c.inside} inside`}>
+        <i className="safe" style={{ width: pc(c.safe) }} /><i className="help" style={{ width: pc(c.help) }} /><i className="in" style={{ width: pc(c.inside) }} />
+      </div>
     </section>
   )
 }
