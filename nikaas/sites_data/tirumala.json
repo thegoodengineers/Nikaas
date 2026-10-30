@@ -1,0 +1,257 @@
+{
+  "id": "tirumala",
+  "name": "Tirumala Venkateswara Temple",
+  "address": "Tirumala, Tirupati, Andhra Pradesh (demo layout)",
+  "demo": true,
+  "building": {
+    "name": "Tirumala Venkateswara Temple",
+    "floors": [
+      {
+        "id": "ground",
+        "name": "Ground Level",
+        "elevation_m": 0
+      }
+    ],
+    "nodes": [
+      {
+        "id": "main_hall",
+        "type": "room",
+        "x": 0,
+        "z": 5,
+        "w": 26,
+        "d": 14,
+        "people": 90,
+        "label": "Tirumala Raya Mandapam",
+        "floor_id": "ground"
+      },
+      {
+        "id": "inner_corr",
+        "type": "room",
+        "x": 0,
+        "z": -7,
+        "w": 10,
+        "d": 10,
+        "people": 24,
+        "label": "Bangaru Vakili and Kulasekhara Padi",
+        "floor_id": "ground"
+      },
+      {
+        "id": "queue_west",
+        "type": "room",
+        "x": -20,
+        "z": 2,
+        "w": 8,
+        "d": 16,
+        "people": 40,
+        "label": "Vaikuntam Queue Hall",
+        "floor_id": "ground"
+      },
+      {
+        "id": "queue_east",
+        "type": "room",
+        "x": 20,
+        "z": 2,
+        "w": 8,
+        "d": 16,
+        "people": 40,
+        "label": "Hundi and Laddu Counter Hall",
+        "floor_id": "ground"
+      },
+      {
+        "id": "c_front",
+        "type": "corridor",
+        "x": 0,
+        "z": 19,
+        "floor_id": "ground"
+      },
+      {
+        "id": "c_fw",
+        "type": "corridor",
+        "x": -20,
+        "z": 14.5,
+        "floor_id": "ground"
+      },
+      {
+        "id": "c_fe",
+        "type": "corridor",
+        "x": 20,
+        "z": 14.5,
+        "floor_id": "ground"
+      },
+      {
+        "id": "p_w",
+        "type": "corridor",
+        "x": -25,
+        "z": -9,
+        "floor_id": "ground"
+      },
+      {
+        "id": "p_e",
+        "type": "corridor",
+        "x": 25,
+        "z": -9,
+        "floor_id": "ground"
+      },
+      {
+        "id": "exit_main",
+        "type": "exit",
+        "x": 0,
+        "z": 22,
+        "label": "Mahadwaram (main gate)",
+        "floor_id": "ground"
+      },
+      {
+        "id": "exit_west",
+        "type": "exit",
+        "x": -30,
+        "z": 2,
+        "label": "West gate (Vaikuntam queue exit)",
+        "floor_id": "ground"
+      },
+      {
+        "id": "exit_east",
+        "type": "exit",
+        "x": 30,
+        "z": 2,
+        "label": "East gate (Laddu / Annadanam exit)",
+        "floor_id": "ground"
+      }
+    ],
+    "edges": [
+      {
+        "from": "c_front",
+        "to": "exit_main",
+        "width": 6,
+        "kind": "corridor"
+      },
+      {
+        "from": "c_front",
+        "to": "c_fw",
+        "width": 4,
+        "kind": "corridor"
+      },
+      {
+        "from": "c_front",
+        "to": "c_fe",
+        "width": 4,
+        "kind": "corridor"
+      },
+      {
+        "from": "c_fw",
+        "to": "exit_west",
+        "width": 3,
+        "kind": "corridor"
+      },
+      {
+        "from": "c_fe",
+        "to": "exit_east",
+        "width": 3,
+        "kind": "corridor"
+      },
+      {
+        "from": "main_hall",
+        "to": "c_front",
+        "width": 6,
+        "kind": "corridor"
+      },
+      {
+        "from": "main_hall",
+        "to": "c_fw",
+        "width": 3,
+        "kind": "corridor"
+      },
+      {
+        "from": "main_hall",
+        "to": "c_fe",
+        "width": 3,
+        "kind": "corridor"
+      },
+      {
+        "from": "queue_west",
+        "to": "c_fw",
+        "width": 3,
+        "kind": "corridor"
+      },
+      {
+        "from": "queue_west",
+        "to": "exit_west",
+        "width": 3,
+        "kind": "corridor"
+      },
+      {
+        "from": "queue_east",
+        "to": "c_fe",
+        "width": 3,
+        "kind": "corridor"
+      },
+      {
+        "from": "queue_east",
+        "to": "exit_east",
+        "width": 3,
+        "kind": "corridor"
+      },
+      {
+        "from": "inner_corr",
+        "to": "p_w",
+        "width": 3,
+        "kind": "corridor"
+      },
+      {
+        "from": "inner_corr",
+        "to": "p_e",
+        "width": 3,
+        "kind": "corridor"
+      },
+      {
+        "from": "p_w",
+        "to": "exit_west",
+        "width": 3,
+        "kind": "corridor"
+      },
+      {
+        "from": "p_e",
+        "to": "exit_east",
+        "width": 3,
+        "kind": "corridor"
+      }
+    ],
+    "units": "m",
+    "description": "Dravidian temple complex: Mahadwaram forecourt, Tirumala Raya mandapam, Bangaru Vakili passage, queue halls, three exits."
+  },
+  "geo": null,
+  "assembly": [
+    {
+      "id": "asm_main",
+      "label": "Mahadwaram Assembly",
+      "x": 0,
+      "z": 34,
+      "exits": [
+        "exit_main"
+      ],
+      "lat": null,
+      "lng": null
+    },
+    {
+      "id": "asm_west",
+      "label": "West Gate Assembly",
+      "x": -44,
+      "z": 2,
+      "exits": [
+        "exit_west"
+      ],
+      "lat": null,
+      "lng": null
+    },
+    {
+      "id": "asm_east",
+      "label": "East Gate Assembly",
+      "x": 44,
+      "z": 2,
+      "exits": [
+        "exit_east"
+      ],
+      "lat": null,
+      "lng": null
+    }
+  ]
+}

@@ -14,9 +14,10 @@ import type { Plan, V3 } from './plan.ts'
 import { makeMats, mulberry32, type Mats } from './materials.ts'
 import { buildWorld, type World } from './build.ts'
 import { buildGraphWorld } from './build-graph.ts'
+import { isTemple } from './load.ts'
 import { buildTempleWorld } from './build-temple.ts'
 import { CrowdView } from './people.ts'
-import { Sim, type SimEvent, type Hazard } from './sim.ts'
+import { Sim, CROWD_PROFILES, WHEELCHAIR_SHARE, type CrowdProfile, type SimEvent, type Hazard } from './sim.ts'
 import { Fire, Collapse, Beacon, Ribbon, assemblyMark, stairBarrier, marker, pointScale } from './effects.ts'
 import { Sound } from './audio.ts'
 
@@ -37,6 +38,8 @@ export type HudState = {
   summary: Summary | null; mapLevel: number; hint: string; ready: boolean
   /** plan picture on the floor: null when the building has none (or it could not be loaded) */
   overlay: boolean | null
+  /** who ignores the guidance and who uses a wheelchair */
+  crowd: { profile: CrowdProfile; label: string; text: string; ignoring: number; wc: number; wcOut: number; wcWaiting: number; wcOn: boolean }
 }
 
 const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`
@@ -58,6 +61,7 @@ export class DrillEngine {
   private raf = 0; private last = 0; private realT = 0
   private phase: Phase = 'briefing'; private phaseAt = 0
   private scenario: Scenario; private startRoom: string
+  private crowdProfile: CrowdProfile = 'guided'; private wheelchairOn = true
   private speed = 1; private paused = false
   private explode = 0; private explodeTarget = 0; private focus: number
   private cinematic = true; private roofOn = false; private flash = true
@@ -95,12 +99,13 @@ export class DrillEngine {
   private overlayOn = true; private overlayReady = false
   private wallMaps = new Map<number, HTMLCanvasElement | null>()
   private warm = new THREE.Color('#ffdcb4'); private red = new THREE.Color('#ff3a2a')
-  private pose = { x: 0, y: 0, z: 0, yaw: 0, scale: 1, sit: 0, crouch: 0, phase: 0, move: 0, wave: 0, alarm: 0, lean: 0, t: 0 }
+  private pose = { x: 0, y: 0, z: 0, yaw: 0, scale: 1, sit: 0, crouch: 0, phase: 0, move: 0, wave: 0, alarm: 0, lean: 0, t: 0, chair: false }
 
-  constructor(host: HTMLElement, labelLayer: HTMLElement, onHud: (s: HudState) => void, opts: { plan: Plan; scenario: Scenario; startRoom: string; muted: boolean; flash: boolean }) {
+  constructor(host: HTMLElement, labelLayer: HTMLElement, onHud: (s: HudState) => void, opts: { plan: Plan; scenario: Scenario; startRoom: string; muted: boolean; flash: boolean; crowd?: CrowdProfile; wheelchair?: boolean }) {
     this.host = host; this.labelLayer = labelLayer; this.onHud = onHud
     this.plan = opts.plan
     this.scenario = opts.scenario; this.startRoom = opts.startRoom; this.flash = opts.flash
+    this.crowdProfile = opts.crowd ?? 'guided'; this.wheelchairOn = opts.wheelchair ?? true
     this.step = { value: this.plan.fh }; this.maxLevel = { value: this.plan.levels - 1 }
     this.focus = this.plan.levels - 1; this.mapLevel = this.plan.levels - 1
     this.sound.muted = opts.muted
@@ -171,7 +176,7 @@ export class DrillEngine {
     const all: any[] = []
     for (const v of Object.values(this.M)) { if (Array.isArray(v)) all.push(...v); else all.push(v) }
     for (const m of all) if (m.isMeshStandardMaterial) m.envMapIntensity = 0.42
-    this.world = plan.key.endsWith('tirumala_temple.json') ? buildTempleWorld(this.M, plan.geo?.seats ?? []) : plan.geo ? buildGraphWorld(this.M, plan.geo) : buildWorld(this.M)
+    this.world = isTemple(plan.key) ? buildTempleWorld(this.M, plan.geo?.seats ?? []) : plan.geo ? buildGraphWorld(this.M, plan.geo) : buildWorld(this.M)
     scene.add(this.root, this.world.site)
     for (const g of this.world.levels) this.root.add(g)
     this.lampRigs = this.world.levels.map((_: any, L: number) => {
@@ -189,7 +194,7 @@ export class DrillEngine {
       if (!asmDone.has(e.asm)) { asmDone.add(e.asm); scene.add(assemblyMark(this.M, e.assembly[0], e.assembly[1], bc[0], bc[1])) }
       const b = new Beacon(e.out[0], e.out[1], e.id); b.group.position.y = e.level * plan.fh; this.beacons[e.id] = b; scene.add(b.group)
     }
-    this.sim = new Sim(plan, this.world.seats, this.startRoom, mulberry32(42), ev => this.addLog(ev.kind, ev.text))
+    this.sim = new Sim(plan, this.world.seats, this.startRoom, mulberry32(42), ev => this.addLog(ev.kind, ev.text), { follow: CROWD_PROFILES[this.crowdProfile].follow, wheelchair: this.wheelchairOn ? WHEELCHAIR_SHARE : 0 })
     const n = this.sim.agents.length
     this.crowd = new CrowdView(n, scene, mulberry32(7))
     for (const m of [this.crowd.torso.material, this.crowd.head.material]) m.envMapIntensity = 0.3
@@ -209,6 +214,10 @@ export class DrillEngine {
   // ---------- public controls (from the HUD) ----------
   setMinimap(c: HTMLCanvasElement | null) { this.minimap = c }
   setScenario(s: Scenario) { this.scenario = s }
+  setCrowd(profile: CrowdProfile, wheelchair: boolean) {
+    this.crowdProfile = profile; this.wheelchairOn = wheelchair
+    if (this.phase === 'briefing' && this.ready) this.sim.configure({ follow: CROWD_PROFILES[profile].follow, wheelchair: wheelchair ? WHEELCHAIR_SHARE : 0 })
+  }
   setStartRoom(id: string) {
     if (this.phase !== 'briefing' || !this.ready) { this.startRoom = id; return }
     this.startRoom = id; this.sim.startRoom = id
@@ -221,6 +230,8 @@ export class DrillEngine {
     this.sound.init(); this.sound.blip(660)
     this.setPhase('calm')
     this.addLog('info', 'Simulation started. Add incidents from the Incidents toolbar.')
+    const cs = this.sim.crowdStats()
+    this.addLog('info', `Crowd: ${CROWD_PROFILES[this.crowdProfile].label}, ${cs.ignoring} of ${this.sim.agents.length} will ignore the guidance${cs.wc ? `; ${cs.wc} wheelchair users` : ''}.`)
   }
   setSpeed(s: number) { this.speed = s }
   setPaused(p: boolean) { this.paused = p }
@@ -763,7 +774,7 @@ export class DrillEngine {
       else { this.rx[i] += (tx - this.rx[i]) * k; this.ry[i] += (y - this.ry[i]) * k; this.rz[i] += (tz - this.rz[i]) * k }
       const trapped = a.mode === 'trapped'
       const p = this.pose
-      p.x = this.rx[i]; p.y = this.ry[i]; p.z = this.rz[i]; p.yaw = a.yaw; p.scale = a.scale; p.sit = a.sit; p.crouch = a.crouch
+      p.x = this.rx[i]; p.y = this.ry[i]; p.z = this.rz[i]; p.yaw = a.yaw; p.scale = a.scale; p.sit = a.chair ? 1 : a.sit; p.chair = a.chair; p.crouch = a.crouch
       p.phase = a.phase; p.move = a.move; p.wave = trapped ? 1 : 0; p.alarm = a.mode === 'mill' ? 1 : 0
       p.lean = a.danger > 0 ? 0.22 : a.move * 0.07; p.t = t
       cv.pose(i, p)
@@ -836,6 +847,7 @@ export class DrillEngine {
       muted: this.sound.muted, flash: this.flash, startRoom: this.startRoom, startLabel: this.startLabel(), startLevel: this.startLevel(),
       startCount: sim.agents.filter(a => a.room === this.startRoom).length, scenario: this.scenario, summary: this.summary, mapLevel: this.mapLevel, hint, ready: this.ready,
       overlay: this.overlayReady ? this.overlayOn : null,
+      crowd: { profile: this.crowdProfile, label: CROWD_PROFILES[this.crowdProfile].label, text: CROWD_PROFILES[this.crowdProfile].text, ...this.sim.crowdStats(), wcOn: this.wheelchairOn },
     })
   }
 

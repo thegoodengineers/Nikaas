@@ -114,17 +114,6 @@ function BuildingList({ onEdit, onImport, onBlank, opening, err }: { onEdit: (id
               </div>
             </article>
           ))}
-          <article className="pf-card pl-site">
-            <BuildingArt id="tirumala" />
-            <div className="pl-site-title">
-              <h2>Tirumala Venkateswara Temple</h2>
-              <span className="pf-chip info">Demo</span>
-            </div>
-            <p className="pl-facts">1 floor · 5 zones · 3 exits · 194 people</p>
-            <div className="pl-site-actions">
-              <a className="pf-btn primary" href="#/sim?file=data/tirumala_temple.json">3D view</a>
-            </div>
-          </article>
         </div>
       )}
       {ask && (
