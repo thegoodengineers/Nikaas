@@ -91,10 +91,17 @@ threshold` until an AWS Support case raises it). Until then an Android phone can
 
 Keep the phone on, with mobile data or Wi-Fi. To go back to SNS, delete the parameter.
 
-## Deploy in one command
+## Automatic deploys
 
-Nothing deploys automatically when `main` changes: the live site only updates when someone runs the deploy.
-After merging, from an up-to-date `main`:
+Every push to `main` deploys itself: `.github/workflows/deploy.yml` runs the Python tests and the website build,
+then deploys the API and the website and checks the live site (Actions tab on GitHub; "Run workflow" re-runs it).
+A failing test stops the deploy. GitHub signs in to AWS through the IAM role `nikaas-github-deploy`
+(OpenID Connect, no stored keys); only this repository's `main` branch can use it, and its permissions cover the
+`nikaas` stack's resources only. Takes about 6 minutes from merge to live.
+
+## Deploy in one command (by hand)
+
+If the workflow cannot run, deploy from an up-to-date `main`:
 
 ```powershell
 git checkout main; git pull
