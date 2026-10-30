@@ -170,11 +170,20 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
     group_rr_ptr = {g: 0 for g in capacity_groups}
     landing_toggle = {e.key: True for e in b.edges}
 
+    # people still in pre-movement (kept in id order, so queues fill in the same order as a scan of everyone),
+    # and a running count of people out: the loop no longer scans all occupants twice per step
+    waiting = [p for p in people if p.state == "inside"]
+    n_out = sum(p.state == "out" for p in people)
     while t <= max_t:
         # 1) people whose pre-movement ended join the queue of their first edge
-        for p in people:
-            if p.state == "inside" and t >= p.start:
-                want_edge(p)
+        if waiting:
+            still = []
+            for p in waiting:
+                if t >= p.start:
+                    want_edge(p)
+                else:
+                    still.append(p)
+            waiting = still
 
         # 2a) Ungrouped edges admit people independently
         for k in ungrouped_keys:
@@ -276,6 +285,7 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
                 if p.leg == len(p.path) - 1:  # reached the exit node
                     p.state, p.t_out = "out", t + DT
                     exit_count[p.exit] += 1
+                    n_out += 1
                 else:
                     want_edge(p)
         t += DT
@@ -292,7 +302,7 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
                 f_dict["people_3d"] = frame_3d
             frames.append(f_dict)
             next_frame += frame_every
-        if all(p.state == "out" for p in people):
+        if n_out == len(people):
             break
 
     done = all(p.state == "out" for p in people)
