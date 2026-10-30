@@ -176,7 +176,7 @@ export default function Home() {
           </details>
           <details>
             <summary>What do you keep about the people who check in?</summary>
-            <p>Nothing that identifies them. A phone gets a random id, the room it is in, and its status. No name or number is asked for, the location is only read when someone taps “I’m safe”, and every check-in is deleted 24 hours after its last update. Cameras count people and check for fire in the browser; video is never uploaded.</p>
+            <p>As little as possible. A phone gets a random id, the room it is in, and its status. No name is asked for. A mobile number is optional, only for emergency texts, and is checked with a one-time code. The location is only read when someone taps “I’m safe”, and every check-in, number included, is deleted 24 hours after its last update. Cameras count people and check for fire in the browser; video is never uploaded, and a single still is sent to Amazon Rekognition only to confirm a suspected fire.</p>
           </details>
           <details>
             <summary>Why not use existing egress software?</summary>
