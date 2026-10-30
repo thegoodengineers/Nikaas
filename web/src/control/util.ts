@@ -22,10 +22,14 @@ export function mapOf(b: Building): { nodes: MapNode[]; edges: MapEdge[] } {
   }
 }
 
+/** A place's name. Walkway points drawn without one are named after the nearest named room or exit on their floor. */
 export const nodeLabel = (b: Building, id: string | null | undefined) => {
   if (!id) return ''
   const n = b.nodes.find(x => x.id === id)
-  return n?.label ?? id.replace(/_/g, ' ')
+  if (!n || n.label) return n?.label ?? id.replace(/_/g, ' ')
+  const near = b.nodes.filter(x => x.label && (x.floor_id ?? null) === (n.floor_id ?? null))
+    .sort((p, q) => Math.hypot(p.x - n.x, p.z - n.z) - Math.hypot(q.x - n.x, q.z - n.z))[0]
+  return near ? `Walkway by ${near.label}` : id.replace(/_/g, ' ')
 }
 
 /** Stair landings are corridor nodes joined by a stair edge. */

@@ -14,12 +14,16 @@ import WavesPanel from './WavesPanel.tsx'
 import SensorsPanel from './SensorsPanel.tsx'
 import CamerasPanel from './CamerasPanel.tsx'
 import EventFeed from './EventFeed.tsx'
+import { Attention, ExitList } from './Attention.tsx'
 import SiteSetup from './SiteSetup.tsx'
 import QrCodes from './QrCodes.tsx'
 import './control.css'
 
-type Tab = 'live' | 'setup' | 'qr'
-const TABS: [Tab, string][] = [['live', 'Live operations'], ['setup', 'Site setup'], ['qr', 'QR codes']]
+// Live is what an operator watches; every other tool has its own tab
+type Tab = 'live' | 'people' | 'alerts' | 'sensors' | 'marshals' | 'setup' | 'qr'
+const TABS: [Tab, string][] = [
+  ['live', 'Live'], ['people', 'People'], ['alerts', 'Phone alerts'], ['sensors', 'Sensors and cameras'], ['marshals', 'Marshal sheets'], ['setup', 'Site setup'], ['qr', 'QR codes'],
+]
 const POLL_MS = 3000
 
 export default function Control() {
@@ -32,6 +36,8 @@ export default function Control() {
   const [retry, setRetry] = useState(0)
   const [tab, setTab] = useState<Tab>('live')
   const [origin, setOrigin] = useState('')
+  const [asking, setAsking] = useState(false) // the start-alarm window
+  const [focus, setFocus] = useState<{ id: string; n: number } | null>(null) // a place to show on the plan
   const [notice, setNotice] = useState<{ kind: string; text: string; id: number } | null>(null)
   const siteRef = useRef(siteId)
   siteRef.current = siteId
@@ -94,7 +100,7 @@ export default function Control() {
   const choose = (id: string) => {
     if (id === siteId) return
     history.replaceState(null, '', `#/control?site=${encodeURIComponent(id)}`)
-    setData(null); setErr(null); setOrigin(''); setSiteId(id)
+    setData(null); setErr(null); setOrigin(''); setFocus(null); setSiteId(id)
   }
 
   if (!API) {
@@ -131,36 +137,36 @@ export default function Control() {
 
       {data && (
         <>
+          <AlarmPanel data={data} siteId={siteId} act={act} notify={notify} origin={origin} setOrigin={setOrigin} asking={asking} setAsking={setAsking} />
+
           <div className="cr-tabs" role="tablist" aria-label="Control room sections">
             {TABS.map(([k, label]) => (
-              <button key={k} role="tab" id={`cr-tab-${k}`} aria-controls={`cr-panel-${k}`} aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{label}</button>
+              <button key={k} role="tab" id={`cr-tab-${k}`} aria-controls={`cr-panel-${k}`} aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+                {label}{k === 'people' && data.counts.help > 0 && <span className="cr-tab-mark" aria-label={`${data.counts.help} need help`}>{data.counts.help}</span>}
+              </button>
             ))}
           </div>
 
           <div role="tabpanel" key={siteId} id={`cr-panel-${tab}`} aria-labelledby={`cr-tab-${tab}`}>
             {tab === 'live' && (
               <>
-                <AlarmPanel data={data} siteId={siteId} act={act} notify={notify} origin={origin} setOrigin={setOrigin} />
                 <Kpis data={data} />
-                <div className="cr-grid">
-                  <div className="cr-col cr-col-main">
-                    <PlanPanel data={data} siteId={siteId} act={act} notify={notify} onOrigin={id => { setOrigin(id); notify('info', 'Set as the alarm origin. Start the alarm above.') }} origin={origin} />
-                    <ExitsPanel data={data} siteId={siteId} act={act} notify={notify} />
-                  </div>
-                  <div className="cr-col">
-                    <FloorsTable data={data} />
-                    <PeoplePanel data={data} />
-                    <SmsPanel data={data} siteId={siteId} act={act} notify={notify} />
-                  </div>
-                  <div className="cr-col cr-col-side">
+                <div className="cr-board">
+                  <PlanPanel data={data} siteId={siteId} act={act} notify={notify} origin={origin} focus={focus}
+                    onOrigin={id => { setOrigin(id); setAsking(true) }} />
+                  <div className="cr-side">
+                    <Attention data={data} siteId={siteId} act={act} notify={notify} onShow={id => setFocus({ id, n: Date.now() })} />
                     <WavesPanel data={data} />
+                    <ExitList data={data} />
                     <EventFeed data={data} />
-                    <SensorsPanel data={data} siteId={siteId} act={act} notify={notify} />
-                    <CamerasPanel data={data} siteId={siteId} />
                   </div>
                 </div>
               </>
             )}
+            {tab === 'people' && <div className="cr-two"><PeoplePanel data={data} /><FloorsTable data={data} /></div>}
+            {tab === 'alerts' && <div className="cr-one"><SmsPanel data={data} siteId={siteId} act={act} notify={notify} /></div>}
+            {tab === 'sensors' && <div className="cr-two"><SensorsPanel data={data} siteId={siteId} act={act} notify={notify} /><CamerasPanel data={data} siteId={siteId} /></div>}
+            {tab === 'marshals' && <ExitsPanel data={data} siteId={siteId} act={act} notify={notify} />}
             {tab === 'setup' && <SiteSetup key={siteId} data={data} siteId={siteId} act={act} notify={notify} />}
             {tab === 'qr' && <QrCodes data={data} siteId={siteId} />}
           </div>

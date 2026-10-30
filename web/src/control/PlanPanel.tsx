@@ -1,15 +1,15 @@
-// Floor plan: rooms coloured by crowding or by exit group, people counts, hazards and blocked exits.
-// Clicking a room, walkway, stair or exit opens its details and the "report here" actions.
-import { useMemo, useState } from 'react'
-import PlanView, { FloorTabs } from '../platform/PlanView.tsx'
+// Floor plan: rooms coloured by crowding or, during an alarm, by exit group; people counts, hazards and blocked
+// exits. Clicking a room, walkway, stair or exit opens its details and the "report here" actions.
+import { useEffect, useMemo, useRef, useState } from 'react'
+import PlanView from '../platform/PlanView.tsx'
 import { ago, api } from '../platform/api.ts'
 import { HAZARD_KINDS, HAZARD_LABEL, SOURCE_LABEL, floorName, floorsOf, mapOf, nodeKind, nodeLabel, type PanelProps } from './util.ts'
 
 const FILL = { empty: '#ffffff', ok: '#e9f6ee', concern: '#fde68a', crush: '#fca5a5' }
 
-type Props = PanelProps & { onOrigin: (id: string) => void; origin: string }
+type Props = PanelProps & { onOrigin: (id: string) => void; origin: string; focus: { id: string; n: number } | null }
 
-export default function PlanPanel({ data, siteId, act, notify, onOrigin, origin }: Props) {
+export default function PlanPanel({ data, siteId, act, notify, onOrigin, origin, focus }: Props) {
   const b = data.site.building
   const floors = floorsOf(b)
   const map = useMemo(() => mapOf(b), [b])
@@ -18,7 +18,8 @@ export default function PlanPanel({ data, siteId, act, notify, onOrigin, origin 
     const o = data.alarm?.origin ? b.nodes.find(n => n.id === data.alarm!.origin)?.floor_id : undefined
     return o ?? floors[0]?.id ?? null
   })
-  const [mode, setMode] = useState<'crowd' | 'group'>('crowd')
+  const [picked, setMode] = useState<'crowd' | 'group' | null>(null)
+  const mode = data.alarm ? picked ?? 'group' : 'crowd' // exit groups only exist while an alarm runs
   const [showLabels, setShowLabels] = useState(true)
   const [sel, setSel] = useState<string | null>(null)
   const groupColor = Object.fromEntries(data.exits.filter(x => x.group).map(x => [x.group!, x.color ?? '#5f6b77']))
@@ -34,11 +35,6 @@ export default function PlanPanel({ data, siteId, act, notify, onOrigin, origin 
   }
   const hazardNodes = data.hazards.map(h => h.node)
   const blocked = data.exits.filter(x => x.blocked).map(x => x.id)
-  const marks: Record<string, string> = {}
-  for (const f of floors) {
-    const n = data.hazards.filter(h => h.floor === f.id).length + data.help.filter(p => p.floor === f.id).length
-    if (n) marks[f.id] = String(n)
-  }
   const floorOf = (id: string) => b.nodes.find(n => n.id === id)?.floor_id ?? null
 
   const pick = (id: string) => {
@@ -46,29 +42,57 @@ export default function PlanPanel({ data, siteId, act, notify, onOrigin, origin 
     const f = floorOf(id)
     if (f && f !== floor) setFloor(f)
   }
+  // "Show" in the attention list: open that place on the plan and bring the plan into view
+  const box = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (!focus) return
+    setSel(focus.id)
+    const f = b.nodes.find(n => n.id === focus.id)?.floor_id
+    if (f) setFloor(f)
+    box.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  }, [focus, b])
 
   return (
-    <section className="pf-card cr-plan" aria-labelledby="cr-plan-h">
+    <section className="pf-card cr-plan" aria-labelledby="cr-plan-h" ref={box}>
       <div className="cr-card-head">
         <h2 id="cr-plan-h">Floor plan</h2>
-        <FloorTabs floors={floors} value={floor} onChange={f => { setFloor(f); setSel(null) }} marks={marks} />
-      </div>
-      <div className="cr-plan-tools">
+        <FloorPick data={data} floors={floors} value={floor} onChange={f => { setFloor(f); setSel(null) }} />
         <div className="cr-seg" role="group" aria-label="Colour rooms by">
           <button type="button" aria-pressed={mode === 'crowd'} className={mode === 'crowd' ? 'on' : ''} onClick={() => setMode('crowd')}>Crowding</button>
           <button type="button" aria-pressed={mode === 'group'} className={mode === 'group' ? 'on' : ''} onClick={() => setMode('group')} disabled={!data.alarm}
             title={data.alarm ? undefined : 'Exit groups are assigned when an alarm starts'}>Exit groups</button>
         </div>
-        <label className="cr-check"><input type="checkbox" checked={showLabels} onChange={e => setShowLabels(e.target.checked)} /><span>Room names</span></label>
-        <span className="pf-muted pf-small cr-plan-tip">Select a room, walkway or exit for details.</span>
       </div>
       <PlanView nodes={map.nodes} edges={map.edges} floor={floor} hazards={hazardNodes} roomFill={fill} badges={badges} blocked={blocked}
         onNode={pick} selected={sel} labels={labels} showLabels={showLabels}
         label={`Floor plan, ${floorName(b, floor) || 'building'}. ${data.hazards.length} hazards.`} className="cr-planview" />
-      <Legend data={data} mode={mode} groupColor={groupColor} />
-      {sel && <NodePanel id={sel} data={data} siteId={siteId} act={act} notify={notify} onClose={() => setSel(null)} onOrigin={onOrigin} origin={origin} />}
-      <HazardList data={data} siteId={siteId} act={act} notify={notify} onPick={pick} />
+      <div className="cr-plan-foot">
+        <Legend data={data} mode={mode} groupColor={groupColor} />
+        <label className="cr-check cr-names"><input type="checkbox" checked={showLabels} onChange={e => setShowLabels(e.target.checked)} /><span>Room names</span></label>
+      </div>
+      {sel ? <NodePanel id={sel} data={data} siteId={siteId} act={act} notify={notify} onClose={() => setSel(null)} onOrigin={onOrigin} origin={origin} />
+        : <p className="pf-muted pf-small cr-plan-tip">Click a room, walkway or exit for details, or to report a hazard there.</p>}
     </section>
+  )
+}
+
+/** Floor buttons, top floor first: each with its people count and a red mark for help requests and hazards. */
+function FloorPick({ data, floors, value, onChange }: { data: PanelProps['data']; floors: { id: string; name: string }[]; value: string | null; onChange: (id: string) => void }) {
+  if (floors.length < 2) return null
+  return (
+    <div className="floor-tabs cr-floors" role="tablist" aria-label="Floors">
+      {[...floors].reverse().map(f => {
+        const row = data.floors.find(x => x.id === f.id)
+        const n = row ? row.inside + row.help : 0
+        const warn = (row?.help ?? 0) + data.hazards.filter(h => h.floor === f.id).length
+        return (
+          <button key={f.id} role="tab" aria-selected={value === f.id} className={value === f.id ? 'on' : ''} onClick={() => onChange(f.id)}
+            aria-label={`${f.name}: ${n} inside${warn ? `, ${warn} need attention` : ''}`}>
+            {f.name}{n > 0 && <b className="cr-floor-n">{n}</b>}{warn > 0 && <span className="floor-mark">{warn}</span>}
+          </button>
+        )
+      })}
+    </div>
   )
 }
 
@@ -89,7 +113,7 @@ function Legend({ data, mode, groupColor }: { data: PanelProps['data']; mode: 'c
       <li><i className="cr-lg-dot blocked" />Blocked exit</li>
       <li><i className="cr-lg-dot hazard" />Hazard</li>
       <li><i className="cr-lg-stair" />Stair</li>
-      <li className="pf-muted">Numbers: people (camera count when a camera sees the room)</li>
+      <li className="pf-muted">Numbers: people in the room</li>
     </ul>
   )
 }
@@ -164,27 +188,6 @@ function NodePanel({ id, data, siteId, act, onClose, onOrigin, origin }: NodePro
         </div>
       )}
     </div>
-  )
-}
-
-function HazardList({ data, siteId, act, onPick }: PanelProps & { onPick: (id: string) => void }) {
-  const b = data.site.building
-  return (
-    <section className="cr-hz" aria-labelledby="cr-hz-h">
-      <h3 id="cr-hz-h" className="cr-sub-h">Hazards <span className={`pf-chip ${data.hazards.length ? 'bad' : ''}`}>{data.hazards.length}</span></h3>
-      {data.hazards.length === 0 ? <p className="pf-empty">No hazards reported. Routes use every exit.</p> : (
-        <ul className="cr-list">
-          {[...data.hazards].reverse().map(h => (
-            <li key={h.id} className="cr-li">
-              <span className="pf-chip bad">{HAZARD_LABEL[h.kind] ?? h.kind}</span>
-              <button type="button" className="cr-link" onClick={() => onPick(h.node)}>{h.label || nodeLabel(b, h.node)}</button>
-              <span className="pf-muted pf-small cr-li-meta">{SOURCE_LABEL[h.source ?? 'manual'] ?? h.source}{h.confidence != null ? ` ${Math.round(h.confidence * 100)}%` : ''}{h.at ? ` · ${ago(h.at)}` : ''}</span>
-              <button type="button" className="pf-btn cr-btn-s" onClick={() => act(() => api.del(`/sites/${encodeURIComponent(siteId)}/hazards/${encodeURIComponent(h.id)}`, true), 'Hazard cleared. Routes are being re-planned.')}>Clear</button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
   )
 }
 

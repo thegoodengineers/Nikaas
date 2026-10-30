@@ -10,9 +10,10 @@ type Props = {
   busy?: boolean
   onConfirm: () => void
   onCancel: () => void
+  className?: string
 }
 
-export default function Confirm({ open, title, children, confirmLabel, tone = 'primary', busy, onConfirm, onCancel }: Props) {
+export default function Confirm({ open, title, children, confirmLabel, tone = 'primary', busy, onConfirm, onCancel, className }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
   const id = useId()
   useEffect(() => {
@@ -22,7 +23,7 @@ export default function Confirm({ open, title, children, confirmLabel, tone = 'p
     if (!open && d.open) d.close()
   }, [open])
   return (
-    <dialog ref={ref} className="cr-dialog" aria-labelledby={`${id}-t`} onClose={onCancel} onCancel={onCancel}>
+    <dialog ref={ref} className={`cr-dialog ${className ?? ''}`} aria-labelledby={`${id}-t`} onClose={onCancel} onCancel={onCancel}>
       <h2 id={`${id}-t`} className="cr-dialog-title">{title}</h2>
       <div className="cr-dialog-body">{children}</div>
       <div className="cr-dialog-actions">
