@@ -41,8 +41,13 @@ def api(path, body=None):
         return r.read()
 
 
-voices = json.loads(api("/v1/voices"))["voices"]
-voice = next((v for v in voices if v["name"].lower().startswith(a.voice.lower())), voices[0])
+# ElevenLabs' stock voices have fixed ids; a key restricted to text-to-speech cannot list voices, so use these first
+STOCK = {"brian": "nPczCjzI2devNBz1zQrb", "george": "JBFqnCBsd6RMkjVDRZzb", "rachel": "21m00Tcm4TlvDq8ikWAM", "adam": "pNInz6obpgDQGcFmaJgB"}
+if a.voice.lower() in STOCK:
+    voice = {"name": a.voice, "voice_id": STOCK[a.voice.lower()]}
+else:
+    voices = json.loads(api("/v1/voices"))["voices"]
+    voice = next(v for v in voices if v["name"].lower().startswith(a.voice.lower()))
 print("voice:", voice["name"])
 
 segs = json.loads((OUT / "film_segments.json").read_text())
