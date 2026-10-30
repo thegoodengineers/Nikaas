@@ -93,6 +93,19 @@ if mc.exists():
               f"{r['nikaas_p50_s']} / {r['nikaas_p95_s']} | {r['nikaas_faster']} | {r['ties']} | {r['nikaas_slower']} | {r['median_saving_s']} | {r['commit']} |" for r in crows]
     md = Path("docs/RESULTS.md")
     md.write_text(md.read_text(encoding="utf-8") + NL.join(extra) + NL, encoding="utf-8")
+    # the runs where the nearest-exit rule wins: how many people turned up, and by how much the plan lost
+    det = list(csv.DictReader(Path("runs/monte_carlo.csv").open(encoding="utf-8")))
+    for r in crows:
+        nominal = sum(n.get("people", 0) for n in json.loads(Path("data", r["building"]).read_text(encoding="utf-8-sig"))["nodes"] if n.get("type") == "room")
+        lost = [d for d in det if d["building"] == r["building"] and float(d["nikaas_s"]) > float(d["nearest_s"]) + 0.01]
+        loss = sorted(float(d["nikaas_s"]) - float(d["nearest_s"]) for d in lost)
+        r.update(nominal_people=nominal, lost_people_min=min((int(d["people"]) for d in lost), default=0),
+                 lost_people_max=max((int(d["people"]) for d in lost), default=0),
+                 loss_median_s=loss[len(loss) // 2] if loss else 0, loss_max_s=loss[-1] if loss else 0)
+        if lost:
+            extra.append(f"- {r['building']}: in the {len(lost)} runs where the nearest-exit rule wins, {r['lost_people_min']}-{r['lost_people_max']} people "
+                         f"were in the building (planned for {nominal}); the plan lost by {r['loss_median_s']} s at the median, {r['loss_max_s']} s at most.")
+    md.write_text(md.read_text(encoding="utf-8") + NL + NL.join(extra[-sum(1 for r in crows if r['lost_people_max']):]) + NL, encoding="utf-8")
     if web.exists():
         json.dump([{k: (v if k in ("building", "commit") else float(v)) for k, v in r.items()} for r in crows],
                   (web / "monte_carlo.json").open("w"), indent=1)

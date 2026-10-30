@@ -52,3 +52,5 @@ Times from the alarm (pre-movement uniform in [0, max] s per person, room occupa
 |---|---|---|---|---|---|---|---|---|---|---|
 | iit_kgp_museum.json | 200 | 60.0 | 0.2 | 149.0 / 158.0 | 134.0 / 140.5 | 193 | 0 | 7 | 13.75 | be5bf7b |
 | lab_block.json | 200 | 60.0 | 0.2 | 308.25 / 333.75 | 178.0 / 187.25 | 200 | 0 | 0 | 130.25 | be5bf7b |
+
+- iit_kgp_museum.json: in the 7 runs where the nearest-exit rule wins, 453-499 people were in the building (planned for 507); the plan lost by 4.25 s at the median, 10.75 s at most.

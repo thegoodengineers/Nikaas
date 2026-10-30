@@ -4,7 +4,7 @@ type Result = { building: string; plan: string; blocked: string; people: number;
 type Wow = { building: string; blocked: string; people: number; nearest_s: number; nikaas_s: number; saved_s: number; pct_saved: number; lower_bound_s: number; gap_s: number }
 type Stadium = { plan: string; people: number; total_time_s: number; max_density: number; worst_edge: string; lower_bound_s: number | null }
 type MultiFloor = { scenario: string; floors: number; people: number; blocked: string; nearest_s: number; nikaas_s: number | null; lower_bound_s: number }
-type Robust = { building: string; runs: number; premove_max_s: number; occupancy_spread: number; nearest_p50_s: number; nearest_p95_s: number; nikaas_p50_s: number; nikaas_p95_s: number; nikaas_faster: number; ties: number; nikaas_slower: number; median_saving_s: number }
+type Robust = { building: string; runs: number; premove_max_s: number; occupancy_spread: number; nearest_p50_s: number; nearest_p95_s: number; nikaas_p50_s: number; nikaas_p95_s: number; nikaas_faster: number; ties: number; nikaas_slower: number; median_saving_s: number; nominal_people: number; lost_people_min: number; lost_people_max: number; loss_median_s: number; loss_max_s: number }
 type Validation = { case: string; published_s: number; ours_s: number; error_pct: number; commit: string }
 
 const NAMES: Record<string, string> = {
@@ -62,6 +62,12 @@ export default function Evidence() {
           <tr key={r.building}><td>{name(r.building)}</td><td className="num">{r.nearest_p50_s} s / {r.nearest_p95_s} s</td><td className="num">{r.nikaas_p50_s} s / {r.nikaas_p95_s} s</td>
             <td className="num">{r.nikaas_faster} of {r.runs} runs</td><td className="num">{r.median_saving_s} s</td></tr>))}</tbody>
       </table></div>
+      {mc.filter(r => r.nikaas_slower > 0).map(r => (
+        <p key={r.building}>
+          When does the nearest-exit rule win? On the {name(r.building)}, in {r.nikaas_slower} runs. In every one of them fewer people were in the
+          building than planned ({r.lost_people_min}–{r.lost_people_max} instead of {r.nominal_people}), so the jam the plan is built to avoid was smaller. The plan
+          lost {r.loss_median_s} s at the median and {r.loss_max_s} s at most. In a live drill Nikaas re-plans for the people actually there.
+        </p>))}
       <p className="sources">The delay range and occupancy spread are our assumptions (docs/METHOD.md), not measured values; scripts/monte_carlo.py, runs/monte_carlo.csv.</p>
 
       <h3 style={{ marginTop: 40 }}>At stadium scale</h3>

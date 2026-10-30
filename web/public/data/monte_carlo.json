@@ -12,7 +12,12 @@
   "ties": 0.0,
   "nikaas_slower": 7.0,
   "median_saving_s": 13.75,
-  "commit": "be5bf7b"
+  "commit": "be5bf7b",
+  "nominal_people": 507.0,
+  "lost_people_min": 453.0,
+  "lost_people_max": 499.0,
+  "loss_median_s": 4.25,
+  "loss_max_s": 10.75
  },
  {
   "building": "lab_block.json",
@@ -27,6 +32,11 @@
   "ties": 0.0,
   "nikaas_slower": 0.0,
   "median_saving_s": 130.25,
-  "commit": "be5bf7b"
+  "commit": "be5bf7b",
+  "nominal_people": 528.0,
+  "lost_people_min": 0.0,
+  "lost_people_max": 0.0,
+  "loss_median_s": 0.0,
+  "loss_max_s": 0.0
  }
 ]

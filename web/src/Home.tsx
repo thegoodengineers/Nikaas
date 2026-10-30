@@ -21,6 +21,7 @@ const CHAPTERS = [
 export default function Home() {
   const [val, setVal] = useState<Validation>()
   const [qa, setQa] = useState<{ score: number }>()
+  const [mcm, setMcm] = useState<{ runs: number; nikaas_faster: number; nikaas_slower: number; loss_median_s: number }>()
   const [wow, setWow] = useState<Wow[]>([])
   const [building, setBuilding] = useState<Building>()
   const [nearest, setNearest] = useState<Run>()
@@ -32,6 +33,7 @@ export default function Home() {
   useEffect(() => {
     fetch('data/validation.json').then(r => r.json()).then(setVal).catch(() => {})
     fetch('data/vision_nova_pro_qa.json').then(r => r.json()).then(setQa).catch(() => {})
+    fetch('data/monte_carlo.json').then(r => r.json()).then((xs: { building: string }[]) => setMcm(xs.find(x => x.building === 'iit_kgp_museum.json') as any)).catch(() => {})
     fetch('data/wow.json').then(r => r.json()).then(setWow).catch(() => {})
     fetch('data/iit_kgp_museum.json').then(r => r.json()).then(setBuilding).catch(() => {})
     fetch('data/frames_iit_kgp_nearest.json').then(r => r.json()).then(setNearest).catch(() => {})
@@ -136,6 +138,10 @@ export default function Home() {
           <details>
             <summary>Better than the nearest exit, but is the plan any good?</summary>
             <p>We also compute a proven lower bound: a network-flow model that no plan can beat with the same exits and widths. On the IIT Kharagpur floor the Nikaas plan is {iit ? `${iit.gap_s} s above that bound (${iit.nikaas_s} s against ${iit.lower_bound_s} s)` : '…'}. Every row is on the Evidence page.</p>
+          </details>
+          <details>
+            <summary>Is it ever worse than the nearest exit?</summary>
+            <p>Sometimes, by a little. We fixed both plans and re-ran the IIT Kharagpur floor {mcm ? mcm.runs : '…'} times with random start delays and head counts. Nikaas was faster in {mcm ? mcm.nikaas_faster : '…'} runs. In the {mcm ? mcm.nikaas_slower : '…'} others fewer people turned up than planned, the jam was smaller, and the plan lost {mcm ? `${mcm.loss_median_s} s at the median` : '…'}. In a live drill Nikaas re-plans for the people actually there.</p>
           </details>
           <details>
             <summary>What if the photo is read wrong?</summary>
