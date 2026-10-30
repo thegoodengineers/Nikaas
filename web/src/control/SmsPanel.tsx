@@ -6,7 +6,7 @@ export default function SmsPanel({ data, siteId, act }: PanelProps) {
   const s = data.sms
   const phones = data.people.filter(p => p.phone)
   if (!s) return null
-  const provider = { sns: 'Amazon SNS', fast2sms: 'Fast2SMS', twilio: 'Twilio', log: 'Local test outbox' }[s.provider] ?? s.provider
+  const provider = { sns: 'Amazon SNS', fast2sms: 'Fast2SMS', twilio: 'Twilio', smsgate: 'an Android phone (SMS Gateway for Android)', log: 'Local test outbox' }[s.provider] ?? s.provider
   return (
     <section className="pf-card cr-sms" aria-labelledby="cr-sms-h">
       <div className="cr-card-head">
@@ -16,7 +16,8 @@ export default function SmsPanel({ data, siteId, act }: PanelProps) {
       <p className="pf-small pf-muted">Starting the alarm texts every verified phone a link to its own route; All clear texts them too. Sent with {provider}.</p>
       {s.sandbox && (
         <p className="pf-alert warn pf-small">Amazon SNS test mode: texts reach only numbers verified with a code (at most {s.sandbox_limit}), with a USD 1 monthly budget.
-          Ask AWS Support to move SMS to production for any number.</p>
+          Ask AWS Support to move SMS to production for any number, or let an Android phone send the texts: install SMS Gateway for Android,
+          start its Cloud Server, and store its username and password as the SSM parameter <code>/nikaas/sms-gate</code> (<code>username:password</code>).</p>
       )}
       {s.last && <p className="pf-small">Last send ({s.last.kind}): <b>{s.last.sent}</b> sent{s.last.failed ? <>, <b className="cr-t-bad">{s.last.failed} failed</b></> : ''} · {ago(s.last.at)}</p>}
       {phones.length === 0 ? <p className="pf-empty">No phone numbers yet. People register by scanning the building QR code (QR codes tab).</p> : (

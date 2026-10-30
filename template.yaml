@@ -45,6 +45,8 @@ Resources:
           # where the short links in emergency texts open the phone app (the bucket's https address)
           NIKAAS_SITE_URL: !Sub "https://${WebBucket.RegionalDomainName}/index.html"
           NIKAAS_SMS: sns
+          # an Android phone sending the texts (SMS Gateway for Android), when this parameter exists: "username:password"
+          NIKAAS_SMSGATE_PARAM: /nikaas/sms-gate
       Policies:
         - Statement:
             - Effect: Allow
@@ -72,7 +74,9 @@ Resources:
               Resource: !Sub "${PhotoBucket.Arn}/sites/*"
             - Effect: Allow
               Action: [ssm:GetParameter]
-              Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nikaas/control-key"
+              Resource:
+                - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nikaas/control-key"
+                - !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nikaas/sms-gate"
       Events:
         Api:
           Type: HttpApi # no Path = catch-all $default route; FastAPI does routing and CORS

@@ -254,6 +254,8 @@ function Register({ site, tok, roomParam, onDone, onCancel }: { site: Site; tok:
       <label className="go-consent"><input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} />
         <span>Text me emergency alerts for {site.name}. My number is used only for this and deleted 24 hours after my last update.</span></label>
       {err && <div className="pf-alert bad" role="alert">{err}</div>}
+      {err.startsWith('Text messages cannot be sent') && !onCancel &&
+        <button type="button" className="pf-btn primary big" onClick={() => void withoutPhone()} disabled={busy}>Continue without a phone number</button>}
       <button className="pf-btn go big" disabled={busy || !agree || phone.replace(/\D/g, '').length < 8}>{busy ? 'Sending the code…' : 'Send me a code'}</button>
       {onCancel ? <button type="button" className="pf-btn ghost" onClick={onCancel}>Keep my current number</button>
         : <button type="button" className="pf-btn ghost" onClick={() => void withoutPhone()} disabled={busy}>Continue without a phone number</button>}

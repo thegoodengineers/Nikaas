@@ -79,6 +79,18 @@ Control endpoints (`POST /sites/{id}/alarm`, hazards, sensors, cameras, `GET /si
 the `x-control-key` header; the control room asks for it once. Phones never need it. Local runs without the variable are
 open. The Web Push key pair (VAPID) is made on first use and stored in the table.
 
+## Emergency texts (SMS)
+
+Amazon SNS only texts once AWS has enabled SMS for the account (new accounts get `AuthorizationError ... spend
+threshold` until an AWS Support case raises it). Until then an Android phone can send the texts from its own SIM:
+
+1. Install **SMS Gateway for Android** (open source, `capcom6/android-sms-gateway`) on a phone with a SIM.
+2. In the app turn on **Cloud Server**, tap **Start Service**, keep the default **Sign Up**. It shows a username and password.
+3. Store them for the API (no redeploy needed, picked up within a minute):
+   `aws ssm put-parameter --name /nikaas/sms-gate --type SecureString --value "USERNAME:PASSWORD" --region ap-south-1 --overwrite`
+
+Keep the phone on, with mobile data or Wi-Fi. To go back to SNS, delete the parameter.
+
 ## Publish the website
 
 ```bash
