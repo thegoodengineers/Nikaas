@@ -15,7 +15,6 @@ The API is `nikaas/api.py` as-is: same routes as local, CORS open, gzip on.
 | `POST /validate` | see `docs/CONTRACT.md` |
 | `POST /simulate` | see `docs/CONTRACT.md` |
 | `POST /optimise` | best exit plan + lower bound (`nikaas/optimise.py`). ~2 s museum, ~8 s lab block. |
-| `POST /beat` | time a hand-made `plan` against the optimiser ("Beat Nikaas"). ~3 s. |
 | `POST /qa` | graph quality score and warnings (`nikaas/graph_qa.py`). <1 s. |
 | `POST /vision` | photo of a floor plan → building graph (+ `quality`). ~20 s. |
 | `POST /drill` | Live Drill, presenter: start a drill / block exits; the optimiser re-plans every room. ~3 s. |

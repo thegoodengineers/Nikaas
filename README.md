@@ -26,7 +26,7 @@ room the exit that empties the building fastest, re-planning when a stair is blo
 Built from scratch at **AfterHours 1.0** (DBIT, 30–31 Oct 2026), Theme 03: Simulation & Digital
 Twins, by **TheGoodEngineers** (team AH50): Ayush V U, Bhumika G, Abhijeet, Chirag R H.
 
-**Working today:** simulator (SFPE-validated) · API live on AWS (`/simulate`, `/optimise`, `/beat`, `/vision`) · website with 2D + 3D twin, nearest-vs-Nikaas comparison, tap-to-block, Beat Nikaas · photo-to-building with Amazon Nova
+**Working today:** simulator (SFPE-validated) · API live on AWS (`/simulate`, `/optimise`, `/vision`) · website with 2D + 3D twin, nearest-vs-Nikaas comparison, tap-to-block · photo-to-building with Amazon Nova
 **In progress:** Crowd mode density analysis (densities being corrected) · stadium building
 **Not built yet:** multi-floor buildings · NBC travel-distance check
 

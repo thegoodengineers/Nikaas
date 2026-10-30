@@ -10,7 +10,6 @@ const Sim3D = lazy(() => import('./sim3d/Sim3D.tsx'))
 // desktop pages (three.js, charts) load on demand: phones opening a QR code only get the small phone app
 const Home = lazy(() => import('./Home.tsx'))
 const App = lazy(() => import('./App.tsx'))
-const Challenge = lazy(() => import('./Challenge.tsx'))
 const Evidence = lazy(() => import('./Evidence.tsx'))
 const Drill = lazy(() => import('./Drill.tsx'))
 const Cam = lazy(() => import('./Cam.tsx'))
@@ -27,12 +26,25 @@ const PAGES: Record<string, { label: string; render: () => React.ReactElement; n
   buildings: { label: 'Buildings', render: () => <Buildings />, nav: true, wide: true },
   twin: { label: 'Digital twin', render: () => <App />, nav: true },
   evidence: { label: 'Evidence', render: () => <Evidence />, nav: true },
-  beat: { label: 'Plan challenge', render: () => <Challenge /> },
   drill: { label: 'Live drill', render: () => <Drill /> },
 }
-// pages linked from the footer: demos and tools that are not part of the main product flow
-const MORE: [string, string][] = [['#/sim', '3D simulation'], ['#/drill', 'Live drill (presenter)'], ['#/beat', 'Plan challenge'], ['#/cam?site=office', 'Site camera'], ['#/go', 'Phone app']]
-const ALIAS: Record<string, string> = { challenge: 'beat' } // old links keep working
+// the header, in order: the 3D simulation is full screen (own route below) but sits in the main menu
+const NAV: { href: string; route: string; label: string; feature?: boolean }[] = [
+  { href: '#/', route: '', label: 'Platform' },
+  { href: '#/control', route: 'control', label: 'Control room' },
+  { href: '#/buildings', route: 'buildings', label: 'Buildings' },
+  { href: '#/sim', route: 'sim', label: '3D simulation', feature: true },
+  { href: '#/twin', route: 'twin', label: 'Digital twin' },
+  { href: '#/evidence', route: 'evidence', label: 'Evidence' },
+]
+// demo and device tools: one menu in the header instead of footer links
+const TOOLS: { href: string; route: string; label: string; note: string }[] = [
+  { href: '#/drill', route: 'drill', label: 'Live drill', note: 'Presenter screen: judges scan a QR code and follow their phone' },
+  { href: '#/cam?site=office', route: 'cam', label: 'Room camera', note: 'A laptop camera counts people and spots fire for the control room' },
+  { href: '#/go?site=office', route: 'go', label: 'Phone app', note: 'What people see after scanning the building QR code' },
+  { href: '#/sign', route: 'sign', label: 'Exit sign', note: 'A phone beside a door becomes a live exit sign' },
+]
+const ALIAS: Record<string, string> = {} // old links that moved
 const routeOf = () => { const r = location.hash.replace(/^#\/?/, '').split('?')[0]; return ALIAS[r] ?? r }
 
 export default function Shell() {
@@ -54,22 +66,55 @@ export default function Shell() {
   if (route === 'sim') return <Suspense fallback={<div className="page pf-muted">Loading the 3D simulation…</div>}><Sim3D /></Suspense> // full-screen, own HUD
   if (route === 'go') return <Go /> // the phone app people open from a QR code: no site chrome
   const page = PAGES[route] ?? PAGES['']
+  const current = PAGES[route] ? route : ''
   return (
     <>
       <header className="nav">
         <a className="brand" href="#/"><ExitIcon color="var(--exit)" />Nikaas</a>
         <nav aria-label="Pages">
-          {Object.entries(PAGES).filter(([, p]) => p.nav).map(([k, p]) => (
-            <a key={k} href={`#/${k}`} aria-current={k === route || (!PAGES[route] && k === '') ? 'page' : undefined}>{p.label}</a>
+          {NAV.map(n => (
+            <a key={n.href} href={n.href} className={n.feature ? 'nav-feature' : undefined} aria-current={n.route === current ? 'page' : undefined}>
+              {n.feature && <span className="nav-feature-dot" aria-hidden="true" />}{n.label}
+            </a>
           ))}
         </nav>
+        <ToolsMenu current={current} />
       </header>
       <main className={page.wide ? 'main-wide' : undefined}><Suspense fallback={<div className="page pf-muted">Loading…</div>}>{page.render()}</Suspense></main>
       <footer className="footer">
-        <p className="footer-links">{MORE.map(([href, label]) => <a key={href} href={href}>{label}</a>)}</p>
         <p>Nikaas, built at AfterHours 1.0 (DBIT) by TheGoodEngineers, team AH50: Ayush V U, Bhumika G, Abhijeet, Chirag R H.</p>
         <p>Floor-plan photo: Biswarup Ganguly, CC BY 3.0, Wikimedia Commons. Fonts: Bricolage Grotesque, Big Shoulders Display and Atkinson Hyperlegible (SIL OFL). 3D: three.js (MIT).</p>
       </footer>
     </>
+  )
+}
+
+/** Header menu for the demo and device tools. Closes on choosing, on Escape and on a click outside. */
+function ToolsMenu({ current }: { current: string }) {
+  const [open, setOpen] = useState(false)
+  const ref = React.useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const out = (e: PointerEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    addEventListener('pointerdown', out); addEventListener('keydown', esc); addEventListener('hashchange', () => setOpen(false), { once: true })
+    return () => { removeEventListener('pointerdown', out); removeEventListener('keydown', esc) }
+  }, [open])
+  const active = TOOLS.some(t => t.route === current)
+  return (
+    <div className="nav-tools" ref={ref}>
+      <button type="button" className={`nav-tools-btn ${active ? 'is-active' : ''}`} aria-expanded={open} aria-haspopup="true" onClick={() => setOpen(v => !v)}>
+        Tools<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5 6 8l3.5-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+      </button>
+      {open && (
+        <div className="nav-tools-menu" role="menu">
+          {TOOLS.map(t => (
+            <a key={t.href} role="menuitem" href={t.href} onClick={() => setOpen(false)} aria-current={t.route === current ? 'page' : undefined}>
+              <b>{t.label}</b><span>{t.note}</span>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

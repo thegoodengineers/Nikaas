@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from .building import load, nearest_plan, validate
 from .crowd import analyse as crowd_analyse
 from .graph_qa import analyze_graph
-from .optimise import beat_nikaas_score, optimise
+from .optimise import optimise
 from .sim import simulate
 
 app = FastAPI(title="Nikaas")
@@ -178,28 +178,6 @@ def vision(req: VisionRequest):
         stored = None
     qa_report = building.get("vision", {}).get("qa") or analyze_graph(building)
     return {"ok": not probs, "id": rid, "building": building, "problems": probs, "quality": qa_report, "photo_key": stored}
-
-
-class BeatRequest(BaseModel):
-    building: dict
-    plan: dict  # the judge's own plan: room -> exit
-    blocked: list[str] = []
-
-
-@app.post("/beat")
-def beat(req: BeatRequest):
-    """'Beat Nikaas': time a judge's hand-made plan against the optimiser (Ayush's beat_nikaas_score)."""
-    probs = validate(req.building)
-    if probs:
-        raise HTTPException(422, {"problems": probs})
-    try:
-        b = load(req.building)
-        missing = [r for r in b.rooms if r not in req.plan]
-        if missing:
-            raise ValueError(f"plan has no exit for rooms: {missing}")
-        return beat_nikaas_score(b, req.plan, set(req.blocked))
-    except (KeyError, ValueError) as e:
-        raise HTTPException(422, str(e))
 
 
 # ---- Live drill: presenter controls, phones follow (nikaas/drill.py) ----
