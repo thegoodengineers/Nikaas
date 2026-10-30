@@ -27,6 +27,7 @@ export const BUNDLED_FILES: { path: string; label: string }[] = [
   { path: 'data/multi_floor_office.json', label: 'Office, 3 floors' },
   { path: 'data/multi_floor_tower.json', label: 'Tower, 5 floors' },
   { path: 'data/iit_kgp_museum.json', label: 'Science museum, IIT Kharagpur' },
+  { path: 'data/tirumala_temple.json', label: 'Tirumala Venkateswara Temple' },
 ]
 const BUNDLED = import.meta.glob('./data/*.json', { import: 'default' }) as Record<string, () => Promise<unknown>>
 

@@ -14,6 +14,7 @@ import type { Plan, V3 } from './plan.ts'
 import { makeMats, mulberry32, type Mats } from './materials.ts'
 import { buildWorld, type World } from './build.ts'
 import { buildGraphWorld } from './build-graph.ts'
+import { buildTempleWorld } from './build-temple.ts'
 import { CrowdView } from './people.ts'
 import { Sim, type SimEvent, type Hazard } from './sim.ts'
 import { Fire, Collapse, Beacon, Ribbon, assemblyMark, stairBarrier, marker, pointScale } from './effects.ts'
@@ -167,7 +168,7 @@ export class DrillEngine {
     const all: any[] = []
     for (const v of Object.values(this.M)) { if (Array.isArray(v)) all.push(...v); else all.push(v) }
     for (const m of all) if (m.isMeshStandardMaterial) m.envMapIntensity = 0.42
-    this.world = plan.geo ? buildGraphWorld(this.M, plan.geo) : buildWorld(this.M)
+    this.world = plan.key.endsWith('tirumala_temple.json') ? buildTempleWorld(this.M) : plan.geo ? buildGraphWorld(this.M, plan.geo) : buildWorld(this.M)
     scene.add(this.root, this.world.site)
     for (const g of this.world.levels) this.root.add(g)
     for (const g of this.world.flights) this.root.add(g)

@@ -245,6 +245,13 @@ export function makeMats() {
     hedge: std({ color: '#2c5a2a', roughness: 0.9, flatShading: true }),
     bark: std({ color: '#4a3526', roughness: 0.9 }),
 
+    templeStone: std({ map: tex(256, 256, base('#c9a272', 2600, 0.1, 3), 3), roughness: 0.82 }),
+    templeWall: std({ map: tex(256, 256, base('#7a634a', 2600, 0.1, 3), 3), roughness: 0.9 }),
+    templeGold: std({ color: '#c8880a', roughness: 0.2, metalness: 0.75 }),
+    templeGold2: std({ color: '#f0c030', roughness: 0.14, metalness: 0.85, emissive: '#a06000', emissiveIntensity: 0.15 }),
+    gopuramOrange: std({ color: '#c85a18', roughness: 0.72 }),
+    gopuramCream: std({ color: '#f2e4c2', roughness: 0.78 }),
+
     books: keep(std({ map: tex(256, 512, booksPic) })),
     whiteboard: keep(std({ map: tex(512, 256, whiteboardPic), roughness: 0.25 })),
     cork: keep(std({ map: tex(256, 192, corkPic) })),
