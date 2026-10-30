@@ -6,6 +6,7 @@ Every number below is in `runs/` (list at the end). Speakers marked "decide" are
 
 ## Before going on stage (step 0)
 
+- On the laptop, open the **HTTPS** address https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html (not the http:// one: the QR code sends phones to whatever address the laptop has open, and phone alerts, GPS and the camera only work over HTTPS).
 - On the laptop, open the Live drill page (`#/drill`) and press **Start over**, so no phone shows an old alert.
 - Have a second tab on Home (`#/`) and a third on the Twin (`#/twin`).
 - One phone taped beside the classroom door, open on `#/sign`, door chosen: the live exit sign.

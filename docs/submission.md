@@ -3,7 +3,7 @@
 **Project:** Nikaas — Photograph the exit map. Get everyone out faster.
 **Team:** TheGoodEngineers (AH50): Ayush V U, Bhumika G, Abhijeet, Chirag R H · Theme 03: Simulation, Digital Twins & Synthetic Data
 **Repo:** https://github.com/thegoodengineers/Nikaas
-**Live demo:** http://nikaas-webbucket-hbkfctr0cw8s.s3-website.ap-south-1.amazonaws.com · **Video:** _(URL before submitting)_
+**Live demo:** https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html (HTTPS: phone alerts, GPS and the camera need it) · **Video:** _(URL before submitting)_
 
 **One paragraph:** Every building has an evacuation map on the wall, and it says one thing: go to the nearest exit. When
 everyone does, one door jams while others stand empty. Nikaas turns a photo of that map into a digital twin of the
