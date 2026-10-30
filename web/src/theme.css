@@ -74,7 +74,7 @@ select { background: var(--deck-2); color: var(--text-1); border: 1px solid var(
 .nav-tools-menu span { font-size: 13px; line-height: 1.35; color: var(--text-2); }
 @keyframes nav-pop { from { opacity: 0; transform: translateY(-4px); } }
 @media (prefers-reduced-motion: reduce) { .nav-tools-menu { animation: none; } }
-@media (max-width: 680px) { .nav .brand { order: 1; } .nav-tools { order: 2; margin-left: auto; } .nav nav { order: 3; } .nav nav a.nav-feature { margin: 0; } }
+@media (max-width: 680px) { .nav .brand { order: 1; } .nav-tools { order: 2; margin-left: auto; } .nav nav { order: 3; flex-wrap: wrap; overflow: visible; white-space: normal; gap: 8px 18px; } .nav nav a.nav-feature { margin: -2px 0; padding: 4px 10px; } }
 
 /* page frame */
 .page { max-width: 1180px; margin: 0 auto; padding: 40px 24px 80px; }
