@@ -18,6 +18,15 @@ PENALTY_WEIGHTS = {
     "ZERO_WIDTH": 30.0,
     "NON_POSITIVE_ROOM_DIM": 30.0,
     # Warning violations
+    "UNKNOWN_FLOOR_REFERENCE": 40.0,
+    "CROSS_FLOOR_NON_STAIR": 30.0,
+    "OCCUPIED_FLOOR_DISCONNECTED": 40.0,
+    "STAIR_MISSING_LENGTH": 20.0,
+    "STAIR_INVALID_PHYSICAL_LENGTH": 20.0,
+    "MALFORMED_FLOOR_METADATA": 25.0,
+    "DISCONNECTED_CAPACITY_GROUP": 25.0,
+    "NON_ADJACENT_FLOOR_STAIR": 20.0,
+    "INCONSISTENT_CAPACITY_GROUP": 10.0,
     "INSUFFICIENT_EXIT_CAPACITY": 15.0,
     "INSUFFICIENT_EXIT_COUNT": 15.0,
     "DISCONNECTED_EXIT": 15.0,
@@ -214,7 +223,12 @@ def analyze_graph(building: dict[str, Any]) -> dict[str, Any]:
 
         # Geometric edge length
         n_u, n_v = nodes[u], nodes[v]
-        dist = _euclidean_dist(n_u, n_v)
+        fu = n_u.get('floor_id')
+        fv = n_v.get('floor_id')
+        if fu and fv and fu != fv:
+            dist = float(e.get('length', 0.0))
+        else:
+            dist = _euclidean_dist(n_u, n_v)
 
         # Zero length edge check
         if dist < 0.10:
@@ -566,6 +580,230 @@ def analyze_graph(building: dict[str, Any]) -> dict[str, Any]:
             "Add a second remote exit to comply with NBC 2016 Part 4 minimum egress requirements (> 50 occupants)."
         )
 
+
+    # Check 8: Multi-Floor Integrity (when floors are defined)
+    raw_floors = building.get("floors")
+    mf_status = "pass"
+    if raw_floors is not None:
+        if not isinstance(raw_floors, list):
+            warnings.append({
+                "code": "MALFORMED_FLOOR_METADATA",
+                "severity": "warning",
+                "message": "Building 'floors' must be a list of floor specifications.",
+                "elements": [],
+                "suggestion": "Provide a valid list of floor objects with 'id', 'name', and 'elevation_m'."
+            })
+            mf_status = "warning"
+            floor_ids = set()
+        else:
+            floor_ids = set()
+            f_id_list = []
+            for i, f in enumerate(raw_floors):
+                if isinstance(f, dict):
+                    fid = f.get("id")
+                    if fid and isinstance(fid, str):
+                        floor_ids.add(fid)
+                        f_id_list.append(fid)
+                    else:
+                        warnings.append({
+                            "code": "MALFORMED_FLOOR_METADATA",
+                            "severity": "warning",
+                            "message": f"Floor at index {i} is missing a non-empty string 'id'.",
+                            "elements": [],
+                            "suggestion": "Assign a unique string identifier to each floor."
+                        })
+                        mf_status = "warning"
+                    elev = f.get("elevation_m")
+                    if not (isinstance(elev, (int, float)) and math.isfinite(elev)):
+                        warnings.append({
+                            "code": "MALFORMED_FLOOR_METADATA",
+                            "severity": "warning",
+                            "message": f"Floor '{fid or i}' has invalid elevation_m ({elev}).",
+                            "elements": [fid] if fid else [],
+                            "suggestion": f"Specify a finite numerical elevation in metres for floor '{fid or i}'."
+                        })
+                        mf_status = "warning"
+
+            dup_f = {fid for fid in f_id_list if f_id_list.count(fid) > 1}
+            if dup_f:
+                warnings.append({
+                    "code": "MALFORMED_FLOOR_METADATA",
+                    "severity": "warning",
+                    "message": f"Duplicate floor IDs detected: {sorted(dup_f)}.",
+                    "elements": list(dup_f),
+                    "suggestion": "Ensure every floor has a unique ID."
+                })
+                mf_status = "warning"
+
+            # Check node floor references
+            for nid, n in nodes.items():
+                n_floor = n.get("floor_id")
+                if not n_floor or n_floor not in floor_ids:
+                    warnings.append({
+                        "code": "UNKNOWN_FLOOR_REFERENCE",
+                        "severity": "critical",
+                        "message": f"Node '{nid}' references unknown floor '{n_floor}'.",
+                        "elements": [nid],
+                        "suggestion": f"Assign node '{nid}' to a valid floor in {sorted(floor_ids)}."
+                    })
+                    mf_status = "critical"
+
+            # Check cross-floor edges
+            for idx, e in enumerate(raw_edges):
+                u, v = e.get("from"), e.get("to")
+                if u in nodes and v in nodes:
+                    fu = nodes[u].get("floor_id")
+                    fv = nodes[v].get("floor_id")
+                    if fu and fv and fu != fv:
+                        if e.get("kind") != "stair":
+                            warnings.append({
+                                "code": "CROSS_FLOOR_NON_STAIR",
+                                "severity": "critical",
+                                "message": f"Cross-floor edge between '{u}' (floor {fu}) and '{v}' (floor {fv}) has kind '{e.get('kind')}' instead of 'stair'.",
+                                "elements": [u, v],
+                                "suggestion": f"Change edge '{u}-{v}' kind to 'stair' or connect nodes on the same floor."
+                            })
+                            mf_status = "critical"
+                        length = e.get("length")
+                        if length is None:
+                            warnings.append({
+                                "code": "STAIR_MISSING_LENGTH",
+                                "severity": "warning",
+                                "message": f"Cross-floor stair edge between '{u}' and '{v}' is missing explicit physical 'length'.",
+                                "elements": [u, v],
+                                "suggestion": f"Specify the physical walking travel length (m) for stair edge '{u}-{v}'."
+                            })
+                            if mf_status != "critical":
+                                mf_status = "warning"
+                        elif not (isinstance(length, (int, float)) and length > 0 and math.isfinite(length)):
+                            warnings.append({
+                                "code": "STAIR_INVALID_PHYSICAL_LENGTH",
+                                "severity": "warning",
+                                "message": f"Cross-floor stair edge between '{u}' and '{v}' has invalid length ({length}).",
+                                "elements": [u, v],
+                                "suggestion": f"Specify a positive finite length for stair edge '{u}-{v}'."
+                            })
+                            if mf_status != "critical":
+                                mf_status = "warning"
+
+            # Check occupied floors reaching exits
+            if exits and rooms:
+                for fid in floor_ids:
+                    floor_rooms = [rid for rid, r in rooms.items() if r.get("floor_id") == fid and int(r.get("people", 0)) > 0]
+                    if floor_rooms:
+                        floor_can_reach = any(
+                            any(x in next((c for c in components if rid in c), []) for x in exits)
+                            for rid in floor_rooms
+                        )
+                        if not floor_can_reach:
+                            warnings.append({
+                                "code": "OCCUPIED_FLOOR_DISCONNECTED",
+                                "severity": "critical",
+                                "message": f"Occupied floor '{fid}' ({len(floor_rooms)} rooms) cannot reach any outdoor exit.",
+                                "elements": floor_rooms,
+                                "suggestion": f"Connect floor '{fid}' to the stairwell / exit network."
+                            })
+                            mf_status = "critical"
+
+# Sort floors by elevation to verify adjacent floor transitions
+            floor_elev_map = {}
+            for f in raw_floors:
+                if isinstance(f, dict) and "id" in f and isinstance(f.get("elevation_m"), (int, float)):
+                    floor_elev_map[f["id"]] = float(f["elevation_m"])
+            sorted_floors = sorted(floor_elev_map.keys(), key=lambda fid: floor_elev_map[fid])
+            floor_rank = {fid: idx for idx, fid in enumerate(sorted_floors)}
+
+            # Check for non-adjacent floor transitions
+            for e in raw_edges:
+                if e.get("kind") == "stair":
+                    u, v = e.get("from"), e.get("to")
+                    if u in nodes and v in nodes:
+                        fu = nodes[u].get("floor_id")
+                        fv = nodes[v].get("floor_id")
+                        if fu and fv and fu != fv and fu in floor_rank and fv in floor_rank:
+                            if abs(floor_rank[fu] - floor_rank[fv]) > 1:
+                                warnings.append({
+                                    "code": "NON_ADJACENT_FLOOR_STAIR",
+                                    "severity": "warning",
+                                    "message": f"Stair edge '{u}-{v}' connects non-adjacent floors '{fu}' and '{fv}' without an intermediate floor landing.",
+                                    "elements": [u, v],
+                                    "suggestion": f"Ensure stair edge connects consecutive vertical floors or provide intermediate landings."
+                                })
+                                if mf_status != "critical":
+                                    mf_status = "warning"
+
+            # Check capacity groups
+            cap_groups = {}
+            for e in raw_edges:
+                cg = e.get("capacity_group")
+                if cg:
+                    cap_groups.setdefault(cg, []).append(e)
+            for cg, g_edges in cap_groups.items():
+                non_stairs = [e for e in g_edges if e.get("kind") != "stair"]
+                if non_stairs:
+                    warnings.append({
+                        "code": "INCONSISTENT_CAPACITY_GROUP",
+                        "severity": "warning",
+                        "message": f"Capacity group '{cg}' contains {len(non_stairs)} non-stair edges.",
+                        "elements": [f"{e.get('from')}-{e.get('to')}" for e in non_stairs],
+                        "suggestion": f"Ensure all edges in capacity group '{cg}' represent physical stair flights."
+                    })
+                    if mf_status != "critical":
+                        mf_status = "warning"
+
+                # Check vertical shaft continuity across flights in this capacity group
+                if len(g_edges) > 1:
+                    cg_adj = {}
+                    for e in g_edges:
+                        u, v = str(e.get("from")), str(e.get("to"))
+                        cg_adj.setdefault(u, set()).add(v)
+                        cg_adj.setdefault(v, set()).add(u)
+                    visited = set()
+                    comps = 0
+                    for n in cg_adj:
+                        if n not in visited:
+                            comps += 1
+                            q = [n]
+                            visited.add(n)
+                            while q:
+                                curr = q.pop(0)
+                                for nb in cg_adj.get(curr, ()):
+                                    if nb not in visited:
+                                        visited.add(nb)
+                                        q.append(nb)
+                    if comps > 1:
+                        warnings.append({
+                            "code": "DISCONNECTED_CAPACITY_GROUP",
+                            "severity": "warning",
+                            "message": f"Capacity group '{cg}' contains disconnected stair flights that do not form a contiguous vertical shaft ({comps} disconnected components).",
+                            "elements": [f"{e.get('from')}-{e.get('to')}" for e in g_edges],
+                            "suggestion": f"Ensure all stair flights in capacity group '{cg}' connect continuously at floor landings."
+                        })
+                        if mf_status != "critical":
+                            mf_status = "warning"
+
+                    # Check contiguous vertical floor coverage in capacity group
+                    cg_floors = set()
+                    for e in g_edges:
+                        u, v = str(e.get("from")), str(e.get("to"))
+                        if u in nodes and "floor_id" in nodes[u]:
+                            cg_floors.add(nodes[u]["floor_id"])
+                        if v in nodes and "floor_id" in nodes[v]:
+                            cg_floors.add(nodes[v]["floor_id"])
+                    cg_ranks = [floor_rank[fid] for fid in cg_floors if fid in floor_rank]
+                    if cg_ranks and (max(cg_ranks) - min(cg_ranks) + 1 != len(set(cg_ranks))):
+                        missing_ranks = set(range(min(cg_ranks), max(cg_ranks) + 1)) - set(cg_ranks)
+                        missing_fids = [sorted_floors[r] for r in sorted(missing_ranks)]
+                        warnings.append({
+                            "code": "DISCONNECTED_CAPACITY_GROUP",
+                            "severity": "warning",
+                            "message": f"Capacity group '{cg}' has missing intermediate floors ({', '.join(missing_fids)}) in its vertical span.",
+                            "elements": [f"{e.get('from')}-{e.get('to')}" for e in g_edges],
+                            "suggestion": f"Include stair flights for intermediate floors {missing_fids} in capacity group '{cg}'."
+                        })
+                        if mf_status != "critical":
+                            mf_status = "warning"
+
     # Compute heuristic score
     total_penalty = 0.0
     critical_count = 0
@@ -658,6 +896,10 @@ def analyze_graph(building: dict[str, Any]) -> dict[str, Any]:
             "provenance": {
                 "status": "warning" if (total_edges >= 5 and inferred_ratio > 0.35) else "pass",
                 "inferred_ratio": round(inferred_ratio, 3),
+            },
+            "multi_floor": {
+                "status": mf_status,
+                "floors_count": len(raw_floors) if isinstance(raw_floors, list) else (1 if raw_floors is None else 0),
             },
         },
         "warnings": warnings,

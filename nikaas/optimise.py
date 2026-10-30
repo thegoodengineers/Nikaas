@@ -8,7 +8,7 @@ import numpy as np
 from scipy.optimize import linprog
 
 from .building import Building, load, nearest_plan, shortest_path
-from .sim import effective_width, simulate, SPECIFIC_FLOW, STAIR_SPEED, WALK_SPEED
+from .sim import effective_width, simulate, SPECIFIC_FLOW, STAIR_SPEED, WALK_SPEED, door_paths
 
 
 def compute_exit_capacities(b: Building, blocked=()):
@@ -135,6 +135,60 @@ def lower_bound(b: Building | dict, blocked=()) -> float:
                 row[T_idx] = -1.0
                 A_ub.append(row)
                 b_ub.append(0.0)
+
+    # 4. Stairwell capacity group cuts (for multi-floor buildings with shared stairwell capacity)
+    capacity_groups = {}
+    for e in b.edges:
+        if e.capacity_group:
+            capacity_groups.setdefault(e.capacity_group, []).append(e)
+
+    for g, g_edges in capacity_groups.items():
+        min_eff_w = min(effective_width(e) for e in g_edges)
+        cap_g = min_eff_w * SPECIFIC_FLOW['stair']
+        if cap_g <= 0:
+            continue
+        g_edge_set = {(e.a, e.b) for e in g_edges} | {(e.b, e.a) for e in g_edges}
+
+        # Multi-door flow distribution across stairwells:
+        # In simulate(), occupants of a room split across all available doors in proportion to door width.
+        # If doors lead to different stairwells, each stairwell receives a fraction alpha = sum(w_d) / sum(w_all).
+        # To maintain a valid mathematical lower bound, each stairwell cut accounts for this door fraction.
+        pairs_using_g = {}  # (r, ex) -> alpha
+        walk_times_to_g = []
+        for r in rooms:
+            for ex in open_exits:
+                d_paths = door_paths(b, r, ex, blocked)
+                if not d_paths:
+                    continue
+                tot_door_w = sum(w for w, _ in d_paths)
+                if tot_door_w <= 0:
+                    continue
+                g_door_w = 0.0
+                for w, path in d_paths:
+                    if path and any((u, v) in g_edge_set for u, v in zip(path[:-1], path[1:])):
+                        g_door_w += w
+                        t_to_g = 0.0
+                        for u, v in zip(path[:-1], path[1:]):
+                            if (u, v) in g_edge_set:
+                                break
+                            for nb, ed in b.adj[u]:
+                                if nb == v:
+                                    v_spd = STAIR_SPEED if ed.kind == 'stair' else WALK_SPEED
+                                    t_to_g += ed.length / v_spd
+                                    break
+                        walk_times_to_g.append(t_to_g)
+                alpha = g_door_w / tot_door_w
+                if alpha > 0.0:
+                    pairs_using_g[(r, ex)] = alpha
+
+        if pairs_using_g:
+            min_walk_g = min(walk_times_to_g) if walk_times_to_g else 0.0
+            row = np.zeros(num_vars)
+            for (r, ex), alpha in pairs_using_g.items():
+                row[var_map[(r, ex)]] = alpha / cap_g
+            row[T_idx] = -1.0
+            A_ub.append(row)
+            b_ub.append(-min_walk_g)
 
     bounds = [(0.0, None) for _ in range(num_vars)]
 

@@ -1,0 +1,355 @@
+[
+  {
+    "scenario": "3_floor_office_normal",
+    "building_hash": "c09382f73ee3",
+    "commit": "dc3aa5c",
+    "floor_count": 3,
+    "room_count": 10,
+    "total_occupants": 400,
+    "stairwell_count": 2,
+    "blocked_resources": "none",
+    "plan_type": "nikaas_plan",
+    "plan": {
+      "r_GF_1": "exit_north",
+      "r_GF_2": "exit_north",
+      "r_F1_1": "exit_north",
+      "r_F1_2": "exit_north",
+      "r_F1_3": "exit_south",
+      "r_F1_4": "exit_south",
+      "r_F2_1": "exit_north",
+      "r_F2_2": "exit_north",
+      "r_F2_3": "exit_south",
+      "r_F2_4": "exit_south"
+    },
+    "completed": true,
+    "movement_time_s": 210.5,
+    "nearest_time_s": 210.5,
+    "lower_bound_s": 192.02,
+    "gap_to_bound_s": 18.48,
+    "per_floor_population": {
+      "GF": 60,
+      "F1": 160,
+      "F2": 180
+    },
+    "per_exit_population": {
+      "exit_north": 230,
+      "exit_south": 170
+    },
+    "stairwell_load": {
+      "stairwell_north": {
+        "peak_queue": 65,
+        "capacity_pps": 1.32,
+        "bottleneck_edge": "stair_north_F2-stair_north_F1",
+        "edges": [
+          "stair_north_F2-stair_north_F1",
+          "stair_north_F1-stair_north_GF"
+        ]
+      },
+      "stairwell_south": {
+        "peak_queue": 72,
+        "capacity_pps": 0.91,
+        "bottleneck_edge": "stair_south_F2-stair_south_F1",
+        "edges": [
+          "stair_south_F2-stair_south_F1",
+          "stair_south_F1-stair_south_GF"
+        ]
+      }
+    },
+    "runtime_s": 2.762
+  },
+  {
+    "scenario": "3_floor_office_north_exit_blocked",
+    "building_hash": "c09382f73ee3",
+    "commit": "dc3aa5c",
+    "floor_count": 3,
+    "room_count": 10,
+    "total_occupants": 400,
+    "stairwell_count": 2,
+    "blocked_resources": "exit_north",
+    "plan_type": "nearest_plan",
+    "plan": {
+      "r_GF_1": "exit_south",
+      "r_GF_2": "exit_south",
+      "r_F1_1": "exit_south",
+      "r_F1_2": "exit_south",
+      "r_F1_3": "exit_south",
+      "r_F1_4": "exit_south",
+      "r_F2_1": "exit_south",
+      "r_F2_2": "exit_south",
+      "r_F2_3": "exit_south",
+      "r_F2_4": "exit_south"
+    },
+    "completed": true,
+    "movement_time_s": 210.5,
+    "nearest_time_s": 210.5,
+    "lower_bound_s": 207.11,
+    "gap_to_bound_s": 3.39,
+    "per_floor_population": {
+      "GF": 60,
+      "F1": 160,
+      "F2": 180
+    },
+    "per_exit_population": {
+      "exit_north": 0,
+      "exit_south": 400
+    },
+    "stairwell_load": {
+      "stairwell_north": {
+        "peak_queue": 65,
+        "capacity_pps": 1.32,
+        "bottleneck_edge": "stair_north_F2-stair_north_F1",
+        "edges": [
+          "stair_north_F2-stair_north_F1",
+          "stair_north_F1-stair_north_GF"
+        ]
+      },
+      "stairwell_south": {
+        "peak_queue": 72,
+        "capacity_pps": 0.91,
+        "bottleneck_edge": "stair_south_F2-stair_south_F1",
+        "edges": [
+          "stair_south_F2-stair_south_F1",
+          "stair_south_F1-stair_south_GF"
+        ]
+      }
+    },
+    "runtime_s": 0.067
+  },
+  {
+    "scenario": "3_floor_office_south_exit_blocked",
+    "building_hash": "c09382f73ee3",
+    "commit": "dc3aa5c",
+    "floor_count": 3,
+    "room_count": 10,
+    "total_occupants": 400,
+    "stairwell_count": 2,
+    "blocked_resources": "exit_south",
+    "plan_type": "nearest_plan",
+    "plan": {
+      "r_GF_1": "exit_north",
+      "r_GF_2": "exit_north",
+      "r_F1_1": "exit_north",
+      "r_F1_2": "exit_north",
+      "r_F1_3": "exit_north",
+      "r_F1_4": "exit_north",
+      "r_F2_1": "exit_north",
+      "r_F2_2": "exit_north",
+      "r_F2_3": "exit_north",
+      "r_F2_4": "exit_north"
+    },
+    "completed": true,
+    "movement_time_s": 227.5,
+    "nearest_time_s": 227.5,
+    "lower_bound_s": 207.11,
+    "gap_to_bound_s": 20.39,
+    "per_floor_population": {
+      "GF": 60,
+      "F1": 160,
+      "F2": 180
+    },
+    "per_exit_population": {
+      "exit_north": 400,
+      "exit_south": 0
+    },
+    "stairwell_load": {
+      "stairwell_north": {
+        "peak_queue": 65,
+        "capacity_pps": 1.32,
+        "bottleneck_edge": "stair_north_F2-stair_north_F1",
+        "edges": [
+          "stair_north_F2-stair_north_F1",
+          "stair_north_F1-stair_north_GF"
+        ]
+      },
+      "stairwell_south": {
+        "peak_queue": 72,
+        "capacity_pps": 0.91,
+        "bottleneck_edge": "stair_south_F2-stair_south_F1",
+        "edges": [
+          "stair_south_F2-stair_south_F1",
+          "stair_south_F1-stair_south_GF"
+        ]
+      }
+    },
+    "runtime_s": 0.069
+  },
+  {
+    "scenario": "3_floor_narrow_stairwell_1m",
+    "building_hash": "c09382f73ee3",
+    "commit": "dc3aa5c",
+    "floor_count": 3,
+    "room_count": 10,
+    "total_occupants": 400,
+    "stairwell_count": 2,
+    "blocked_resources": "none",
+    "plan_type": "nikaas_plan",
+    "plan": {
+      "r_GF_1": "exit_north",
+      "r_GF_2": "exit_north",
+      "r_F1_1": "exit_north",
+      "r_F1_2": "exit_north",
+      "r_F1_3": "exit_south",
+      "r_F1_4": "exit_south",
+      "r_F2_1": "exit_north",
+      "r_F2_2": "exit_north",
+      "r_F2_3": "exit_south",
+      "r_F2_4": "exit_south"
+    },
+    "completed": true,
+    "movement_time_s": 263.5,
+    "nearest_time_s": 263.5,
+    "lower_bound_s": 245.37,
+    "gap_to_bound_s": 18.13,
+    "per_floor_population": {
+      "GF": 60,
+      "F1": 160,
+      "F2": 180
+    },
+    "per_exit_population": {
+      "exit_north": 230,
+      "exit_south": 170
+    },
+    "stairwell_load": {
+      "stairwell_north": {
+        "peak_queue": 76,
+        "capacity_pps": 0.71,
+        "bottleneck_edge": "stair_north_F2-stair_north_F1",
+        "edges": [
+          "stair_north_F2-stair_north_F1",
+          "stair_north_F1-stair_north_GF"
+        ]
+      },
+      "stairwell_south": {
+        "peak_queue": 76,
+        "capacity_pps": 0.71,
+        "bottleneck_edge": "stair_south_F2-stair_south_F1",
+        "edges": [
+          "stair_south_F2-stair_south_F1",
+          "stair_south_F1-stair_south_GF"
+        ]
+      }
+    },
+    "runtime_s": 3.454
+  },
+  {
+    "scenario": "3_floor_office_uneven_top_heavy",
+    "building_hash": "c09382f73ee3",
+    "commit": "dc3aa5c",
+    "floor_count": 3,
+    "room_count": 10,
+    "total_occupants": 580,
+    "stairwell_count": 2,
+    "blocked_resources": "none",
+    "plan_type": "nikaas_plan",
+    "plan": {
+      "r_GF_1": "exit_north",
+      "r_GF_2": "exit_north",
+      "r_F1_1": "exit_north",
+      "r_F1_2": "exit_north",
+      "r_F1_3": "exit_south",
+      "r_F1_4": "exit_south",
+      "r_F2_1": "exit_north",
+      "r_F2_2": "exit_north",
+      "r_F2_3": "exit_south",
+      "r_F2_4": "exit_south"
+    },
+    "completed": true,
+    "movement_time_s": 309.25,
+    "nearest_time_s": 309.25,
+    "lower_bound_s": 290.88,
+    "gap_to_bound_s": 18.37,
+    "per_floor_population": {
+      "GF": 60,
+      "F1": 160,
+      "F2": 360
+    },
+    "per_exit_population": {
+      "exit_north": 320,
+      "exit_south": 260
+    },
+    "stairwell_load": {
+      "stairwell_north": {
+        "peak_queue": 130,
+        "capacity_pps": 1.32,
+        "bottleneck_edge": "stair_north_F2-stair_north_F1",
+        "edges": [
+          "stair_north_F2-stair_north_F1",
+          "stair_north_F1-stair_north_GF"
+        ]
+      },
+      "stairwell_south": {
+        "peak_queue": 145,
+        "capacity_pps": 0.91,
+        "bottleneck_edge": "stair_south_F2-stair_south_F1",
+        "edges": [
+          "stair_south_F2-stair_south_F1",
+          "stair_south_F1-stair_south_GF"
+        ]
+      }
+    },
+    "runtime_s": 1.091
+  },
+  {
+    "scenario": "5_floor_tower_scaling",
+    "building_hash": "c34ee4afe8a8",
+    "commit": "dc3aa5c",
+    "floor_count": 5,
+    "room_count": 9,
+    "total_occupants": 450,
+    "stairwell_count": 2,
+    "blocked_resources": "none",
+    "plan_type": "nikaas_plan",
+    "plan": {
+      "r_GF_1": "exit_north",
+      "r_F1_1": "exit_north",
+      "r_F1_2": "exit_north",
+      "r_F2_1": "exit_south",
+      "r_F2_2": "exit_south",
+      "r_F3_1": "exit_south",
+      "r_F3_2": "exit_north",
+      "r_F4_1": "exit_south",
+      "r_F4_2": "exit_north"
+    },
+    "completed": true,
+    "movement_time_s": 206.0,
+    "nearest_time_s": 375.25,
+    "lower_bound_s": 179.73,
+    "gap_to_bound_s": 26.27,
+    "per_floor_population": {
+      "GF": 50,
+      "F1": 100,
+      "F2": 100,
+      "F3": 100,
+      "F4": 100
+    },
+    "per_exit_population": {
+      "exit_north": 450,
+      "exit_south": 0
+    },
+    "stairwell_load": {
+      "tower_north": {
+        "peak_queue": 86,
+        "capacity_pps": 1.21,
+        "bottleneck_edge": "stair_north_F2-stair_north_F1",
+        "edges": [
+          "stair_north_F4-stair_north_F3",
+          "stair_north_F3-stair_north_F2",
+          "stair_north_F2-stair_north_F1",
+          "stair_north_F1-stair_north_GF"
+        ]
+      },
+      "tower_south": {
+        "peak_queue": 0,
+        "capacity_pps": 1.21,
+        "bottleneck_edge": "stair_south_F4-stair_south_F3",
+        "edges": [
+          "stair_south_F4-stair_south_F3",
+          "stair_south_F3-stair_south_F2",
+          "stair_south_F2-stair_south_F1",
+          "stair_south_F1-stair_south_GF"
+        ]
+      }
+    },
+    "runtime_s": 4.401
+  }
+]
