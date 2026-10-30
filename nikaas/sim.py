@@ -119,6 +119,8 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
 
     frames, t, next_frame = [], 0.0, 0.0
 
+    multi = bool(b.floors)  # 3D positions only for multi-floor buildings: single-floor frames never carry them
+
     def pos_2d_and_3d(p):
         if p.state == "inside" or (p.state == "queuing" and p.leg == 0):
             # still in the room: spread over the room floor, drifting toward the door while queuing
@@ -128,18 +130,14 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
             x, z = n["x"] + p.ox * k, n["z"] + p.oz * k
             if p.state == "queuing":
                 x, z = x + (door["x"] - x) * 0.35, z + (door["z"] - z) * 0.35
-            y = b.elevation_of(p.room)
-            fl = b.floor_of(p.room) or "default"
-            return (x, z), (x, y, z, fl)
+            return (x, z), ((x, b.elevation_of(p.room), z, b.floor_of(p.room) or "default") if multi else None)
 
         if p.state == "queuing":
             # waiting in front of a corridor junction or stair
             u_id = p.path[p.leg]
             a = b.nodes[u_id]
             x, z = a["x"] + p.ox * 0.15, a["z"] + p.oz * 0.15
-            y = b.elevation_of(u_id)
-            fl = b.floor_of(u_id) or "default"
-            return (x, z), (x, y, z, fl)
+            return (x, z), ((x, b.elevation_of(u_id), z, b.floor_of(u_id) or "default") if multi else None)
 
         u_id = p.path[p.leg]
         v_id = p.path[min(p.leg + 1, len(p.path) - 1)]
@@ -148,6 +146,8 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
         f = 0.0 if not e else min(1.0, p.s / e.length)
         x = a["x"] + (c["x"] - a["x"]) * f
         z = a["z"] + (c["z"] - a["z"]) * f
+        if not multi:
+            return (x, z), None
         y_a = b.elevation_of(u_id)
         y_c = b.elevation_of(v_id)
         y = y_a + (y_c - y_a) * f
@@ -283,10 +283,10 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
             frame_2d = []
             frame_3d = []
             for p in people:
-                (x, z), (x3, y3, z3, fl) = pos_2d_and_3d(p)
+                (x, z), p3 = pos_2d_and_3d(p)
                 frame_2d.append([round(x, 2), round(z, 2), p.state])
-                if b.floors:
-                    frame_3d.append([round(x3, 2), round(y3, 2), round(z3, 2), p.state, fl])
+                if multi:
+                    frame_3d.append([round(p3[0], 2), round(p3[1], 2), round(p3[2], 2), p.state, p3[3]])
             f_dict = {"t": round(t, 2), "people": frame_2d}
             if b.floors:
                 f_dict["people_3d"] = frame_3d
