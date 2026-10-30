@@ -15,6 +15,7 @@ function gopuram(b: Batch, M: Mats, cx: number, cz: number, totalH: number, hx: 
     const th = (totalH * 0.74) / TIERS * Math.pow(0.95, t)
     b.ext(t % 2 === 0 ? M.gopuramOrange : M.gopuramCream, cx - wx, y, cz - wz, cx + wx, y + th, cz + wz)
     b.ext(M.templeGold, cx - wx - 0.1, y + th - 0.12, cz - wz - 0.1, cx + wx + 0.1, y + th, cz + wz + 0.1)
+    for (const [ax, az] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) { b.sph(M.templeGold2, 0.15, cx + ax * wx, y + th + 0.12, cz + az * wz, 1, 6); b.cyl(M.gopuramCream, 0.05, 0.16, 0.3, cx + ax * wx, y + th + 0.15, cz + az * wz, 6) }
     y += th; wx *= 0.87; wz *= 0.9
   }
   const capH = totalH * 0.07
@@ -106,7 +107,7 @@ export function buildTempleWorld(M: Mats, seats: Seat[] = []): World {
   R.ext(M.templeStone, -13, MH + 0.45, -2.8, 13, MH + 0.6, 12)
   hw(glass, -13, 0, 11.2, -4, MH, 12); hw(glass, 4, 0, 11.2, 13, MH, 12)
   hw(glass, -4, 2.9, 11.2, 4, MH, 12)
-  hw(glass, 12.2, 0, -2, 13, MH, 12); hw(glass, -13, 0, -2, -12.2, MH, 12)
+  hw(glass, 12.2, 0, -2, 13, MH, 10); hw(glass, 12.2, 2.9, 10, 13, MH, 12); hw(glass, -13, 0, -2, -12.2, MH, 10); hw(glass, -13, 2.9, 10, -12.2, MH, 12)
   hw(glass, -13, 0, -2.8, -3, MH, -2); hw(glass, 3, 0, -2.8, 13, MH, -2)
   hw(glass, -3, 2.9, -2.8, 3, MH, -2)
   const colH = MH - 0.85
@@ -126,7 +127,9 @@ export function buildTempleWorld(M: Mats, seats: Seat[] = []): World {
     const east = sx > 0, innerX0 = east ? sx : ex - 0.8, innerX1 = east ? sx + 0.8 : ex
     b.floor(M.checker, rect(sx, -6, ex, 10), 0.15)
     R.ext(M.templeStone, sx, QH, -6, ex, QH + 0.35, 10)
-    hw(glass, sx, 0, 9.2, ex, QH, 10); hw(glass, sx, 0, -6, ex, QH, -5.2)
+    ;(() => { const c = (sx + ex) / 2; hw(glass, sx, 0, 9.2, c - 1.5, QH, 10); hw(glass, c + 1.5, 0, 9.2, ex, QH, 10); hw(glass, c - 1.5, 2.7, 9.2, c + 1.5, QH, 10)
+    b.floor(M.marble, rect(c - 1.5, 10, c + 1.5, 12), 0.15); R.ext(M.templeStone, c - 1.5, 3.0, 10, c + 1.5, 3.3, 12)
+    hw(glass, c - 1.7, 0, 10, c - 1.5, 3.0, 12); hw(glass, c + 1.5, 0, 10, c + 1.7, 3.0, 12) })(); (() => { const g0 = east ? 16.6 : -18.6, g1 = east ? 18.6 : -16.6; hw(glass, sx, 0, -6, g0, QH, -5.2); hw(glass, g1, 0, -6, ex, QH, -5.2); hw(glass, g0, 2.7, -6, g1, QH, -5.2) })()
     hw(glass, east ? ex - 0.8 : sx, 0, -6, east ? ex : sx + 0.8, QH, 10)
     hw(glass, innerX0, 0, -6, innerX1, QH, -1.5); hw(glass, innerX0, 0, 4, innerX1, QH, 10)
     hw(glass, innerX0, 2.8, -1.5, innerX1, QH, 4)
@@ -138,7 +141,17 @@ export function buildTempleWorld(M: Mats, seats: Seat[] = []): World {
   // inner corridor
   b.floor(M.marble, rect(-5, -12, 5, -2), 0.15)
   R.ext(M.templeStone, -5, IH, -12, 5, IH + 0.35, -2)
-  hw(glass, -5, 0, -12, -4.2, IH, -2); hw(glass, 4.2, 0, -12, 5, IH, -2)
+  for (const sg of [-1, 1]) {
+    const xa = sg < 0 ? -5 : 4.2, xb = sg < 0 ? -4.2 : 5
+    hw(glass, xa, 0, -12, xb, IH, -10.5); hw(glass, xa, 0, -7, xb, IH, -2); hw(glass, xa, 2.7, -10.5, xb, IH, -7)
+    const x0 = sg < 0 ? -25 : 5, x1 = sg < 0 ? -5 : 25
+    b.floor(M.marble, rect(x0, -12, x1, -6), 0.15); R.ext(M.templeStone, x0, IH, -12, x1, IH + 0.35, -6)
+    hw(glass, x0, 0, -12.8, x1, IH, -12)
+    hw(glass, sg < 0 ? -16 : 5, 0, -6.8, sg < 0 ? -5 : 16, IH, -6)
+    hw(glass, sg < 0 ? -25 : 24, 0, -6.8, sg < 0 ? -24 : 25, IH, -6)
+    b.floor(M.marble, rect(sg < 0 ? -26 : 24, -6, sg < 0 ? -24 : 26, 3), 0.1); R.ext(M.templeStone, sg < 0 ? -26 : 24, 3.0, -6, sg < 0 ? -24 : 26, 3.2, 3)
+    for (let x = x0 + 2; x < x1; x += 3.5) { b.cyl(M.templeGold, 0.12, 0.12, 1.6, x, 0.95, -9.3, 8); b.sph(M.lamp, 0.14, x, 1.9, -9.3) }
+  }
 
   // sanctum
   b.floor(M.marble, rect(-4.6, -18, 4.6, -12), 0.2)
@@ -184,11 +197,27 @@ export function buildTempleWorld(M: Mats, seats: Seat[] = []): World {
   for (let k = 0; k < 4; k++) b.cyl(M.templeGold2, 0.34, 0.34, 0.12, 0, 1.6 + k * 2.2, 17, 10)
   b.sph(M.templeGold2, 0.38, 0, 11.9, 17, 0.8)
   b.box(M.gopuramOrange, 1.5, 0.9, 0.04, 0.8, 10.6, 17)
-  // sanctum idol: pedestal, golden figure, halo and lamps
-  b.ext(M.templeStone, -1.4, 0.2, -16.6, 1.4, 0.9, -14.4)
-  b.cyl(M.templeGold2, 0.5, 0.65, 2.0, 0, 1.9, -15.5, 10); b.sph(M.templeGold2, 0.38, 0, 3.1, -15.5)
-  b.cyl(M.templeGold2, 0.9, 0.9, 0.06, 0, 3.0, -15.9, 20)
-  for (const lx of [-1.8, 1.8]) { b.cyl(M.templeGold, 0.1, 0.16, 0.8, lx, 0.6, -14.8, 8); b.sph(M.lamp, 0.12, lx, 1.1, -14.8) }
+  // sanctum: Sri Venkateswara in the Garbhagriha
+  const iz = -16, y0 = 0.22
+  b.ext(M.templeStone, -3.2, y0, -17, 3.2, y0 + 0.25, -13.6)
+  b.cyl(M.templeGold, 1.55, 1.7, 0.3, 0, y0 + 0.4, iz, 16); b.cyl(M.templeGold2, 1.2, 1.4, 0.3, 0, y0 + 0.7, iz, 16)
+  for (let k = 0; k < 10; k++) { const a = k * Math.PI / 5; b.sph(M.templeGold2, 0.24, Math.cos(a) * 1.3, y0 + 0.95, iz + Math.sin(a) * 1.3, 0.55, 6) }
+  b.cyl(M.templeGold2, 0.5, 0.62, 1.3, 0, y0 + 1.6, iz, 14)
+  b.cyl(M.templeGold2, 0.4, 0.55, 1.1, 0, y0 + 2.8, iz, 14)
+  b.sph(M.templeGold2, 0.62, 0, y0 + 3.3, iz, 0.55); b.sph(M.templeGold2, 0.36, 0, y0 + 3.75, iz, 1.1)
+  b.cyl(M.templeGold2, 0.06, 0.32, 0.95, 0, y0 + 4.4, iz, 10); b.sph(M.templeGold2, 0.1, 0, y0 + 4.95, iz)
+  b.ext(M.red, -0.05, y0 + 3.7, iz + 0.33, 0.05, y0 + 4.05, iz + 0.38); b.ext(M.whiteLam, -0.28, y0 + 3.9, iz + 0.30, 0.28, y0 + 3.95, iz + 0.36)
+  for (const sg of [-1, 1]) {
+    b.rod(M.templeGold2, 0.1, [sg * 0.55, y0 + 3.15, iz], [sg * 0.95, y0 + 2.3, iz + 0.25], 6); b.sph(M.templeGold2, 0.12, sg * 0.95, y0 + 2.25, iz + 0.28)
+    b.rod(M.templeGold2, 0.08, [sg * 0.5, y0 + 3.3, iz], [sg * 0.95, y0 + 3.9, iz + 0.1], 6)
+    b.cyl(M.steel, 0.2, 0.2, 0.08, sg * 0.95, y0 + 4.0, iz + 0.1, 12); b.sph(M.steel, 0.16, sg * 1.02, y0 + 3.8, iz + 0.15, 1.3)
+    b.cyl(M.templeGold2, 0.2, 0.26, 1.5, sg * 2.5, y0 + 1.0, iz + 0.5, 10); b.sph(M.templeGold2, 0.24, sg * 2.5, y0 + 2.0, iz + 0.5)
+    b.cyl(M.templeGold2, 0.05, 0.2, 0.5, sg * 2.5, y0 + 2.4, iz + 0.5, 8)
+    b.cyl(M.templeGold, 0.1, 0.16, 1.2, sg * 3.7, y0 + 0.6, iz + 1.0, 8); b.sph(M.lamp, 0.16, sg * 3.7, y0 + 1.3, iz + 1.0)
+  }
+  for (let k = 0; k <= 8; k++) { const t = k / 8, gx = (t - 0.5) * 1.4, gy = y0 + 3.0 - Math.sin(t * Math.PI) * 1.2; b.sph(M.gopuramOrange, 0.11, gx, gy, iz + 0.42, 1, 6); b.sph(M.red, 0.09, gx * 0.9, gy - 0.25, iz + 0.46, 1, 6) }
+  for (let k = 0; k <= 14; k++) { const a = Math.PI * k / 14; b.sph(M.templeGold2, 0.13, Math.cos(a) * 2.1, y0 + 2.6 + Math.sin(a) * 2.5, iz - 0.7, 1, 6); if (k % 2 === 0) b.rod(M.templeGold, 0.04, [Math.cos(a) * 2.1, y0 + 2.6 + Math.sin(a) * 2.5, iz - 0.7], [Math.cos(a) * 2.7, y0 + 2.6 + Math.sin(a) * 3.2, iz - 0.7], 5) }
+  b.cyl(M.steel, 0.05, 0.05, 0.9, 0, y0 + 5.4, iz, 6); b.sph(M.steel, 1.0, 0, y0 + 5.0, iz, 0.28, 12)
   // windows (dark niches) on every gopuram tier face
   for (const [gx, gz, gh, hx, hz] of [[0, PS + 3.5, 16, 5.5, 3.5], [PX + 3, 0, 11, 3.2, 5.0], [-PX - 3, 0, 11, 3.2, 5.0]] as number[][]) {
     let wx = hx, wz = hz, y = 1.2
@@ -208,6 +237,49 @@ export function buildTempleWorld(M: Mats, seats: Seat[] = []): World {
   // hundi (offering chest) and laddu counter in the east hall
   b.ext(M.red, 19.2, 0.15, -4.2, 20.8, 1.2, -3.2); b.ext(M.templeGold, 19.1, 1.2, -4.3, 20.9, 1.32, -3.1)
   b.ext(M.counter, 17, 0.15, 7.4, 23, 1.1, 8.4); b.ext(M.templeGold, 16.9, 1.1, 7.3, 23.1, 1.18, 8.5)
+  // ---- grand detailing ----
+  const cp = (x: number, z: number) => { b.cyl(M.templeStone, 0.22, 0.22, 2.6, x, 1.3, z, 8); b.cyl(M.templeGold, 0.3, 0.3, 0.14, x, 2.65, z, 8); b.ext(M.templeStone, x - 0.4, 2.72, z - 0.4, x + 0.4, 2.95, z + 0.4); b.cyl(M.templeStone, 0.3, 0.3, 0.3, x, 0.15, z, 8) }
+  for (let x = -PX + 2.2; x <= PX - 2; x += 3.1) { if (Math.abs(x) > 5) { cp(x, PS - 1.7); cp(x, -PN + 1.7) } }
+  for (let z = -PN + 4.8; z <= PS - 4.5; z += 3.1) { if (Math.abs(z) > 3.4) { cp(PX - 1.15, z); cp(-PX + 1.15, z) } }
+  R.ext(M.templeStone, -PX + WT, 2.95, PS - 2.3, -5, 3.15, PS - WT); R.ext(M.templeStone, 5, 2.95, PS - 2.3, PX - WT, 3.15, PS - WT)
+  R.ext(M.templeStone, -PX + WT, 2.95, -PN + WT, PX - WT, 3.15, -PN + 2.3)
+  for (const ex of [-7.5, 7.5]) {
+    b.ext(M.templeStone, ex - 1, 0, PS + 8, ex + 1, 0.4, PS + 11)
+    b.ext(M.darkMetal, ex - 0.55, 1.0, PS + 8.4, ex + 0.55, 2.3, PS + 10.4)
+    for (const [lx, lz] of [[-0.35, 8.6], [0.35, 8.6], [-0.35, 10.2], [0.35, 10.2]]) b.cyl(M.darkMetal, 0.2, 0.22, 0.7, ex + lx, 0.75, PS + lz, 7)
+    b.sph(M.darkMetal, 0.5, ex, 2.0, PS + 8.3, 1); b.rod(M.darkMetal, 0.14, [ex, 1.9, PS + 8.0], [ex, 0.9, PS + 7.5], 6)
+    b.rod(M.gopuramCream, 0.06, [ex - 0.25, 1.8, PS + 8.0], [ex - 0.35, 1.4, PS + 7.5], 5); b.rod(M.gopuramCream, 0.06, [ex + 0.25, 1.8, PS + 8.0], [ex + 0.35, 1.4, PS + 7.5], 5)
+    b.ext(M.red, ex - 0.6, 2.1, PS + 8.5, ex + 0.6, 2.3, PS + 10.3); b.ext(M.templeGold, ex - 0.62, 2.28, PS + 8.5, ex + 0.62, 2.34, PS + 10.3)
+  }
+  b.ext(M.templeStone, -0.9, 0, 19.2, 0.9, 0.9, 20.6)
+  b.cyl(M.templeGold2, 0.24, 0.32, 1.2, 0, 1.5, 19.9, 8); b.sph(M.templeGold2, 0.24, 0, 2.3, 19.9); b.cyl(M.gopuramOrange, 0.02, 0.12, 0.3, 0, 2.6, 19.9, 6)
+  b.box(M.templeGold, 1.2, 0.9, 0.06, -0.7, 1.9, 19.9, 0.35); b.box(M.templeGold, 1.2, 0.9, 0.06, 0.7, 1.9, 19.9, -0.35)
+  for (let k = 0; k <= 18; k++) { const a = Math.PI * k / 18; b.sph(M.templeGold2, 0.12, Math.cos(a) * 3.9, MH - 0.4 + Math.sin(a) * 1.5, 12.3, 1, 6) }
+  b.sph(M.templeGold2, 0.4, 0, MH + 1.2, 12.3, 1); for (const sg of [-1, 1]) b.sph(M.gopuramOrange, 0.3, sg * 3.9, MH - 0.4, 12.3, 1.3)
+  for (const lx of [-3, 3]) for (const lz of [1.5, 5, 8.5]) { b.cyl(M.templeGold, 0.07, 0.14, 1.4, lx, 0.85, lz, 6); b.cyl(M.templeGold2, 0.2, 0.1, 0.12, lx, 1.6, lz, 8); b.sph(M.lamp, 0.12, lx, 1.72, lz) }
+  for (const mx of [-4.6, 4.6]) for (const mz of [3.5, 8.5]) { b.cyl(M.templeGold, 1.5, 1.5, 0.02, mx, 0.18, mz, 24); b.cyl(M.red, 1.15, 1.15, 0.03, mx, 0.19, mz, 24); b.cyl(M.templeGold2, 0.7, 0.7, 0.04, mx, 0.2, mz, 24) }
+  for (const [qx, qz] of [[-PX + 3.5, -PN + 3.5], [PX - 3.5, -PN + 3.5]]) {
+    b.ext(M.templeStone, qx - 1.8, 0, qz - 1.8, qx + 1.8, 2.4, qz + 1.8); b.ext(M.templeGold, qx - 1.9, 2.4, qz - 1.9, qx + 1.9, 2.55, qz + 1.9)
+    for (let t = 0; t < 4; t++) b.box(t % 2 ? M.gopuramCream : M.gopuramOrange, 3 - t * 0.6, 0.6, 3 - t * 0.6, qx, 2.85 + t * 0.6, qz)
+    b.sph(M.templeGold2, 0.3, qx, 5.5, qz); b.cyl(M.templeGold2, 0.04, 0.12, 0.8, qx, 5.9, qz, 6)
+  }
+  b.ext(M.templeStone, -45.5, 0, 22, -38.5, 3.5, 28.5); b.ext(M.templeGold, -45.7, 3.5, 21.8, -38.3, 3.65, 28.7)
+  vimana(b, M, -42, 25.2, 3.2, 3.65)
+  b.ext(M.darkMetal, -43, 0, 21.9, -41, 2.4, 22.1)
+  for (let k = 0; k < 3; k++) b.ext(M.templeStone, -44 - k * 0.3, 0, 19.5 + k * 0.8, -40 + k * 0.3, 0.4 - k * 0.1, 20.2 + k * 0.8)
+  const lotus = new THREE.MeshStandardMaterial({ color: '#e86aa0', roughness: 0.6 })
+  for (const [lx, lz] of [[-50, 4], [-34, 4], [-50, 18], [-34, 18]]) { b.cyl(M.templeStone, 0.25, 0.3, 2.6, lx, 1.4, lz, 8); b.sph(M.templeGold2, 0.3, lx, 2.9, lz, 1.2) }
+  for (const [lx, lz] of [[-45, 8.5], [-39.5, 13], [-43, 14.2], [-38, 7.2], [-46, 12], [-41.5, 9.5]]) { b.sph(lotus, 0.35, lx, 0.5, lz, 0.4, 7); b.cyl(M.plant, 0.5, 0.5, 0.02, lx, 0.44, lz, 8) }
+  const marigold = new THREE.MeshStandardMaterial({ color: '#f59e0b', roughness: 0.8 })
+  for (const sx of [-1, 1]) for (let z = PS + 3; z < PS + 14; z += 2.3) { b.sph(marigold, 0.45, sx * 3.3, 0.3, z, 0.7, 6); b.cyl(M.templeGold, 0.07, 0.1, 1.8, sx * 5, 0.9, z + 1.1, 6); b.sph(M.lamp, 0.13, sx * 5, 1.9, z + 1.1) }
+
+  for (const px of [-12, -18, 12, 18]) for (const pz of [13.5, 17]) { b.cyl(M.templeStone, 0.3, 0.3, 3.2, px, 1.6, pz, 8); b.ext(M.templeStone, px - 0.45, 3.2, pz - 0.45, px + 0.45, 3.4, pz + 0.45) }
+  // covered links from the mandapam to the forecourt cloister (both sides)
+  for (const sg of [-1, 1]) {
+    const x0 = sg < 0 ? -21.5 : 12.2, x1 = sg < 0 ? -12.2 : 21.5
+    b.floor(M.marble, rect(x0, 10, x1, 12), 0.15); R.ext(M.templeStone, x0, 3.0, 10, x1, 3.3, 12)
+    hw(glass, x0, 0, 12, x1, 3.0, 12.2); hw(glass, sg < 0 ? -16 : 12.2, 0, 9.8, sg < 0 ? -12.2 : 16, 3.0, 10)
+  }
   // Mahadwaram court: colonnade along both sides
   for (const px of [-6.6, 6.6]) for (const pz of [13, 15.5, 18]) { b.cyl(M.templeStone, 0.3, 0.3, 3.2, px, 1.6, pz, 8); b.ext(M.templeStone, px - 0.45, 3.2, pz - 0.45, px + 0.45, 3.4, pz + 0.45) }
   // sacred tank (pushkarini) with steps, and palms
@@ -223,7 +295,7 @@ export function buildTempleWorld(M: Mats, seats: Seat[] = []): World {
   }
 
   const pickMat = new THREE.MeshBasicMaterial({ visible: false })
-  for (const [x0, z0, x1, z1] of [[-13, -2, 13, 12], [-24, -6, -16, 10], [16, -6, 24, 10], [-7, 12, 7, 18], [-5, -12, 5, -2]]) {
+  for (const [x0, z0, x1, z1] of [[-13, -2, 13, 12], [-24, -6, -16, 10], [16, -6, 24, 10], [-22, 12, 22, 18], [-5, -12, 5, -2]]) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.4, z1 - z0), pickMat)
     m.position.set((x0 + x1) / 2, 0.2, (z0 + z1) / 2); m.userData.level = 0
     picks.push(m)
