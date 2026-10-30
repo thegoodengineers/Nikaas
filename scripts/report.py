@@ -61,3 +61,23 @@ if st.exists():
                     "lower_bound_s": float(r["lower_bound_s"]) if r["lower_bound_s"] else None} for r in srows],
                   (web / "stadium.json").open("w"), indent=1)
     print(NL.join(extra))
+
+# multi-floor buildings (Ayush, scripts/run_multi_floor.py -> runs/multi_floor.csv)
+mf = Path("runs/multi_floor.csv")
+if mf.exists():
+    mrows = list(csv.DictReader(mf.open(encoding="utf-8")))
+    nik = lambda r: r["plan_type"] == "nikaas_plan"  # blocked scenarios were run with the nearest-exit plan only
+    extra = ["", "## Multi-floor buildings (`runs/multi_floor.csv`)", "",
+             "| Scenario | Floors | People | Blocked | Nearest exit (s) | Nikaas plan (s) | Lower bound (s) | Commit |",
+             "|---|---|---|---|---|---|---|---|"]
+    extra += [f"| {r['scenario']} | {r['floor_count']} | {r['total_occupants']} | {r['blocked_resources']} | {r['nearest_time_s']} | "
+              f"{r['movement_time_s'] if nik(r) else '-'} | {r['lower_bound_s']} | {r['commit']} |" for r in mrows]
+    md = Path("docs/RESULTS.md")
+    md.write_text(md.read_text(encoding="utf-8") + NL.join(extra) + NL, encoding="utf-8")
+    if web.exists():
+        json.dump([{"scenario": r["scenario"], "floors": int(r["floor_count"]), "people": int(r["total_occupants"]),
+                    "blocked": "" if r["blocked_resources"] == "none" else r["blocked_resources"],
+                    "nearest_s": float(r["nearest_time_s"]), "nikaas_s": float(r["movement_time_s"]) if nik(r) else None,
+                    "lower_bound_s": float(r["lower_bound_s"])} for r in mrows], (web / "multi_floor.json").open("w"), indent=1)
+    print(NL.join(extra))
+

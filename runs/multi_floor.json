@@ -2,7 +2,7 @@
   {
     "scenario": "3_floor_office_normal",
     "building_hash": "c09382f73ee3",
-    "commit": "dc3aa5c",
+    "commit": "ac54330",
     "floor_count": 3,
     "room_count": 10,
     "total_occupants": 400,
@@ -55,12 +55,12 @@
         ]
       }
     },
-    "runtime_s": 2.762
+    "runtime_s": 2.967
   },
   {
     "scenario": "3_floor_office_north_exit_blocked",
     "building_hash": "c09382f73ee3",
-    "commit": "dc3aa5c",
+    "commit": "ac54330",
     "floor_count": 3,
     "room_count": 10,
     "total_occupants": 400,
@@ -113,12 +113,12 @@
         ]
       }
     },
-    "runtime_s": 0.067
+    "runtime_s": 0.108
   },
   {
     "scenario": "3_floor_office_south_exit_blocked",
     "building_hash": "c09382f73ee3",
-    "commit": "dc3aa5c",
+    "commit": "ac54330",
     "floor_count": 3,
     "room_count": 10,
     "total_occupants": 400,
@@ -171,12 +171,12 @@
         ]
       }
     },
-    "runtime_s": 0.069
+    "runtime_s": 0.127
   },
   {
     "scenario": "3_floor_narrow_stairwell_1m",
     "building_hash": "c09382f73ee3",
-    "commit": "dc3aa5c",
+    "commit": "ac54330",
     "floor_count": 3,
     "room_count": 10,
     "total_occupants": 400,
@@ -229,12 +229,12 @@
         ]
       }
     },
-    "runtime_s": 3.454
+    "runtime_s": 5.149
   },
   {
     "scenario": "3_floor_office_uneven_top_heavy",
     "building_hash": "c09382f73ee3",
-    "commit": "dc3aa5c",
+    "commit": "ac54330",
     "floor_count": 3,
     "room_count": 10,
     "total_occupants": 580,
@@ -287,12 +287,12 @@
         ]
       }
     },
-    "runtime_s": 1.091
+    "runtime_s": 1.979
   },
   {
     "scenario": "5_floor_tower_scaling",
     "building_hash": "c34ee4afe8a8",
-    "commit": "dc3aa5c",
+    "commit": "ac54330",
     "floor_count": 5,
     "room_count": 9,
     "total_occupants": 450,
@@ -350,6 +350,6 @@
         ]
       }
     },
-    "runtime_s": 4.401
+    "runtime_s": 7.635
   }
 ]

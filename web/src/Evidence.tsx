@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 type Result = { building: string; plan: string; blocked: string; people: number; total_time_s: number; bottleneck: string; peak_queue: number; commit: string }
 type Wow = { building: string; blocked: string; people: number; nearest_s: number; nikaas_s: number; saved_s: number; pct_saved: number; lower_bound_s: number; gap_s: number }
 type Stadium = { plan: string; people: number; total_time_s: number; max_density: number; worst_edge: string; lower_bound_s: number | null }
+type MultiFloor = { scenario: string; floors: number; people: number; blocked: string; nearest_s: number; nikaas_s: number | null; lower_bound_s: number }
 type Validation = { case: string; published_s: number; ours_s: number; error_pct: number; commit: string }
 
 const NAMES: Record<string, string> = {
@@ -18,11 +19,13 @@ export default function Evidence() {
   const [wow, setWow] = useState<Wow[]>([])
   const [val, setVal] = useState<Validation>()
   const [stadium, setStadium] = useState<Stadium[]>([])
+  const [mf, setMf] = useState<MultiFloor[]>([])
   useEffect(() => {
     fetch('data/results.json').then(r => r.json()).then(setRows).catch(() => {})
     fetch('data/wow.json').then(r => r.json()).then(setWow).catch(() => {})
     fetch('data/validation.json').then(r => r.json()).then(setVal).catch(() => {})
     fetch('data/stadium.json').then(r => r.json()).then(setStadium).catch(() => {})
+    fetch('data/multi_floor.json').then(r => r.json()).then(setMf).catch(() => {})
   }, [])
   return (
     <div className="page">
@@ -56,6 +59,19 @@ export default function Evidence() {
             <td className="num">{r.total_time_s} s</td><td className="num">{r.max_density} p/m² ({r.worst_edge})</td><td className="num">{r.lower_bound_s ? `${r.lower_bound_s} s` : '-'}</td></tr>))}</tbody>
       </table></div>
       <p className="sources">Densities are estimated from the flow model, not a spatial crowd model, and capped at 10 p/m². Thresholds and their sources are in docs/CROWD_RESEARCH.md.</p>
+
+      <h3 style={{ marginTop: 40 }}>Buildings with several floors</h3>
+      <p>
+        Floors share stairwells, so a stair carries people from every floor above it. The simulator limits each stair flight by its
+        width and lets floors take turns at the stair doors, so no floor is starved.
+      </p>
+      <div className="table-wrap"><table className="data">
+        <thead><tr><th>Scenario</th><th>Floors</th><th>People</th><th>Blocked</th><th>Nearest exit</th><th>Nikaas plan</th><th>Fastest possible ≥</th></tr></thead>
+        <tbody>{mf.map(r => (
+          <tr key={r.scenario}><td>{r.scenario.replace(/_/g, ' ')}</td><td className="num">{r.floors}</td><td className="num">{r.people}</td><td>{r.blocked || 'none'}</td>
+            <td className="num">{r.nearest_s} s</td><td className="num">{r.nikaas_s === null ? '-' : `${r.nikaas_s} s`}</td><td className="num">{r.lower_bound_s} s</td></tr>))}</tbody>
+      </table></div>
+      <p className="sources">On the 3-floor office the Nikaas plan ties the nearest-exit rule; the gain shows on the 5-floor tower, where the nearest exit sends everyone down one stairwell. Blocked-exit rows were run with the nearest-exit plan only.</p>
 
       <h3 style={{ marginTop: 40 }}>Every scenario we ran</h3>
       <div className="table-wrap"><table className="data">

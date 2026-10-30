@@ -1,7 +1,7 @@
 scenario,building_hash,commit,floor_count,room_count,total_occupants,stairwell_count,blocked_resources,plan_type,completed,movement_time_s,nearest_time_s,lower_bound_s,gap_to_bound_s,runtime_s
-3_floor_office_normal,c09382f73ee3,dc3aa5c,3,10,400,2,none,nikaas_plan,True,210.5,210.5,192.02,18.48,2.762
-3_floor_office_north_exit_blocked,c09382f73ee3,dc3aa5c,3,10,400,2,exit_north,nearest_plan,True,210.5,210.5,207.11,3.39,0.067
-3_floor_office_south_exit_blocked,c09382f73ee3,dc3aa5c,3,10,400,2,exit_south,nearest_plan,True,227.5,227.5,207.11,20.39,0.069
-3_floor_narrow_stairwell_1m,c09382f73ee3,dc3aa5c,3,10,400,2,none,nikaas_plan,True,263.5,263.5,245.37,18.13,3.454
-3_floor_office_uneven_top_heavy,c09382f73ee3,dc3aa5c,3,10,580,2,none,nikaas_plan,True,309.25,309.25,290.88,18.37,1.091
-5_floor_tower_scaling,c34ee4afe8a8,dc3aa5c,5,9,450,2,none,nikaas_plan,True,206.0,375.25,179.73,26.27,4.401
+3_floor_office_normal,c09382f73ee3,ac54330,3,10,400,2,none,nikaas_plan,True,210.5,210.5,192.02,18.48,2.967
+3_floor_office_north_exit_blocked,c09382f73ee3,ac54330,3,10,400,2,exit_north,nearest_plan,True,210.5,210.5,207.11,3.39,0.108
+3_floor_office_south_exit_blocked,c09382f73ee3,ac54330,3,10,400,2,exit_south,nearest_plan,True,227.5,227.5,207.11,20.39,0.127
+3_floor_narrow_stairwell_1m,c09382f73ee3,ac54330,3,10,400,2,none,nikaas_plan,True,263.5,263.5,245.37,18.13,5.149
+3_floor_office_uneven_top_heavy,c09382f73ee3,ac54330,3,10,580,2,none,nikaas_plan,True,309.25,309.25,290.88,18.37,1.979
+5_floor_tower_scaling,c34ee4afe8a8,ac54330,5,9,450,2,none,nikaas_plan,True,206.0,375.25,179.73,26.27,7.635

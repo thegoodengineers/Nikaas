@@ -32,3 +32,14 @@
 |---|---|---|---|---|---|---|
 | nearest | 2001 | 348.5 | 2.69 | cse-cn2 | - | aacd983 |
 | nikaas | 2001 | 203.0 | 1.61 | cse-cn2 | 107.11 | aacd983 |
+
+## Multi-floor buildings (`runs/multi_floor.csv`)
+
+| Scenario | Floors | People | Blocked | Nearest exit (s) | Nikaas plan (s) | Lower bound (s) | Commit |
+|---|---|---|---|---|---|---|---|
+| 3_floor_office_normal | 3 | 400 | none | 210.5 | 210.5 | 192.02 | ac54330 |
+| 3_floor_office_north_exit_blocked | 3 | 400 | exit_north | 210.5 | - | 207.11 | ac54330 |
+| 3_floor_office_south_exit_blocked | 3 | 400 | exit_south | 227.5 | - | 207.11 | ac54330 |
+| 3_floor_narrow_stairwell_1m | 3 | 400 | none | 263.5 | 263.5 | 245.37 | ac54330 |
+| 3_floor_office_uneven_top_heavy | 3 | 580 | none | 309.25 | 309.25 | 290.88 | ac54330 |
+| 5_floor_tower_scaling | 5 | 450 | none | 375.25 | 206.0 | 179.73 | ac54330 |

@@ -1,0 +1,56 @@
+[
+ {
+  "scenario": "3_floor_office_normal",
+  "floors": 3,
+  "people": 400,
+  "blocked": "",
+  "nearest_s": 210.5,
+  "nikaas_s": 210.5,
+  "lower_bound_s": 192.02
+ },
+ {
+  "scenario": "3_floor_office_north_exit_blocked",
+  "floors": 3,
+  "people": 400,
+  "blocked": "exit_north",
+  "nearest_s": 210.5,
+  "nikaas_s": null,
+  "lower_bound_s": 207.11
+ },
+ {
+  "scenario": "3_floor_office_south_exit_blocked",
+  "floors": 3,
+  "people": 400,
+  "blocked": "exit_south",
+  "nearest_s": 227.5,
+  "nikaas_s": null,
+  "lower_bound_s": 207.11
+ },
+ {
+  "scenario": "3_floor_narrow_stairwell_1m",
+  "floors": 3,
+  "people": 400,
+  "blocked": "",
+  "nearest_s": 263.5,
+  "nikaas_s": 263.5,
+  "lower_bound_s": 245.37
+ },
+ {
+  "scenario": "3_floor_office_uneven_top_heavy",
+  "floors": 3,
+  "people": 580,
+  "blocked": "",
+  "nearest_s": 309.25,
+  "nikaas_s": 309.25,
+  "lower_bound_s": 290.88
+ },
+ {
+  "scenario": "5_floor_tower_scaling",
+  "floors": 5,
+  "people": 450,
+  "blocked": "",
+  "nearest_s": 375.25,
+  "nikaas_s": 206.0,
+  "lower_bound_s": 179.73
+ }
+]
