@@ -91,11 +91,26 @@ threshold` until an AWS Support case raises it). Until then an Android phone can
 
 Keep the phone on, with mobile data or Wi-Fi. To go back to SNS, delete the parameter.
 
+## Deploy in one command
+
+Nothing deploys automatically when `main` changes: the live site only updates when someone runs the deploy.
+After merging, from an up-to-date `main`:
+
+```powershell
+git checkout main; git pull
+powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1            # API + website
+powershell -ExecutionPolicy Bypass -File scripts/deploy.ps1 -WebOnly   # frontend changes only
+```
+
+It warns when the checkout is behind `origin/main` or has uncommitted changes, and prints the live link. Old
+website files are kept, so tabs left open across a deploy still work (the app reloads itself onto the new build).
+The manual steps below are what the script runs.
+
 ## Publish the website
 
 ```bash
 cd web && npm ci && npm run build && cd ..
-aws s3 sync web/dist s3://nikaas-webbucket-hbkfctr0cw8s --delete --exclude index.html --cache-control "public,max-age=300"
+aws s3 sync web/dist s3://nikaas-webbucket-hbkfctr0cw8s --exclude index.html --cache-control "public,max-age=300"
 aws s3 cp web/dist/index.html s3://nikaas-webbucket-hbkfctr0cw8s/index.html --cache-control no-cache --content-type text/html
 aws s3 cp web/dist/sw.js s3://nikaas-webbucket-hbkfctr0cw8s/sw.js --cache-control no-cache --content-type text/javascript
 aws s3 cp web/dist/manifest.webmanifest s3://nikaas-webbucket-hbkfctr0cw8s/manifest.webmanifest --cache-control no-cache --content-type application/manifest+json
