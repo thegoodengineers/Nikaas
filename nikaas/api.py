@@ -29,6 +29,11 @@ class SimRequest(BaseModel):
     blocked: list[str] = []
     frame_every: float = 1.0  # seconds of simulated time between frames (bigger = smaller response)
     crowd: bool = False  # run the crowd-density analysis too (slower; off for interactive tap-to-block)
+    compliance: float = 1.0  # fraction of occupants who follow the plan (0-1); rest take nearest exit
+    # preset profiles override compliance: "guidance" = 0.9, "mixed" = 0.65, "panic" = 0.3
+    profile: str | None = None  # "guidance" | "mixed" | "panic" | null
+
+_PROFILES = {"guidance": 0.9, "mixed": 0.65, "panic": 0.3}
 
 
 class OptimiseRequest(BaseModel):
@@ -76,11 +81,15 @@ def run(req: SimRequest):
         raise HTTPException(422, {"problems": probs})
     try:
         b = load(req.building)
-        plan = req.plan or nearest_plan(b, set(req.blocked))
-        out = simulate(b, plan, set(req.blocked), frame_every=max(0.25, req.frame_every))
+        blocked = set(req.blocked)
+        plan = req.plan or nearest_plan(b, blocked)
+        compliance = _PROFILES.get(req.profile, req.compliance) if req.profile else req.compliance
+        compliance = max(0.0, min(1.0, compliance))
+        out = simulate(b, plan, blocked, frame_every=max(0.25, req.frame_every), compliance=compliance)
     except (KeyError, ValueError) as e:
         raise HTTPException(422, str(e))
     out["plan"] = plan
+    out["profile"] = req.profile or "custom"
     # crowd density analysis: crush-risk on every corridor/door edge over time (only when asked: it doubles the cost)
     if req.crowd:
         try:
@@ -213,9 +222,9 @@ def drill_start(req: DrillStart):
 
 
 @app.get("/drill")
-def drill_get(room: str | None = None, since: int = 0):
+def drill_get(room: str | None = None, since: int = 0, accessible: bool = False):
     """Phones: current drill state; with ?room= only that room's instruction. ?since=<version> lets a phone
-    tell whether anything changed."""
+    tell whether anything changed. ?accessible=true filters to stair-free routes (for mobility-impaired users)."""
     s = drill_state.read()
     if not s:
         raise HTTPException(404, "no drill running")
@@ -224,9 +233,16 @@ def drill_get(room: str | None = None, since: int = 0):
         return s
     if room not in s["rooms"]:
         raise HTTPException(404, f"unknown room {room}")
-    return {"version": s["version"], "updated": s["version"] > since, "room": room, "room_label": s["room_labels"].get(room, room),
-            "blocked": s["blocked"], "blocked_labels": s["blocked_labels"], "alert": room in s["changed"], "map": s.get("map"),
-            "people": s.get("people", {}).get(room), "live": s.get("live", {}).get(room), **s["rooms"][room]}
+    room_data = s["rooms"][room]
+    if accessible and not room_data.get("accessible", True):
+        room_data = {**room_data, "needs_assistance": True,
+                     "guidance": "Please wait at the nearest refuge point or stairwell landing for assistance."}
+    return {"version": s["version"], "updated": s["version"] > since, "room": room,
+            "room_label": s["room_labels"].get(room, room),
+            "blocked": s["blocked"], "blocked_labels": s["blocked_labels"],
+            "alert": room in s["changed"], "map": s.get("map"),
+            "people": s.get("people", {}).get(room), "live": s.get("live", {}).get(room),
+            "accessible_mode": accessible, **room_data}
 
 
 class Occupancy(BaseModel):

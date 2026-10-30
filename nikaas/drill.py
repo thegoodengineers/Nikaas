@@ -51,17 +51,39 @@ def read() -> dict | None:
         return None
 
 
-def _instructions(b: Building, plan: dict, blocked: set) -> dict:
-    """room -> {exit, exit_label, distance_m, walk_s, path}: shortest route through the room's best door."""
+def _path_has_stair(b: Building, path: list) -> bool:
+    """Return True if any edge in path is a stairwell."""
+    for u, v in zip(path, path[1:]):
+        for nb, e in b.adj[u]:
+            if nb == v and e.kind == "stair":
+                return True
+    return False
+
+
+def _instructions(b: Building, plan: dict, blocked: set, accessible_only: bool = False) -> dict:
+    """room -> {exit, exit_label, distance_m, walk_s, path, accessible}: shortest route through the room's best door.
+
+    accessible_only: when True, exclude any path that traverses a stairwell edge.
+    """
     out = {}
     for room, ex in plan.items():
         routes = door_paths(b, room, ex, blocked)
         if not routes:
             continue
+        if accessible_only:
+            routes = [(w, p) for w, p in routes if not _path_has_stair(b, p)]
+        if not routes:
+            # no stair-free route — mark the room as needing assistance
+            out[room] = {"exit": ex, "exit_label": b.nodes[ex].get("label", ex),
+                         "distance_m": None, "walk_s": None, "path": [],
+                         "accessible": False, "needs_assistance": True}
+            continue
         best = min((sum(e.length for u, v in zip(p, p[1:]) for nb, e in b.adj[u] if nb == v), p) for _, p in routes)
         dist, path = best
-        out[room] = {"exit": ex, "exit_label": b.nodes[ex].get("label", ex), "distance_m": round(dist, 1),
-                     "walk_s": round(dist / WALK_SPEED), "path": path}
+        out[room] = {"exit": ex, "exit_label": b.nodes[ex].get("label", ex),
+                     "distance_m": round(dist, 1), "walk_s": round(dist / WALK_SPEED),
+                     "path": path, "accessible": not _path_has_stair(b, path),
+                     "needs_assistance": False}
     return out
 
 
@@ -76,14 +98,15 @@ def _with_live(building: dict, live: dict) -> dict:
     return out
 
 
-def start(building: dict, blocked: list[str], previous: dict | None = None, live: dict | None = None) -> dict:
+def start(building: dict, blocked: list[str], previous: dict | None = None,
+          live: dict | None = None, accessible_only: bool = False) -> dict:
     """Plan the building with the given exits blocked and publish it as the new drill state.
 
     `building` has the floor-plan occupancy. Camera counts (`live`, or the previous state's) replace it for
-    their rooms, so a presenter setting a fire keeps the live counts."""
+    their rooms, so a presenter setting a fire keeps the live counts.
+    `accessible_only`: when True, filter stair edges from routes (for mobility-impaired users)."""
     previous = previous or {}
     if live is None:
-        # keep the cameras' counts only while the presenter stays on the same building
         same = previous.get("building", {}).get("name") == building.get("name")
         live = previous.get("live", {}) if same else {}
     room_ids = {n["id"] for n in building["nodes"] if n.get("type") == "room"}
@@ -91,7 +114,7 @@ def start(building: dict, blocked: list[str], previous: dict | None = None, live
     b = load(_with_live(building, live))
     blocked_set = set(blocked)
     opt = optimise(b, blocked_set)
-    rooms = _instructions(b, opt["plan"], blocked_set)
+    rooms = _instructions(b, opt["plan"], blocked_set, accessible_only=accessible_only)
     old = previous.get("rooms", {})
     changed = sorted(r for r, x in rooms.items() if r in old and old[r]["exit"] != x["exit"])
     state = {

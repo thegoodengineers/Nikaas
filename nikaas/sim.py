@@ -65,36 +65,60 @@ def door_paths(b: Building, room, ex, blocked=()):
     return out
 
 
-def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_every=1.0, premove=(0.0, 0.0)):
-    """Run one evacuation. plan: room -> exit. Returns a dict in the API contract shape."""
+def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_every=1.0, premove=(0.0, 0.0),
+             compliance: float = 1.0, nearest: dict | None = None):
+    """Run one evacuation. plan: room -> exit. Returns a dict in the API contract shape.
+
+    compliance: fraction of occupants who follow `plan` (1.0 = everyone obeys).
+    The rest are "rebels" who follow `nearest` (computed if not supplied).
+    """
     rng = random.Random(seed)
     blocked = set(blocked)
+    # build rebel plan once (nearest exit per room ignoring compliance)
+    if compliance < 1.0:
+        from .building import nearest_plan as _nearest_plan
+        rebel_plan = nearest or _nearest_plan(b, blocked)
+    else:
+        rebel_plan = plan
     edge_of = {}
     for e in b.edges:
         edge_of[(e.a, e.b)] = e
         edge_of[(e.b, e.a)] = e
     people, pid, routes, door_routes = [], 0, {}, {}
     for room, n in b.people().items():
-        ex = plan[room]
-        if ex in blocked:
-            raise ValueError(f"plan sends {room} to blocked exit {ex}")
-        doors = door_paths(b, room, ex, blocked)
-        if not doors:
-            raise ValueError(f"no route from {room} to {ex}")
-        door_routes[room] = [path for _, path in doors]
-        routes[room] = max(doors, key=lambda d: d[0])[1]  # widest door's route (kept for the UI contract)
         node = b.nodes[room]
-        total_w = sum(w for w, _ in doors)
-        # occupants split across the room's usable doors in proportion to door width
-        counts = [int(n * w / total_w) for w, _ in doors]
-        for i in range(n - sum(counts)):
-            counts[i % len(counts)] += 1
-        for (_, path), k in zip(doors, counts):
-            for _ in range(k):
-                people.append(Person(pid, room, ex, path, start=rng.uniform(*premove),
-                                     ox=(rng.random() - .5) * node.get("w", 4) * .8,
-                                     oz=(rng.random() - .5) * node.get("d", 4) * .8))
-                pid += 1
+
+        # split occupants: compliant follow plan, rebels follow rebel_plan
+        n_compliant = round(n * compliance)
+        groups = [(plan[room], n_compliant), (rebel_plan[room], n - n_compliant)]
+
+        primary_ex = plan[room]  # used for the UI route ribbons
+        if primary_ex in blocked:
+            raise ValueError(f"plan sends {room} to blocked exit {primary_ex}")
+        primary_doors = door_paths(b, room, primary_ex, blocked)
+        if not primary_doors:
+            raise ValueError(f"no route from {room} to {primary_ex}")
+        door_routes[room] = [path for _, path in primary_doors]
+        routes[room] = max(primary_doors, key=lambda d: d[0])[1]
+
+        for ex, count in groups:
+            if count == 0:
+                continue
+            if ex in blocked:
+                ex = primary_ex  # fall back to compliant exit if rebel exit is blocked
+            doors = door_paths(b, room, ex, blocked)
+            if not doors:
+                doors = primary_doors  # fallback
+            total_w = sum(w for w, _ in doors)
+            counts = [int(count * w / total_w) for w, _ in doors]
+            for i in range(count - sum(counts)):
+                counts[i % len(counts)] += 1
+            for (_, path), k in zip(doors, counts):
+                for _ in range(k):
+                    people.append(Person(pid, room, ex, path, start=rng.uniform(*premove),
+                                         ox=(rng.random() - .5) * node.get("w", 4) * .8,
+                                         oz=(rng.random() - .5) * node.get("d", 4) * .8))
+                    pid += 1
 
     # Base capacities
     cap = {e.key: effective_width(e) * SPECIFIC_FLOW[e.kind] for e in b.edges}  # persons / s
@@ -308,6 +332,8 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
     done = all(p.state == "out" for p in people)
     bottleneck = max(peak_q, key=peak_q.get) if peak_q else None
     tot_time = round(max(p.t_out for p in people), 2) if done and people else None
+    t_outs = sorted(p.t_out for p in people if not math.isnan(p.t_out))
+    p95 = round(t_outs[int(len(t_outs) * 0.95)] if t_outs else 0, 2)
 
     # Multi-floor progress and stairwell metrics
     per_floor = {}
@@ -349,8 +375,10 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
 
     return {
         "total_time_s": tot_time,
+        "p95_time_s": p95,
         "completed": done,
         "people": len(people),
+        "compliance": round(compliance, 2),
         "per_exit": exit_count,
         "bottleneck": bottleneck,
         "peak_queue": peak_q.get(bottleneck, 0) if bottleneck else 0,
@@ -358,7 +386,6 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
         "routes": routes,
         "door_routes": door_routes,
         "frames": frames,
-        # Additive multi-floor metrics
         "per_floor": per_floor,
         "stairwell_load": stairwell_load,
         "vertical_movement": {
