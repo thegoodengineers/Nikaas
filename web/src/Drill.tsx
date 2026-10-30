@@ -37,9 +37,9 @@ export default function Drill() {
     <div className="page drill">
       <div className="drill-grid">
         <div>
-          <h2>Live drill</h2>
+          <h1 className="page-title">Live drill</h1>
           <p className="lede">Scan with your phone and choose the room you are in. Your phone shows your own way out, and changes it the moment an exit is blocked.</p>
-          <div className="drill-qr" dangerouslySetInnerHTML={{ __html: qr }} aria-label={`QR code for ${phoneUrl}`} />
+          <div className="drill-qr" role="img" dangerouslySetInnerHTML={{ __html: qr }} aria-label={`QR code for ${phoneUrl}`} />
           <p className="sources">{phoneUrl}</p>
           <p className="sources">Phones taped beside the doors become live exit signs: open {phoneUrl.replace('#/me', '#/sign')}</p>
         </div>
@@ -52,7 +52,7 @@ export default function Drill() {
                 <div><span>Everyone out in</span><b>{state.total_time_s} s</b></div>
                 <div><span>Drill update</span><b>#{state.version}</b></div>
               </div>
-              <h3 style={{ marginTop: 20 }}>Set a fire</h3>
+              <h2 className="sub" style={{ marginTop: 20 }}>Set a fire</h2>
               <div className="drill-exits">
                 {exits.map(x => (
                   <button key={x.id} className={blocked.includes(x.id) ? 'fire' : ''} disabled={busy || (!blocked.includes(x.id) && blocked.length + 1 >= exits.length)} onClick={() => toggle(x.id)}>

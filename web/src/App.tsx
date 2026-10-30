@@ -187,7 +187,7 @@ export default function App() {
 
   return (
     <div className="page">
-      <h2 style={{ marginBottom: 4 }}>The twin</h2>
+      <h1 className="page-title" style={{ marginBottom: 4 }}>The twin</h1>
       <p style={{ color: 'var(--muted)', margin: '6px 0 16px' }}>{building?.name}</p>
       <div className="ctl-row">
         <div className="ctl"><span>Building</span>

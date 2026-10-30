@@ -53,18 +53,18 @@ export default function Phone() {
   function choose(r: string) { try { localStorage.setItem('nikaas-room', r) } catch { /* private mode */ } seen.current = 0; setRoom(r) }
 
   if (!room) return (
-    <div className="phone">
+    <main className="phone">
       <div className="phone-brand"><ExitIcon color="var(--exit)" /> Nikaas live drill</div>
       <h1>Which room are you in?</h1>
       {err && <p className="phone-note">{err}</p>}
       <div className="phone-rooms">
         {Object.entries(rooms ?? {}).map(([id, label]) => <button key={id} onClick={() => choose(id)}>{label}</button>)}
       </div>
-    </div>
+    </main>
   )
 
   return (
-    <div className={`phone ${flash ? 'phone-alarm' : ''}`}>
+    <main className={`phone ${flash ? 'phone-alarm' : ''}`}>
       <div className="phone-brand"><ExitIcon color={flash ? '#fff' : 'var(--exit)'} /> {me?.room_label ?? '…'}
         <button className="phone-change" onClick={() => choose('')}>Change room</button></div>
       {flash && me && <div className="phone-fire">Fire at {me.blocked_labels.join(', ')}. Your exit has changed.</div>}
@@ -79,7 +79,7 @@ export default function Phone() {
           {me.map && <MiniMap me={me} />}
         </>
       ) : <p className="phone-note">{err || 'Connecting…'}</p>}
-    </div>
+    </main>
   )
 }
 
