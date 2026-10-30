@@ -1,9 +1,10 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { api, type Building, type BuildingNode, type Site } from '../platform/api.ts'
 
-// A building card's picture: the building drawn from its own map as an architect's massing model.
-// Axonometric, the long side running across; each floor a plate, each room a white block with its design
-// occupancy as orange dots, exits green, stair landings blue. Floors lift apart a little on hover.
+// A building card's picture: its 3D render from web/public/thumbs (made by scripts/card_pictures.py), or, for a
+// building without one, the building drawn from its own map as an architect's massing model: axonometric, the long
+// side running across; each floor a plate, each room a white block with its design occupancy as orange dots,
+// exits green, stair landings blue. Floors lift apart a little on hover.
 const [A, B] = [12 * Math.PI / 180, 40 * Math.PI / 180] // x runs right and slightly down, z down to the left
 const [CA, SA, CB, SB] = [Math.cos(A), Math.sin(A), Math.cos(B), Math.sin(B)]
 const ROOM_H = 2.2, SLAB = 0.6
@@ -12,13 +13,19 @@ const P = (x: number, z: number, y: number) => xy(x, z, y).map(v => v.toFixed(2)
 const quad = (x0: number, z0: number, x1: number, z1: number, y: number) => [P(x0, z0, y), P(x1, z0, y), P(x1, z1, y), P(x0, z1, y)].join(' ')
 
 export default function BuildingArt({ id }: { id: string }) {
+  const [photo, setPhoto] = useState(true) // the saved render, until it fails to load
   const [b, setB] = useState<Building>()
   useEffect(() => {
+    if (photo) return
     let live = true
     api.get<Site>(`/sites/${encodeURIComponent(id)}`).then(s => { if (live) setB(s.building) }).catch(() => {})
     return () => { live = false }
-  }, [id])
-  return <div className="pl-art" aria-hidden="true">{b && <Model b={b} seed={id} />}</div>
+  }, [id, photo])
+  return (
+    <div className="pl-art" aria-hidden="true">
+      {photo ? <img src={`thumbs/${encodeURIComponent(id)}.jpg`} alt="" loading="lazy" onError={() => setPhoto(false)} /> : b && <Model b={b} seed={id} />}
+    </div>
+  )
 }
 
 function Model({ b, seed: key }: { b: Building; seed: string }) {
