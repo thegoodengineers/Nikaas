@@ -58,3 +58,7 @@ uvicorn nikaas.api:app --reload
 - `nikaas/sim.py` flow-limited evacuation simulator (SFPE hydraulic model)
 - `nikaas/api.py` FastAPI app
 - `data/` building graphs · `runs/` measured outputs · `docs/CONTRACT.md` shared format
+
+## Licence
+
+MIT, see [LICENSE](LICENSE). Vendored third-party code (three.js, qrcode-generator, pdf.js, TensorFlow.js, COCO-SSD) keeps its own licence, listed in the same file.

@@ -70,7 +70,7 @@ Press **Set a fire** at West steps.
 
 ## 2:40 – 3:00 · Close  *(Chirag)*
 
-> "Nikaas is live on AWS, its code is public on GitHub, and it starts from the map that is already on the wall.
+> "Nikaas is open source under the MIT licence, it is live on AWS, and it starts from the map that is already on the wall.
 > Photograph the exit map. Get everyone out faster."
 
 ---
