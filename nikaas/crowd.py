@@ -1,14 +1,14 @@
 ﻿"""Crowd density analysis — crush-risk detection.
 
 Computes people per m² on each corridor/door edge over time from a simulate() result.
-Thresholds from docs/CROWD_RESEARCH.md (G. Keith Still; UK Green Guide).
+Thresholds from docs/CROWD_RESEARCH.md: our cautious flags, set below G. Keith Still's published 5 p/m² "Maximum".
 """
 from __future__ import annotations
 import math
 from dataclasses import dataclass, field
 
 
-CRUSH_THRESHOLD = 4.0    # p/m²  — crowd forces can reach fatal levels (G.K. Still)
+CRUSH_THRESHOLD = 4.0    # p/m²  — our cautious early-warning flag, below G.K. Still's 5 p/m² "Maximum" (gkstill.com)
 CONCERN_THRESHOLD = 2.7  # p/m²  — LoS E boundary; UK Green Guide cap for stadia
 PHYSICAL_CAP = 10.0      # p/m²  — absolute physical maximum for standing humans; clamped because
                           #         the simulator stacks queuing people at grid nodes, not spread physically
@@ -215,7 +215,7 @@ def narrative(crowd_result: dict, building_name: str = "") -> str:
     ]
     if first_t is not None:
         lines.append(
-            f"The crush threshold ({CRUSH_THRESHOLD} p/m², G. Keith Still) is first "
+            f"Our crush warning ({CRUSH_THRESHOLD} p/m², set below G. Keith Still's 5 p/m² maximum) is first "
             f"exceeded at t = {first_t:.0f} s."
         )
     if crush:
