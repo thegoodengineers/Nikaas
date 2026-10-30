@@ -1,11 +1,12 @@
 // Building editing helpers: floors, ids, edge defaults, merging per-floor plans into one building.
 import type { Building, BuildingEdge, BuildingNode } from '../platform/api.ts'
+import type { WallGrid } from '../platform/walls.ts'
 
 export type FloorDef = { id: string; name: string; elevation_m: number }
 /** A plan image drawn under one floor, placed in building metres (top-left corner, width, height). */
 export type Underlay = { src: string; x: number; z: number; w: number; h: number }
-/** Everything the editor can undo: the building and where each floor's plan image sits. */
-export type Doc = { building: Building; underlays: Record<string, Underlay> }
+/** Everything the editor can undo: the building, where each floor's plan image sits and the walls traced from it. */
+export type Doc = { building: Building; underlays: Record<string, Underlay>; walls?: Record<string, WallGrid> }
 /** Where the building came from, so Save knows whether to update it or make a copy. */
 export type Origin = { id?: string; demo?: boolean; name: string; address: string; geo: unknown; assembly: unknown[] }
 

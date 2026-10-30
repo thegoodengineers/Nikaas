@@ -13,7 +13,7 @@ import re
 import time
 import uuid
 
-from . import push, detect
+from . import push, detect, sms
 from . import sites as S
 from .building import Building, load, shortest_path
 from .optimise import optimise
@@ -113,6 +113,114 @@ def checkin(sid: str, token: str, room: str | None = None, gate: str | None = No
         where = _label(nodes[room]) if room else f"entrance {_label(nodes[gate])}" if gate else "the building"
         event(sid, "info", f"Checked in: {where}")
     return me(sid, token)
+
+
+LINK_CHARS = "abcdefghjkmnpqrstuvwxyz23456789"  # no 0/o, 1/l/i: easy to read from a text message
+
+
+def register(sid: str, token: str, phone: str) -> dict:
+    """Register this phone's number for emergency texts at `sid`. Sends a one-time code unless the number is
+    already verified. Returns Me plus {"verify": "sandbox" | "code" | "none"}."""
+    _check_token(token)
+    site = _site(sid)
+    try:
+        e164 = sms.normalize(phone)
+    except sms.SmsError as e:
+        raise ValueError(str(e))
+    p = _person(sid, token) or {"token": token, "checked_in_at": time.time(), "status": "inside", "need": None, "room": None,
+                                "gate": None, "push": None, "seen": 0, "safe_verified": None}
+    v = p.get("verify") or {}
+    if p.get("phone") == e164 and not p.get("phone_verified") and time.time() - v.get("sent_at", 0) < 30:
+        raise ValueError("A code was sent less than 30 seconds ago. Wait a moment before asking again.")
+    sends = [t for t in v.get("history", []) if time.time() - t < 3600]
+    if len(sends) >= 5:
+        raise ValueError("Too many codes for this phone in the last hour. Try again later.")
+    for other in people(sid):  # the same number on another device: keep only the newest registration
+        if other.get("phone") == e164 and other["token"] != token:
+            store().delete(pk(sid), f"P#{other['token']}")
+    try:
+        r = sms.start_verify(e164, token, site["name"])
+    except sms.SmsError as e:
+        raise ValueError(str(e))
+    p["phone"], p["phone_verified"] = e164, r["method"] == "none"
+    p["verify"] = {"method": r["method"], "hash": r.get("hash"), "sent_at": time.time(), "attempts": 0, "history": sends + [time.time()]}
+    if p["phone_verified"]:
+        _registered(sid, p)
+    _save_person(sid, p)
+    return {**me(sid, token), "verify": r["method"]}
+
+
+def verify_phone(sid: str, token: str, code: str) -> dict:
+    _check_token(token)
+    _site(sid)
+    p = _person(sid, token)
+    if p is None or not p.get("phone"):
+        raise KeyError("not registered")
+    if p.get("phone_verified"):
+        return me(sid, token)
+    v = p.get("verify") or {}
+    if time.time() - v.get("sent_at", 0) > 600:
+        raise ValueError("That code has expired. Ask for a new one.")
+    if v.get("attempts", 0) >= 5:
+        raise ValueError("Too many wrong codes. Ask for a new one.")
+    v["attempts"] = v.get("attempts", 0) + 1
+    ok = sms.finish_verify(p["phone"], p["token"], code, v.get("method", "code"), v.get("hash"))
+    p["verify"] = v
+    if not ok:
+        _save_person(sid, p)
+        raise ValueError("That code is not right. Check the text message and try again.")
+    p["phone_verified"] = True
+    _registered(sid, p)
+    _save_person(sid, p)
+    return me(sid, token)
+
+
+def _registered(sid: str, p: dict) -> None:
+    if not p.get("link"):
+        code = "".join(LINK_CHARS[b % len(LINK_CHARS)] for b in uuid.uuid4().bytes[:7])
+        p["link"] = code
+        store().put("LINK", code, {"site": sid, "token": p["token"]}, PERSON_TTL)
+    event(sid, "info", f"Phone registered for SMS alerts: {sms.mask(p['phone'])}")
+
+
+def resolve_link(code: str) -> dict | None:
+    """Short link in a text message -> {site, token}."""
+    if not re.fullmatch(r"[a-z0-9]{4,12}", code or ""):
+        return None
+    return store().get("LINK", code)
+
+
+def _text_people(sid: str, ppl: list[dict], text_for, kind: str) -> dict:
+    """Text every verified phone. Records the result on each person; returns {sent, failed}."""
+    targets = [p for p in ppl if p.get("phone") and p.get("phone_verified")]
+    results = sms.send_many([(p["phone"], text_for(p)) for p in targets])
+    sent = failed = 0
+    for p, r in zip(targets, results):
+        sent += r["ok"]
+        failed += not r["ok"]
+        q = _person(sid, p["token"])
+        if q:
+            q["sms_last"] = {"kind": kind, "ok": r["ok"], "error": r.get("error"), "at": time.time()}
+            _save_person(sid, q)
+    if targets:
+        event(sid, "info" if not failed else "warn", f"SMS {kind}: sent to {sent} phone{'s' if sent != 1 else ''}" + (f", {failed} failed" if failed else ""))
+        store().put(pk(sid), "SMSLAST", {"kind": kind, "sent": sent, "failed": failed, "at": time.time()}, EVENT_TTL)
+    return {"sent": sent, "failed": failed}
+
+
+def test_sms(sid: str, short_id: str) -> dict:
+    """Send a test text to one registered phone (picked in the control room by its short id)."""
+    site = _site(sid)
+    p = next((q for q in people(sid) if hashlib.sha1(q["token"].encode()).hexdigest()[:8] == short_id), None)
+    if p is None or not p.get("phone"):
+        raise KeyError("no registered phone with that id")
+    if not p.get("phone_verified"):
+        raise ValueError("that phone has not finished verifying its number")
+    return _text_people(sid, [p], lambda q: f"Test from {_ascii(site['name'])[:40]}: emergency texts will reach this phone.", "test")
+
+
+def _ascii(s: str) -> str:
+    return s.encode("ascii", "ignore").decode().strip() or "the building"
 
 
 def checkout(sid: str, token: str) -> None:
@@ -566,7 +674,7 @@ def _notify(sid: str, ppl: list[dict], message_for) -> None:
                 _save_person(sid, p)
 
 
-def start_alarm(sid: str, type_: str = "fire", message: str = "", origin: str | None = None, phased: bool = False, wave_gap_s: float = 60) -> dict:
+def start_alarm(sid: str, type_: str = "fire", message: str = "", origin: str | None = None, phased: bool = False, wave_gap_s: float = 60, link_base: str = "") -> dict:
     site = _site(sid)
     if type_ not in ALARM_TYPES:
         raise ValueError(f"type: one of {sorted(ALARM_TYPES)}")
@@ -590,6 +698,10 @@ def start_alarm(sid: str, type_: str = "fire", message: str = "", origin: str | 
         body = f"{first}{'l' if first else 'L'}eave now by {r['exit_label']} (Group {r['group']})." if r else f"{first}{'l' if first else 'L'}eave the building now. Open Nikaas for your route."
         return {"title": title, "body": body, "tag": a["id"], "url": f"/#/go?site={sid}", "alarm": True}
     _notify(sid, people(sid), msg)
+    # the text message: short and plain (one SMS part), with this person's own link to their route
+    head = {"earthquake": "EARTHQUAKE", "fire": "FIRE ALARM", "gas": "GAS LEAK", "collapse": "COLLAPSE", "drill": "EVACUATION DRILL"}.get(type_, "EMERGENCY")
+    first = "Drop, cover, hold on. When shaking stops, leave." if type_ == "earthquake" else "Leave now. No lifts."
+    _text_people(sid, people(sid), lambda p: f"{head} at {_ascii(site['name'])[:40]}. {first} Your exit route: {link_base}/r/{p.get('link', '')}", "alarm")
     return a
 
 
@@ -603,6 +715,7 @@ def stop_alarm(sid: str) -> None:
         _save_person(sid, p)
     event(sid, "good", "All clear. The alarm is off.")
     _notify(sid, people(sid), lambda p: {"title": f"All clear · {site['name']}", "body": "The alarm is over. Follow staff instructions before going back in.", "tag": "all-clear", "url": f"/#/go?site={sid}"})
+    _text_people(sid, people(sid), lambda p: f"ALL CLEAR at {_ascii(site['name'])[:40]}. The emergency is over. Follow staff instructions before going back in.", "all clear")
 
 
 # ---------- what one phone sees ----------
@@ -653,7 +766,10 @@ def me(sid: str, token: str) -> dict:
             if best:
                 route = {**_route_payload(site, b, best[1], best[2]), "group": None, "group_color": None, "wave": 0, "release_at": 0, "changed": False}
     floors = [{"id": f["id"], "name": f.get("name", f["id"]), "elevation_m": f.get("elevation_m", 0)} for f in sorted(site["building"].get("floors") or [], key=lambda f: f.get("elevation_m", 0))]
-    public = {k: v for k, v in p.items() if k != "push"}
+    public = {k: v for k, v in p.items() if k not in ("push", "verify", "phone", "link")}
+    public["phone"] = sms.mask(p.get("phone"))
+    public["phone_verified"] = bool(p.get("phone_verified"))
+    public["verify_pending"] = bool(p.get("phone")) and not p.get("phone_verified")
     public["room_label"] = _label(nodes[room]) if room in nodes else None
     public["floor"] = nodes[room].get("floor_id") if room in nodes else None
     public["push"] = bool(p.get("push"))
@@ -808,7 +924,8 @@ def control(sid: str) -> dict:
         r = plan.get("rooms", {}).get(rm or "", {})
         return {"token": hashlib.sha1(p["token"].encode()).hexdigest()[:8], "room": rm, "room_label": _label(nodes[rm]) if rm in nodes else None, "floor": nodes[rm].get("floor_id") if rm in nodes else None,
                 "status": p["status"], "need": p.get("need"), "updated_at": p.get("updated_at"), "exit": r.get("exit"), "group": r.get("group"),
-                "safe_verified": p.get("safe_verified"), "safe_distance_m": p.get("safe_distance_m"), "push": bool(p.get("push"))}
+                "safe_verified": p.get("safe_verified"), "safe_distance_m": p.get("safe_distance_m"), "push": bool(p.get("push")),
+                "phone": sms.mask(p.get("phone")), "phone_verified": bool(p.get("phone_verified")), "sms_last": p.get("sms_last")}
     rows = [row(p) for p in ppl]
     counts = {"checked_in": len(rows), "inside": sum(r["status"] == "inside" for r in rows), "safe": sum(r["status"] == "safe" for r in rows),
               "help": sum(r["status"] == "help" for r in rows), "missing": sum(r["status"] == "inside" for r in rows) if a else 0}
@@ -862,4 +979,7 @@ def control(sid: str) -> dict:
         "sensors": sens, "cameras": list(cam_by_node.values()), "events": ev, "version": (a or {}).get("version", 0),
         "thresholds": {"concern": CONCERN, "crush": CRUSH, "heat_c": HEAT_C},
         "server_time": time.time(),
+        "sms": {"provider": sms.provider(), "sandbox": sms.sandbox(), "registered": sum(1 for p in ppl if p.get("phone")),
+                "verified": sum(1 for p in ppl if p.get("phone_verified")), "sandbox_limit": 10 if sms.sandbox() else None,
+                "last": store().get(pk(sid), "SMSLAST")},
     }

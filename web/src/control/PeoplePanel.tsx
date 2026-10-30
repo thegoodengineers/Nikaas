@@ -26,7 +26,7 @@ export default function PeoplePanel({ data }: { data: Control }) {
                 <span className="pf-muted pf-small">{ago(p.updated_at)}</span>
               </div>
               <div className="cr-help-where">{where(p)}</div>
-              <div className="pf-muted pf-small">Phone <code className="cr-tok">{p.token}</code>{p.push ? '' : ' · no push alerts'}</div>
+              <div className="pf-muted pf-small"><PhoneId p={p} /></div>
             </li>
           ))}
         </ul>
@@ -39,7 +39,7 @@ export default function PeoplePanel({ data }: { data: Control }) {
             <ul className="cr-list cr-scroll">
               {[...data.missing].sort((x, y) => (x.floor ?? '').localeCompare(y.floor ?? '') || (x.room_label ?? '').localeCompare(y.room_label ?? '')).map((p, i) => (
                 <li key={`${p.token}-${i}`} className="cr-li">
-                  <code className="cr-tok">{p.token}</code>
+                  <PhoneId p={p} />
                   <span className="cr-li-main">{where(p)}</span>
                   <span className="cr-li-meta pf-small pf-muted">{p.group && <GroupTag letter={p.group} color={color[p.group] ?? null} />} {ago(p.updated_at)}</span>
                 </li>
@@ -49,12 +49,12 @@ export default function PeoplePanel({ data }: { data: Control }) {
         </>
       ) : (
         <>
-          <h3 className="cr-sub-h">Checked in <span className="pf-chip">{inside.length}</span></h3>
-          {inside.length === 0 ? <p className="pf-empty">No phones checked in. People check in by scanning an entrance or room QR code.</p> : (
+          <h3 className="cr-sub-h">Registered <span className="pf-chip">{inside.length}</span></h3>
+          {inside.length === 0 ? <p className="pf-empty">No one registered yet. People register by scanning the building QR code.</p> : (
             <ul className="cr-list cr-scroll">
               {inside.map((p, i) => (
                 <li key={`${p.token}-${i}`} className="cr-li">
-                  <code className="cr-tok">{p.token}</code>
+                  <PhoneId p={p} />
                   <span className="cr-li-main">{where(p)}</span>
                   <span className="cr-li-meta pf-small pf-muted">{ago(p.updated_at)}</span>
                 </li>
@@ -69,14 +69,14 @@ export default function PeoplePanel({ data }: { data: Control }) {
         <ul className="cr-list cr-scroll">
           {safe.map((p, i) => (
             <li key={`${p.token}-${i}`} className="cr-li">
-              <code className="cr-tok">{p.token}</code>
+              <PhoneId p={p} />
               <span className="cr-li-main">{p.room_label ? `From ${p.room_label}` : 'Room not given'}</span>
               <span className="cr-li-meta pf-small">{verified(p)}</span>
             </li>
           ))}
         </ul>
       )}
-      <p className="pf-muted pf-small cr-foot">Phones are anonymous: each shows a short random id, never a name.</p>
+      <p className="pf-muted pf-small cr-foot">No names are kept: phones show a masked number or a short random id.</p>
     </section>
   )
 }
@@ -87,4 +87,8 @@ function verified(p: ControlPerson) {
   if (p.safe_verified) return <span className="cr-verified" title={p.safe_distance_m != null ? `${Math.round(p.safe_distance_m)} m from the assembly point` : undefined}>✓ GPS verified</span>
   if (p.safe_distance_m != null) return <span className="cr-t-warn">{Math.round(p.safe_distance_m)} m from the assembly point</span>
   return <span className="pf-muted">Self-reported</span>
+}
+
+function PhoneId({ p }: { p: ControlPerson }) {
+  return p.phone ? <span className="cr-phone">{p.phone}{!p.phone_verified && <span className="pf-muted"> (not verified)</span>}</span> : <code className="cr-tok">{p.token}</code>
 }

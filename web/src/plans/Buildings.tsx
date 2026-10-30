@@ -5,10 +5,11 @@ import { api, ApiError, hashQuery, type Site, type SiteSummary } from '../platfo
 import Editor from './Editor.tsx'
 import Icon from './Icon.tsx'
 import ImportPlans from './ImportPlans.tsx'
-import { floorId, floorName, type Doc, type Origin } from './model.ts'
+import type { WallGrid } from '../platform/walls.ts'
+import { floorId, floorName, type Doc, type Origin, type Underlay } from './model.ts'
 import './plans.css'
 
-type View = { kind: 'list' } | { kind: 'import' } | { kind: 'edit'; doc: Doc; origin: Origin; note?: ReactNode; key: number }
+type View = { kind: 'list' } | { kind: 'import' } | { kind: 'edit'; doc: Doc; origin: Origin; note?: ReactNode; fresh?: boolean; key: number }
 
 const blank = (): Doc => ({ building: { name: 'New building', floors: [{ id: floorId(0), name: floorName(0), elevation_m: 0 }], nodes: [], edges: [] }, underlays: {} })
 
@@ -22,8 +23,14 @@ export default function Buildings() {
     setOpening(id); setErr('')
     try {
       const s = await api.get<Site>(`/sites/${encodeURIComponent(id)}`)
+      // plan pictures (links, or inline data when run locally) and traced walls saved with the site
+      const underlays: Record<string, Underlay> = {}, walls: Record<string, WallGrid> = {}
+      for (const [k, m] of Object.entries(s.media ?? {})) {
+        if (m.plan?.url) underlays[k] = { src: m.plan.url, x: m.plan.x, z: m.plan.z, w: m.plan.w, h: m.plan.h }
+        if (m.walls) walls[k] = m.walls
+      }
       setView({
-        kind: 'edit', key: Date.now(), doc: { building: s.building, underlays: {} },
+        kind: 'edit', key: Date.now(), doc: { building: s.building, underlays, walls },
         origin: { id: s.id, demo: !!s.demo, name: s.name, address: s.address ?? '', geo: s.geo, assembly: s.assembly ?? [] },
       })
     } catch (e) {
@@ -53,9 +60,9 @@ export default function Buildings() {
           onBlank={() => setView({ kind: 'edit', key: Date.now(), doc: blank(), origin: { name: '', address: '', geo: null, assembly: [] } })} />
       )}
       {view.kind === 'import' && (
-        <ImportPlans onCancel={toList} onDone={(doc, origin, note) => setView({ kind: 'edit', key: Date.now(), doc, origin, note })} />
+        <ImportPlans onCancel={toList} onDone={(doc, origin, note, fresh) => setView({ kind: 'edit', key: Date.now(), doc, origin, note, fresh })} />
       )}
-      {view.kind === 'edit' && <Editor key={view.key} initial={view.doc} origin={view.origin} note={view.note} onClose={toList} />}
+      {view.kind === 'edit' && <Editor key={view.key} initial={view.doc} origin={view.origin} note={view.note} fresh={view.fresh} onClose={toList} />}
     </div>
   )
 }

@@ -122,6 +122,7 @@ function DrillRun({ plan, source, opts, onRestart }: { plan: Plan; source: Sourc
       else if (k === 'm' || k === 'M') setBigMap(v => !v)
       else if (k === 'x' || k === 'X') en.setExplode(!hud?.explode)
       else if (k === 'c' || k === 'C') en.setCinematic(!hud?.cinematic)
+      else if ((k === 'p' || k === 'P') && hud?.overlay != null) en.setOverlay(!hud.overlay)
       else if (k === ']') en.setFocus(Math.min(LV - 1, (hud?.focus ?? LV - 1) + 1))
       else if (k === '[') en.setFocus(Math.max(0, (hud?.focus ?? LV - 1) - 1))
     }
@@ -236,6 +237,7 @@ function DrillRun({ plan, source, opts, onRestart }: { plan: Plan; source: Sourc
           <div className="d-seg" role="group" aria-label="View options">
             {LV > 1 && <button className={hud?.explode ? 'on' : ''} aria-pressed={!!hud?.explode} onClick={() => e?.setExplode(!hud?.explode)} title="Separate the floors (X)">Separate floors</button>}
             <button className={hud?.roof ? 'on' : ''} aria-pressed={!!hud?.roof} onClick={() => e?.setRoof(!hud?.roof)}>Roof</button>
+            {hud?.overlay != null && <button className={hud.overlay ? 'on' : ''} aria-pressed={hud.overlay} onClick={() => e?.setOverlay(!hud.overlay)} title="The evacuation plan picture on the floor (P)">Plan overlay</button>}
             <button className={hud?.cinematic ? 'on' : ''} aria-pressed={!!hud?.cinematic} onClick={() => e?.setCinematic(!hud?.cinematic)} title="Automatic camera (C)">Auto camera</button>
           </div>
           <div className="d-seg d-cams" role="group" aria-label="Camera">
@@ -350,7 +352,7 @@ function DrillRun({ plan, source, opts, onRestart }: { plan: Plan; source: Sourc
               <div><dt><kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd></dt><dd>Move</dd></div><div><dt><kbd>Q</kbd> / <kbd>E</kbd></dt><dd>Turn</dd></div><div><dt><kbd>R</kbd> / <kbd>F</kbd></dt><dd>Up / down</dd></div>
               <div><dt><kbd>1</kbd> Fire · <kbd>2</kbd> Collapse</dt><dd>Place an incident</dd></div><div><dt><kbd>3</kbd> Stair · <kbd>4</kbd> Quake · <kbd>5</kbd> Alarm</dt><dd>Other incidents</dd></div>
               <div><dt><kbd>[</kbd> / <kbd>]</kbd></dt><dd>Floors shown</dd></div><div><dt><kbd>X</kbd></dt><dd>Separate floors</dd></div>
-              <div><dt><kbd>C</kbd></dt><dd>Auto camera</dd></div><div><dt><kbd>M</kbd></dt><dd>Floor plans</dd></div><div><dt><kbd>Space</kbd></dt><dd>Pause</dd></div>
+              <div><dt><kbd>C</kbd></dt><dd>Auto camera</dd></div><div><dt><kbd>M</kbd></dt><dd>Floor plans</dd></div><div><dt><kbd>P</kbd></dt><dd>Plan overlay</dd></div><div><dt><kbd>Space</kbd></dt><dd>Pause</dd></div>
               <div><dt>Select an exit beam</dt><dd>Block / reopen exit</dd></div><div><dt><kbd>Esc</kbd></dt><dd>Cancel / close</dd></div>
             </dl>
             <button className="d-go small" onClick={() => setHelp(false)} autoFocus>Close</button>

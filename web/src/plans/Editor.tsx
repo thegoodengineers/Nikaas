@@ -1,22 +1,28 @@
 // The plan editor: one floor at a time over its plan picture. Draw rooms, walkway points, exits and stair
-// landings, connect them, set the scale and measure widths on the picture, link stairs between floors,
-// check the building and save it as a site. Units are metres; +x is east, +z is south.
+// landings, connect them, set the scale, trace the walls from the picture and measure widths from them, link
+// stairs between floors, check the building and save it as a site (with its plan pictures and walls).
+// The building stores metres (+x east, +z south); lengths show in metres or feet.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError, setControlKey, type Building, type BuildingNode, type Site } from '../platform/api.ts'
 import { FloorTabs } from '../platform/PlanView.tsx'
+import type { WallGrid } from '../platform/walls.ts'
 import Checks from './Checks.tsx'
 import { forVision, imageFile, isPdf, pdfPages } from './files.ts'
 import Icon from './Icon.tsx'
 import { LinksTable } from './ImportPlans.tsx'
-import Inspector, { NumField, type Edit, type Sel } from './Inspector.tsx'
+import Inspector, { LenField, type Edit, type Sel } from './Inspector.tsx'
 import Modal from './Modal.tsx'
 import {
-  bounds, cleanBuilding, defaultEdge, dist, edgeKind, floorId, floorName, floorsOf, isStair, newGroup, newId, nodeMap, onFloor,
+  bounds, cleanBuilding, defaultEdge, dist, edgeKind, floorId, floorName, floorsOf, isStair, keyOf, newGroup, newId, nodeMap, onFloor,
   patchEdge, patched, round1, round2, SINGLE, STAIR_LENGTH, type Doc, type Origin, type Underlay,
 } from './model.ts'
+import { emptyWalls, moveWalls, paintWalls, scaleWalls, storable, traceWalls, uploadJpeg, wallsPng } from './trace.ts'
+import { fmtLen, fromU, numU, setUnits, useUnits } from './units.ts'
 import { useHistory } from './useHistory.ts'
+import { edgeFloor, edgeKey, measureEdge, perMin, snapFace, snapRooms, suggests, wallsOf, widthIssues, type Measure, type Walls } from './widths.ts'
+import WidthsPanel from './WidthsPanel.tsx'
 
-type Tool = 'select' | 'room' | 'corridor' | 'exit' | 'stair' | 'connect' | 'delete'
+type Tool = 'select' | 'room' | 'corridor' | 'exit' | 'stair' | 'connect' | 'delete' | 'wall'
 type P = { x: number; z: number }
 type View = { x0: number; z0: number; s: number } // top-left corner in metres, pixels per metre
 type Mode = { kind: 'scale'; pts: P[] } | { kind: 'measure'; edge: number; pts: P[] } | null
@@ -31,6 +37,7 @@ type Drag =
   | { kind: 'pan'; sx: number; sy: number; v: View; moved: boolean; clear: boolean }
   | { kind: 'node'; id: string; dx: number; dz: number; sx: number; sy: number; moved: boolean }
   | { kind: 'rect'; a: P; b: P }
+  | { kind: 'brush'; pts: P[]; add: boolean }
   | null
 
 const TOOLS: { id: Tool; label: string; key: string; icon: string; hint: string }[] = [
@@ -41,9 +48,19 @@ const TOOLS: { id: Tool; label: string; key: string; icon: string; hint: string 
   { id: 'stair', label: 'Stair', key: 'S', icon: 'M4 20h4v-4h4v-4h4V8h4', hint: 'Click where people step onto a staircase. Landings join floors.' },
   { id: 'connect', label: 'Connect', key: 'L', icon: 'M7 17 17 7M7 7h.01M17 17h.01', hint: 'Click two nodes to link them. For stairs, pick a landing, switch floor, pick the other.' },
   { id: 'delete', label: 'Delete', key: 'D', icon: 'M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13', hint: 'Click a node or a link to delete it.' },
+  { id: 'wall', label: 'Walls', key: 'B', icon: 'M3 21c3 0 4-2 4-4a3 3 0 0 1 3-3l8-8a2 2 0 0 0-3-3l-8 8a3 3 0 0 1-3 3', hint: 'Paint walls the tracing missed. Hold Alt (or pick Erase in the Floor panel) to rub out walls.' },
 ]
+const WALL_RGB: [number, number, number] = [194, 65, 12]
 
-export default function Editor({ initial, origin: origin0, note, onClose }: { initial: Doc; origin: Origin; note?: ReactNode; onClose: () => void }) {
+/** Snap both ends of a measuring line to the wall faces they are near (pointing into the opening). */
+function snapPair(w: Walls | null, a: P, b: P): [P, P] {
+  const d = dist(a, b)
+  if (!w || d < 0.05) return [a, b]
+  const dx = (b.x - a.x) / d, dz = (b.z - a.z) / d
+  return [snapFace(w, a, dx, dz), snapFace(w, b, -dx, -dz)]
+}
+
+export default function Editor({ initial, origin: origin0, note, fresh, onClose }: { initial: Doc; origin: Origin; note?: ReactNode; fresh?: boolean; onClose: () => void }) {
   const h = useHistory<Doc>(initial)
   const { doc } = h
   const b = doc.building
@@ -77,12 +94,26 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
   const side = useRef<HTMLElement>(null)
   useEffect(() => { if (sel) side.current?.scrollTo({ top: 0, behavior: 'smooth' }) }, [sel])
   const space = useRef(false)
+  const units = useUnits()
+  const L = (m: number) => fmtLen(m, units)
+  const [showWalls, setShowWalls] = useState(true)
+  const [wallOpacity, setWallOpacity] = useState(0.75)
+  const [sens, setSens] = useState(0.5)
+  const [tracing, setTracing] = useState('')
+  const [brush, setBrush] = useState({ add: true, size: 0.25 })
+  const [stroke, setStroke] = useState<{ pts: P[]; add: boolean } | null>(null)
+  const [measured, setMeasured] = useState<Record<string, Measure>>({})
+  const [ignored, setIgnored] = useState<Set<string>>(new Set())
+  const [showCap, setShowCap] = useState(true)
 
   const by = useMemo(() => nodeMap(b), [b])
   const floorOf = (id: string | undefined) => (floors.length ? (id ? floors.find(f => f.id === id)?.name ?? id : 'No floor') : '')
   const vis = b.nodes.filter(n => onFloor(b, n, fl))
   const visIds = new Set(vis.map(n => n.id))
   const under: Underlay | undefined = doc.underlays[fl]
+  const grid: WallGrid | undefined = doc.walls?.[fl]
+  const W = useMemo(() => wallsOf(grid), [grid])
+  const wallImg = useMemo(() => (grid ? wallsPng(grid, WALL_RGB) : null), [grid])
 
   const flash = (t: string) => { setToast(t); setTimeout(() => setToast(x => (x === t ? '' : x)), 3500) }
   const { commit } = h
@@ -214,9 +245,10 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
       if (m < 0.01) { setMode({ ...mode, pts: [] }); return }
       if (mode.kind === 'scale') { setMode({ ...mode, pts }); setAsk({ kind: 'scale', measured: m }) }
       else {
-        const w = Math.max(0.1, round1(m))
+        const [a, c] = snapPair(W, pts[0], pts[1])
+        const w = Math.max(0.1, round2(dist(a, c)))
         setB(bb => patchEdge(bb, mode.edge, { width: w }))
-        setMode(null); flash(`Width set to ${w} m.`)
+        setMode(null); flash(`Width set to ${L(w)}${W ? ' (ends snapped to the traced walls)' : ''}.`)
       }
       return
     }
@@ -248,6 +280,12 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
         if (nodeId) removeNode(nodeId)
         else if (edgeI != null) removeEdge(edgeI)
         break
+      case 'wall': {
+        const add = brush.add !== e.altKey
+        drag.current = { kind: 'brush', pts: [p], add }
+        setStroke({ pts: [p], add })
+        break
+      }
     }
   }
   const onMove = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -274,6 +312,11 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
     } else if (d.kind === 'rect') {
       d.b = p
       setRect({ a: d.a, b: p })
+    } else if (d.kind === 'brush') {
+      const last = d.pts[d.pts.length - 1]
+      if (dist(last, p) < brush.size / 3) return
+      d.pts.push(p)
+      setStroke({ pts: [...d.pts], add: d.add })
     }
   }
   const onUp = () => {
@@ -288,6 +331,15 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
       if (w < 0.5 || dd < 0.5) { flash('Drag a larger rectangle to draw a room.'); return }
       setAsk({ kind: 'room', x: round1((d.a.x + d.b.x) / 2), z: round1((d.a.z + d.b.z) / 2), w: round1(w), d: round1(dd) })
     }
+    if (d.kind === 'brush') {
+      setStroke(null)
+      const key = fl
+      h.commit(dc => {
+        const g = dc.walls?.[key] ?? (dc.underlays[key] ? emptyWalls(dc.underlays[key]) : emptyWalls(padded(bounds(dc.building.nodes.filter(n => onFloor(dc.building, n, key))))))
+        const ng = paintWalls(g, d.pts, brush.size, d.add)
+        return ng === dc.walls?.[key] ? dc : { ...dc, walls: { ...dc.walls, [key]: ng } }
+      })
+    }
   }
 
   // ---- keyboard ----
@@ -300,7 +352,7 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
       if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); if (e.shiftKey) h.redo(); else h.undo(); return }
       if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); h.redo(); return }
       if (e.ctrlKey || e.metaKey || e.altKey) return
-      if (k === 'escape') { setMode(null); setFrom(null); setRect(null); drag.current = null; setSel(null); return }
+      if (k === 'escape') { setMode(null); setFrom(null); setRect(null); setStroke(null); drag.current = null; setSel(null); return }
       if (k === 'delete' || k === 'backspace') { if (sel) { e.preventDefault(); deleteSel() } return }
       if (k === 'f') { fit(); return }
       if (k === 'w') { setShowWidths(x => !x); return }
@@ -332,12 +384,13 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
       const bb = d.building
       if (bb.floors?.length) return { ...d, building: { ...bb, floors: [...bb.floors, { id, name: floorName(k), elevation_m: elev }] } }
       // a single-floor building gets floors: everything so far is the ground floor
-      const under0 = d.underlays[SINGLE]
-      const underlays = { ...d.underlays }
-      delete underlays[SINGLE]
+      const under0 = d.underlays[SINGLE], walls0 = d.walls?.[SINGLE]
+      const underlays = { ...d.underlays }, walls = { ...d.walls }
+      delete underlays[SINGLE]; delete walls[SINGLE]
       if (under0) underlays.GF = under0
+      if (walls0) walls.GF = walls0
       return {
-        underlays, building: {
+        underlays, walls, building: {
           ...bb, floors: [{ id: 'GF', name: floorName(0), elevation_m: 0 }, { id: 'F1', name: floorName(1), elevation_m: 3.5 }],
           nodes: bb.nodes.map(n => ({ ...n, floor_id: 'GF' })),
         },
@@ -349,10 +402,10 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
   const deleteFloor = () => {
     h.commit(d => {
       const gone = new Set(d.building.nodes.filter(n => n.floor_id === fl).map(n => n.id))
-      const underlays = { ...d.underlays }
-      delete underlays[fl]
+      const underlays = { ...d.underlays }, walls = { ...d.walls }
+      delete underlays[fl]; delete walls[fl]
       return {
-        underlays, building: {
+        underlays, walls, building: {
           ...d.building, floors: (d.building.floors ?? []).filter(f => f.id !== fl),
           nodes: d.building.nodes.filter(n => !gone.has(n.id)), edges: d.building.edges.filter(e => !gone.has(e.from) && !gone.has(e.to)),
         },
@@ -367,19 +420,100 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
       const box = bounds(vis)
       const w = vis.length ? Math.max(10, box.x1 - box.x0) : 40
       h.commit(d => ({ ...d, underlays: { ...d.underlays, [fl]: { src: img.src, x: vis.length ? box.x0 : 0, z: vis.length ? box.z0 : 0, w, h: w * img.height / img.width } } }))
-      flash('Plan picture added. Use Set scale with a known length to line it up.')
+      flash('Plan picture added. Use Set scale with a known length to line it up, then Trace walls.')
     } catch (e) {
       flash(`Could not open the picture: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
-  /** Move or resize the picture under this floor (to line it up with the drawing); keeps its proportions. */
+  /** Move or resize the picture under this floor (to line it up with the drawing); keeps its proportions. Its walls follow. */
   const setUnder = (patch: Partial<Underlay>) => h.live(d => {
     const u = d.underlays[fl]
     if (!u) return d
     const nu = { ...u, ...patch }
     if (patch.w) nu.h = u.h * patch.w / u.w
-    return { ...d, underlays: { ...d.underlays, [fl]: nu } }
+    const g = d.walls?.[fl]
+    return { ...d, underlays: { ...d.underlays, [fl]: nu }, ...(g ? { walls: { ...d.walls, [fl]: moveWalls(g, u, nu) } } : {}) }
   })
+
+  // ---- walls and widths ----
+  const traceFloor = async () => {
+    const u = doc.underlays[fl]
+    if (!u) return
+    setTracing(fl)
+    try {
+      const r = await traceWalls(u.src, u, { sensitivity: sens })
+      const key = fl
+      h.commit(d => ({ ...d, walls: { ...d.walls, [key]: r.grid } }))
+      flash(`Walls traced in ${(r.ms / 1000).toFixed(1)} s (${L(r.grid.res)} cells). Paint or erase with the Walls tool.`)
+    } catch (e) {
+      flash(`Could not trace: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setTracing('')
+    }
+  }
+  const measureAll = useCallback((bb: Building, walls: Doc['walls']) => {
+    const out: Record<string, Measure> = {}
+    for (const e of bb.edges) {
+      const g = walls?.[edgeFloor(bb, e)]
+      if (g) out[edgeKey(e)] = measureEdge(bb, e, wallsOf(g))
+    }
+    setMeasured(out)
+    return out
+  }, [])
+  const measureOne = (i: number) => {
+    const e = b.edges[i]
+    if (!e) return
+    setMeasured(m => ({ ...m, [edgeKey(e)]: measureEdge(b, e, wallsOf(doc.walls?.[edgeFloor(b, e)])) }))
+  }
+  const acceptWidth = (i: number, w: number) => { setB(bb => patchEdge(bb, i, { width: w })); flash(`Width set to ${L(w)}.`) }
+  const acceptHigh = () => {
+    const take = (e: Building['edges'][number]) => { const m = measured[edgeKey(e)]; return m?.conf === 'high' && suggests(m, e.width) && !ignored.has(edgeKey(e)) ? m.width! : null }
+    const n = b.edges.filter(e => take(e) !== null).length
+    setB(bb => ({ ...bb, edges: bb.edges.map(e => { const w = take(e); return w === null ? e : { ...e, width: w } }) }))
+    flash(`${n} widths taken from the walls. Ctrl+Z undoes them.`)
+  }
+  const toggleIgnore = (key: string) => setIgnored(s0 => { const s1 = new Set(s0); if (s1.has(key)) s1.delete(key); else s1.add(key); return s1 })
+  const snapHere = () => {
+    if (!W) return
+    const { moved } = snapRooms(b.nodes, n => (keyOf(b, n) === fl ? W : null))
+    if (moved) h.commit(d => ({ ...d, building: { ...d.building, nodes: snapRooms(d.building.nodes, n => (keyOf(d.building, n) === fl ? W : null)).nodes } }))
+    flash(moved ? `${moved} rooms lined up with the walls. Ctrl+Z undoes it.` : 'Rooms already sit on the walls (or no wall within 0.5 m).')
+  }
+  const pickEdge = (i: number) => {
+    const e = b.edges[i]
+    const n = e && by[e.from]
+    if (!n) return
+    if (floors.length && n.floor_id && n.floor_id !== fl) setFloor(n.floor_id)
+    setSel({ kind: 'edge', i })
+    const o = by[e.to] ?? n
+    setView(v => ({ ...v, x0: (n.x + o.x) / 2 - size.w / v.s / 2, z0: (n.z + o.z) / 2 - size.h / v.s / 2 }))
+  }
+
+  // after an import with pictures: trace every floor, line rooms up with the walls, measure every link
+  const autoRan = useRef(false)
+  const { commit: hCommit, live: hLive } = h
+  useEffect(() => {
+    if (!fresh || autoRan.current) return
+    autoRan.current = true
+    const keys = Object.keys(initial.underlays).filter(k => !initial.walls?.[k])
+    if (!keys.length) return
+    void (async () => {
+      const grids: Record<string, WallGrid> = {}
+      for (const k of keys) {
+        setTracing(k)
+        try { grids[k] = (await traceWalls(initial.underlays[k].src, initial.underlays[k], { sensitivity: 0.5 })).grid } catch { /* that floor stays untraced */ }
+      }
+      setTracing('')
+      if (!Object.keys(grids).length) return
+      hLive(d => ({ ...d, walls: { ...d.walls, ...grids } }))
+      const bb = initial.building
+      const r = snapRooms(bb.nodes, n => wallsOf(grids[keyOf(bb, n)]))
+      if (r.moved) hCommit(d => ({ ...d, building: { ...d.building, nodes: snapRooms(d.building.nodes, n => wallsOf(grids[keyOf(d.building, n)])).nodes } }))
+      const m = measureAll({ ...bb, nodes: r.nodes }, grids)
+      const n = Object.values(m).filter(x => x.width).length
+      setBanner(<>Walls traced from the plan picture{keys.length > 1 ? 's' : ''}{r.moved ? `; ${r.moved} rooms lined up with them (Ctrl+Z undoes it)` : ''}. {n} of {bb.edges.length} widths measured from the walls: review them under <b>Widths</b> before accepting.</>)
+    })()
+  }, [fresh, initial, hLive, hCommit, measureAll])
 
   // ---- scale ----
   const applyScale = (real: number, measured: number) => {
@@ -391,8 +525,11 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
       const ids = new Set(bb.nodes.filter(mine).map(n => n.id))
       const nodes = bb.nodes.map(n => (ids.has(n.id) ? { ...n, x: round2(n.x * f), z: round2(n.z * f), ...(n.type === 'room' ? { w: round2((n.w ?? 0) * f), d: round2((n.d ?? 0) * f) } : {}) } : n))
       const edges = bb.edges.map(e => (ids.has(e.from) && ids.has(e.to) && e.length !== undefined && e.kind !== 'stair' ? { ...e, length: round2(e.length * f) } : e))
-      const u = d.underlays[fl]
-      return { building: { ...bb, nodes, edges }, underlays: u ? { ...d.underlays, [fl]: { ...u, x: u.x * f, z: u.z * f, w: u.w * f, h: u.h * f } } : d.underlays }
+      const u = d.underlays[fl], g = d.walls?.[fl]
+      return {
+        building: { ...bb, nodes, edges }, underlays: u ? { ...d.underlays, [fl]: { ...u, x: u.x * f, z: u.z * f, w: u.w * f, h: u.h * f } } : d.underlays,
+        walls: g ? { ...d.walls, [fl]: scaleWalls(g, f) } : d.walls,
+      }
     })
     setMode(null)
     setView(v => ({ s: v.s / f, x0: v.x0 * f, z0: v.z0 * f }))
@@ -432,11 +569,22 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
   const measuring = mode?.kind === 'measure'
   const toolHint = mode?.kind === 'scale'
     ? (mode.pts.length ? 'Now click the other end of the known length.' : 'Set scale: click one end of a length you know on the plan (a wall, a door, a dimension line).')
-    : mode?.kind === 'measure' ? (mode.pts.length ? 'Click the other side.' : 'Measure width: click one side of the corridor or door on the plan, then the other.')
+    : mode?.kind === 'measure' ? (mode.pts.length ? `Click the other side.${W ? ' Ends snap to the traced walls.' : ''}` : 'Measure width: click one side of the corridor or door on the plan, then the other.')
       : from ? `Linking from ${by[from]?.label ?? from}: click the other node${floors.length > 1 ? ' (switch floors for a stair)' : ''}. Esc cancels.`
         : TOOLS.find(t => t.id === tool)!.hint
   const counts = { rooms: b.nodes.filter(n => n.type === 'room').length, exits: b.nodes.filter(n => n.type === 'exit').length, people: b.nodes.reduce((s, n) => s + (n.type === 'room' ? Number(n.people ?? 0) : 0), 0) }
   const labelOf = (id: string) => by[id]?.label ?? id
+  const issues = widthIssues(b, measured, labelOf, L)
+  const selKey = selEdge != null && b.edges[selEdge] ? edgeKey(b.edges[selEdge]) : null
+  const selMeasure = selKey ? measured[selKey] : undefined
+  const measureLine = (() => {
+    if (mode?.kind !== 'measure' || !mode.pts.length) return null
+    const end = mode.pts[1] ?? cursor
+    if (!end) return null
+    const [a, c] = snapPair(W, mode.pts[0], end)
+    const e = b.edges[mode.edge]
+    return { a, c, raw: [mode.pts[0], end], w: dist(a, c), kind: e ? edgeKind(b, e) : 'door' as const }
+  })()
 
   return (
     <div className="pl-editor">
@@ -477,6 +625,13 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
               <Icon d="M3 17 17 3l4 4L7 21zM7 13l2 2m2-6 2 2m2-6 2 2" /><span>Set scale</span>
             </button>
             <label className="pl-toggle"><input type="checkbox" checked={showWidths} onChange={e => setShowWidths(e.target.checked)} />Widths</label>
+            {showWidths && <label className="pl-toggle" title="Show people per minute with each width"><input type="checkbox" checked={showCap} onChange={e => setShowCap(e.target.checked)} />/min</label>}
+            {grid && <label className="pl-toggle"><input type="checkbox" checked={showWalls} onChange={e => setShowWalls(e.target.checked)} />Walls</label>}
+            <span className="pf-grow" />
+            <div className="pl-units" role="group" aria-label="Units">
+              <button className={units === 'm' ? 'on' : ''} aria-pressed={units === 'm'} onClick={() => setUnits('m')}>m</button>
+              <button className={units === 'ft' ? 'on' : ''} aria-pressed={units === 'ft'} onClick={() => setUnits('ft')}>ft</button>
+            </div>
           </div>
           {floors.length > 1 && <div className="pl-floorbar"><FloorTabs floors={floors} value={fl} onChange={id => { setFloor(id); if (!from) setSel(null) }} /></div>}
           <div className="pl-canvas" ref={wrap}>
@@ -500,6 +655,9 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
                   </g>
                 )
               })}
+              {/* walls over the room fills, so they stay visible inside rooms */}
+              {grid && wallImg && showWalls && <image href={wallImg} x={grid.x0} y={grid.z0} width={grid.cols * grid.res} height={grid.rows * grid.res} opacity={wallOpacity} preserveAspectRatio="none" className="pl-under pl-walls" />}
+              {stroke && stroke.pts.length > 0 && <polyline className={`pl-brush ${stroke.add ? 'add' : 'erase'}`} points={stroke.pts.map(q => `${q.x},${q.z}`).join(' ')} strokeWidth={brush.size * 2} />}
               {b.edges.map((e, i) => {
                 const A = by[e.from], B = by[e.to]
                 if (!A || !B || !visIds.has(A.id) || !visIds.has(B.id)) return null
@@ -509,8 +667,9 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
                   <g key={`e${i}`} data-edge={i} className={`pl-edge k-${kind} ${selEdge === i ? 'sel' : ''}`}>
                     <line x1={A.x} y1={A.z} x2={B.x} y2={B.z} className="pl-edge-hit" />
                     <line x1={A.x} y1={A.z} x2={B.x} y2={B.z} className="pl-edge-line" />
-                    {showWidths && kind !== 'door' && dist(A, B) * view.s > 44 && <text x={mx} y={mz - px(5)} style={{ fontSize: px(10.5) }} className="pl-width">{e.width} m</text>}
-                    {showWidths && kind === 'door' && selEdge === i && <text x={mx} y={mz - px(5)} style={{ fontSize: px(10.5) }} className="pl-width">{e.width} m</text>}
+                    {showWidths && (kind !== 'door' ? dist(A, B) * view.s > 44 : selEdge === i || view.s > 28) && (
+                      <text x={mx} y={mz - px(5)} style={{ fontSize: px(10.5) }} className={`pl-width ${issues.some(x => x.edge === i) ? 'warn' : ''}`}>{L(e.width)}{showCap ? ` · ${perMin(kind, e.width)}/min` : ''}</text>
+                    )}
                   </g>
                 )
               })}
@@ -542,13 +701,26 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
                 </g>
               ))}
               {rect && <rect className="pl-draft" x={Math.min(rect.a.x, rect.b.x)} y={Math.min(rect.a.z, rect.b.z)} width={Math.abs(rect.b.x - rect.a.x)} height={Math.abs(rect.b.z - rect.a.z)} />}
-              {rect && <text className="pl-dim" x={(rect.a.x + rect.b.x) / 2} y={Math.min(rect.a.z, rect.b.z) - px(6)} style={{ fontSize: px(11) }}>{round1(Math.abs(rect.b.x - rect.a.x))} × {round1(Math.abs(rect.b.z - rect.a.z))} m</text>}
+              {rect && <text className="pl-dim" x={(rect.a.x + rect.b.x) / 2} y={Math.min(rect.a.z, rect.b.z) - px(6)} style={{ fontSize: px(11) }}>{L(Math.abs(rect.b.x - rect.a.x))} × {L(Math.abs(rect.b.z - rect.a.z))}</text>}
+              {selMeasure && selMeasure.spans.map(([a, c], k) => <line key={`sp${k}`} className={`pl-span ${selMeasure.conf}`} x1={a.x} y1={a.z} x2={c.x} y2={c.z} />)}
+              {tool === 'wall' && cursor && !mode && <circle className={`pl-brush-cursor ${brush.add ? 'add' : 'erase'}`} cx={cursor.x} cy={cursor.z} r={brush.size} />}
               {from && cursor && by[from] && visIds.has(from) && <line className="pl-rubber" x1={by[from].x} y1={by[from].z} x2={cursor.x} y2={cursor.z} />}
-              {mode && (mode.pts.length > 0) && (
+              {mode?.kind === 'scale' && (mode.pts.length > 0) && (
                 <g className="pl-measure">
                   {(() => { const end = mode.pts[1] ?? cursor; return end ? <line x1={mode.pts[0].x} y1={mode.pts[0].z} x2={end.x} y2={end.z} /> : null })()}
                   {mode.pts.map((q, k) => <circle key={k} cx={q.x} cy={q.z} r={px(4)} />)}
-                  {(() => { const end = mode.pts[1] ?? cursor; return end ? <text x={(mode.pts[0].x + end.x) / 2} y={(mode.pts[0].z + end.z) / 2 - px(8)} style={{ fontSize: px(12) }}>{round2(dist(mode.pts[0], end))} m</text> : null })()}
+                  {(() => { const end = mode.pts[1] ?? cursor; return end ? <text x={(mode.pts[0].x + end.x) / 2} y={(mode.pts[0].z + end.z) / 2 - px(8)} style={{ fontSize: px(12) }}>{round2(dist(mode.pts[0], end))} units</text> : null })()}
+                </g>
+              )}
+              {measureLine && (
+                <g className="pl-measure">
+                  <line x1={measureLine.raw[0].x} y1={measureLine.raw[0].z} x2={measureLine.raw[1].x} y2={measureLine.raw[1].z} className="raw" />
+                  <line x1={measureLine.a.x} y1={measureLine.a.z} x2={measureLine.c.x} y2={measureLine.c.z} />
+                  <circle cx={measureLine.a.x} cy={measureLine.a.z} r={px(4)} />
+                  <circle cx={measureLine.c.x} cy={measureLine.c.z} r={px(4)} />
+                  <text x={(measureLine.a.x + measureLine.c.x) / 2} y={(measureLine.a.z + measureLine.c.z) / 2 - px(10)} style={{ fontSize: px(12.5) }}>
+                    {L(measureLine.w)} · {perMin(measureLine.kind, measureLine.w)} people/min
+                  </text>
                 </g>
               )}
             </svg>
@@ -558,7 +730,8 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
               <button onClick={() => zoomAt(0.8)} aria-label="Zoom out">−</button>
               <button onClick={fit} aria-label="Fit to view" title="Fit (F)"><Icon d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></button>
             </div>
-            {cursor && <div className="pl-coords">x {cursor.x.toFixed(1)} · z {cursor.z.toFixed(1)} m</div>}
+            {cursor && <div className="pl-coords">x {numU(cursor.x, units, 1)} · z {numU(cursor.z, units, 1)} {units}{W && isWallAt(W, cursor) ? ' · wall' : ''}</div>}
+            {tracing && <div className="pl-tracing" role="status"><span className="pl-spin" />Tracing walls{floors.length > 1 ? ` of ${floorOf(tracing)}` : ''}…</div>}
             {toast && <div className="pl-toast" role="status">{toast}</div>}
             {b.nodes.length === 0 && !under && <div className="pl-empty-canvas"><p>Empty floor. Draw rooms with <b>Room</b>, walkways with <b>Walkway</b>, and mark <b>Exits</b>. Or add a plan picture in the Floor panel to trace over.</p></div>}
           </div>
@@ -568,7 +741,8 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
           <section className="pf-card">
             <h3>{sel?.kind === 'edge' ? 'Link' : sel?.kind === 'node' ? (by[sel.id]?.type === 'room' ? 'Room' : by[sel.id]?.type === 'exit' ? 'Exit' : isStair(by[sel.id] ?? { id: '', type: 'room', x: 0, z: 0 }) ? 'Stair landing' : 'Walkway point') : 'Selection'}</h3>
             <Inspector building={b} sel={sel} edit={edit} floorName={floorOf} onSelect={setSel} onPickNode={pick} onDelete={deleteSel} measuring={measuring}
-              onMeasure={i => setMode(m => (m?.kind === 'measure' ? null : { kind: 'measure', edge: i, pts: [] }))} />
+              onMeasure={i => setMode(m => (m?.kind === 'measure' ? null : { kind: 'measure', edge: i, pts: [] }))}
+              units={units} auto={selMeasure} canAuto={!!(selEdge != null && b.edges[selEdge] && doc.walls?.[edgeFloor(b, b.edges[selEdge])])} onAuto={measureOne} onAccept={acceptWidth} />
           </section>
 
           <section className="pf-card">
@@ -577,11 +751,11 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
               {curFloor && (
                 <div className="pl-grid2">
                   <label className="pf-field">Name<input value={curFloor.name} onFocus={edit.begin} onBlur={edit.end} onChange={e => setFloorField({ name: e.target.value })} /></label>
-                  <NumField label="Elevation (m)" value={curFloor.elevation_m} step={0.1} edit={edit} onChange={v => setFloorField({ elevation_m: round2(v) })} />
+                  <LenField units={units} label="Elevation" value={curFloor.elevation_m} step={0.1} edit={edit} onChange={v => setFloorField({ elevation_m: round2(v) })} />
                 </div>
               )}
               <div className="pl-under-row">
-                <span className="pf-small"><b>Plan picture</b> {under ? `${round1(under.w)} × ${round1(under.h)} m` : 'none'}</span>
+                <span className="pf-small"><b>Plan picture</b> {under ? `${L(under.w)} × ${L(under.h)}` : 'none'}</span>
                 <label className="pf-btn">{under ? 'Replace' : 'Add'}<input type="file" hidden accept="image/png,image/jpeg,image/webp,.pdf,application/pdf"
                   onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void loadUnderlay(f) }} /></label>
                 {under && <button className="pf-btn ghost" onClick={() => h.commit(d => { const u = { ...d.underlays }; delete u[fl]; return { ...d, underlays: u } })}>Remove</button>}
@@ -590,14 +764,38 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
                 <details className="pl-details">
                   <summary className="pf-small">Picture position</summary>
                   <div className="pl-grid3">
-                    <NumField label="Left x (m)" value={round2(under.x)} step={0.5} edit={edit} onChange={v => setUnder({ x: v })} />
-                    <NumField label="Top z (m)" value={round2(under.z)} step={0.5} edit={edit} onChange={v => setUnder({ z: v })} />
-                    <NumField label="Width (m)" value={round2(under.w)} step={0.5} min={1} edit={edit} onChange={v => { if (v >= 1) setUnder({ w: v }) }} />
+                    <LenField units={units} label="Left x" value={under.x} step={0.5} edit={edit} onChange={v => setUnder({ x: v })} />
+                    <LenField units={units} label="Top z" value={under.z} step={0.5} edit={edit} onChange={v => setUnder({ z: v })} />
+                    <LenField units={units} label="Width" value={under.w} step={0.5} edit={edit} onChange={v => { if (v >= 1) setUnder({ w: v }) }} />
                   </div>
-                  <p className="pf-small pf-muted">Moves the picture only. Set scale stretches the picture and the drawing together.</p>
+                  <p className="pf-small pf-muted">Moves the picture (and its traced walls) only. Set scale stretches the picture and the drawing together.</p>
                 </details>
               )}
               {under && <label className="pf-field pl-range">Picture opacity {Math.round(opacity * 100)}%<input type="range" min="0" max="1" step="0.05" value={opacity} onChange={e => setOpacity(+e.target.value)} /></label>}
+              <div className="pl-walls-box">
+                <div className="pl-under-row">
+                  <span className="pf-small"><b>Walls</b> {grid ? `traced, ${L(grid.res)} cells` : 'none yet'}</span>
+                  {under && <button className="pf-btn" onClick={() => void traceFloor()} disabled={!!tracing}>{tracing === fl ? 'Tracing…' : grid ? 'Trace again' : 'Trace walls from plan'}</button>}
+                </div>
+                {under && <label className="pf-field pl-range" title="Higher marks fainter lines as walls">Sensitivity {Math.round(sens * 100)}%<input type="range" min="0" max="1" step="0.05" value={sens} onChange={e => setSens(+e.target.value)} /></label>}
+                {!under && <p className="pf-small pf-muted">Add a plan picture to trace its walls, or paint walls with the Walls tool (B).</p>}
+                {grid && (
+                  <>
+                    <label className="pf-field pl-range">Wall overlay {Math.round(wallOpacity * 100)}%<input type="range" min="0.1" max="1" step="0.05" value={wallOpacity} onChange={e => { setWallOpacity(+e.target.value); setShowWalls(true) }} /></label>
+                    <div className="pl-under-row">
+                      <div className="pl-units" role="group" aria-label="Brush">
+                        <button className={brush.add ? 'on' : ''} aria-pressed={brush.add} onClick={() => { setBrush(x => ({ ...x, add: true })); setTool('wall'); setMode(null) }}>Paint</button>
+                        <button className={!brush.add ? 'on' : ''} aria-pressed={!brush.add} onClick={() => { setBrush(x => ({ ...x, add: false })); setTool('wall'); setMode(null) }}>Erase</button>
+                      </div>
+                      <label className="pf-field pl-range pf-grow">Brush {L(brush.size * 2)}<input type="range" min="0.05" max="1.5" step="0.05" value={brush.size} onChange={e => setBrush(x => ({ ...x, size: +e.target.value }))} /></label>
+                    </div>
+                    <div className="pf-row">
+                      <button className="pf-btn" onClick={snapHere} title="Move room sides onto wall lines within 0.5 m">Line rooms up with walls</button>
+                      <button className="pf-btn ghost" onClick={() => h.commit(d => { const w = { ...d.walls }; delete w[fl]; return { ...d, walls: w } })}>Clear walls</button>
+                    </div>
+                  </>
+                )}
+              </div>
               {under && <VisionRead under={under} floorLabel={curFloor?.name ?? 'Floor'} hasNodes={vis.length > 0} onRead={(nb) => {
                 const pre = fl === SINGLE ? '' : `${fl}_`
                 h.commit(d => ({
@@ -630,18 +828,25 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
               {linkRes && !linkRes.err && (linkRes.links.length
                 ? <LinksTable links={linkRes.links} />
                 : <p className="pf-small pf-muted">No new links. Either every landing is already linked, or no landings are within {tolerance} m of one on the next floor.</p>)}
-              <StairList building={b} onPick={i => { const e = b.edges[i]; const n = by[e.from]; if (n?.floor_id) setFloor(n.floor_id); setSel({ kind: 'edge', i }) }} floorName={floorOf} label={labelOf} />
+              <StairList building={b} onPick={i => { const e = b.edges[i]; const n = by[e.from]; if (n?.floor_id) setFloor(n.floor_id); setSel({ kind: 'edge', i }) }} floorName={floorOf} label={labelOf} L={L} />
             </section>
           )}
 
           <section className="pf-card">
+            <h3>Widths</h3>
+            <WidthsPanel building={b} measured={measured} ignored={ignored} units={units} selected={selEdge} onPick={pickEdge} onAccept={acceptWidth}
+              onAcceptHigh={acceptHigh} onIgnore={toggleIgnore} onMeasureAll={() => { measureAll(b, doc.walls); flash('Widths measured from the walls. Nothing changes until you accept.') }}
+              canMeasure={!!doc.walls && Object.keys(doc.walls).length > 0} floorName={floorOf} />
+          </section>
+
+          <section className="pf-card">
             <h3>Checks</h3>
-            <Checks building={b} onPick={pick} label={labelOf} />
+            <Checks building={b} onPick={pick} label={labelOf} widths={issues} onPickEdge={pickEdge} />
           </section>
         </aside>
       </div>
 
-      {ask?.kind === 'room' && <RoomAsk ask={ask} n={vis.filter(n => n.type === 'room').length + 1} onCancel={() => setAsk(null)} onOk={(label, people) => {
+      {ask?.kind === 'room' && <RoomAsk ask={ask} L={L} n={vis.filter(n => n.type === 'room').length + 1} onCancel={() => setAsk(null)} onOk={(label, people) => {
         const id = newId(b, fl, 'room')
         const n: BuildingNode = { id, type: 'room', label, x: ask.x, z: ask.z, w: ask.w, d: ask.d, people }
         if (floors.length) n.floor_id = fl
@@ -651,19 +856,20 @@ export default function Editor({ initial, origin: origin0, note, onClose }: { in
       {ask?.kind === 'stair' && <StairAsk a={by[ask.a]} c={by[ask.b]} group={(() => {
         const g = b.edges.find(e => e.kind === 'stair' && e.capacity_group && [e.from, e.to].some(x => x === ask.a || x === ask.b))?.capacity_group
         return g ?? newGroup(b)
-      })()} floorName={floorOf} onCancel={() => setAsk(null)} onOk={(width, length, group) => {
+      })()} floorName={floorOf} units={units} onCancel={() => setAsk(null)} onOk={(width, length, group) => {
         setB(bb => ({ ...bb, edges: [...bb.edges, { from: ask.a, to: ask.b, width, length, kind: 'stair', ...(group ? { capacity_group: group } : {}) }] }))
         setSel({ kind: 'edge', i: b.edges.length })
         setAsk(null)
       }} />}
-      {ask?.kind === 'scale' && <ScaleAsk measured={ask.measured} onCancel={() => { setAsk(null); setMode(null) }} onOk={real => { applyScale(real, ask.measured); setAsk(null) }} />}
+      {ask?.kind === 'scale' && <ScaleAsk measured={ask.measured} units={units} onCancel={() => { setAsk(null); setMode(null) }} onOk={real => { applyScale(real, ask.measured); setAsk(null) }} />}
       {ask?.kind === 'deleteFloor' && (
         <Modal title={`Delete ${curFloor?.name ?? 'this floor'}?`} submit="Delete floor" onCancel={() => setAsk(null)} onSubmit={() => { deleteFloor(); setAsk(null) }}>
           <p>Its {vis.length} nodes and their links go too. You can undo this.</p>
         </Modal>
       )}
-      {ask?.kind === 'save' && <SaveAsk building={b} origin={origin} onCancel={() => setAsk(null)} onSaved={s => {
+      {ask?.kind === 'save' && <SaveAsk doc={doc} origin={origin} floorName={floorOf} onCancel={() => setAsk(null)} onSaved={(s, warn) => {
         h.markSaved(); setSavedSite(s); setAsk(null)
+        if (warn.length) setBanner(<>Saved, but: {warn.join(' ')}</>)
         setOrigin({ id: s.id, demo: false, name: s.name, address: s.address ?? '', geo: s.geo, assembly: s.assembly })
       }} />}
     </div>
@@ -681,7 +887,7 @@ function Grid({ view, size }: { view: View; size: { w: number; h: number } }) {
   return <g className="pl-grid-lines">{lines}</g>
 }
 
-function StairList({ building, onPick, floorName, label }: { building: Building; onPick: (i: number) => void; floorName: (id: string | undefined) => string; label: (id: string) => string }) {
+function StairList({ building, onPick, floorName, label, L }: { building: Building; onPick: (i: number) => void; floorName: (id: string | undefined) => string; label: (id: string) => string; L: (m: number) => string }) {
   const by = nodeMap(building)
   const rows = building.edges.map((e, i) => [e, i] as const).filter(([e]) => e.kind === 'stair' && by[e.from]?.floor_id !== by[e.to]?.floor_id)
   if (!rows.length) return <p className="pf-small pf-muted">No stairs between floors yet.</p>
@@ -693,7 +899,7 @@ function StairList({ building, onPick, floorName, label }: { building: Building;
           <tr key={i} onClick={() => onPick(i)} className="pl-rowbtn" tabIndex={0} onKeyDown={ev => { if (ev.key === 'Enter') onPick(i) }}>
             <td>{e.capacity_group ?? <span className="pf-muted">none</span>}</td>
             <td>{label(e.from)} <span className="pf-muted">({floorName(by[e.from]?.floor_id)})</span> → {label(e.to)} <span className="pf-muted">({floorName(by[e.to]?.floor_id)})</span></td>
-            <td>{e.width} m</td>
+            <td>{L(e.width)}</td>
           </tr>
         ))}
       </tbody>
@@ -701,12 +907,12 @@ function StairList({ building, onPick, floorName, label }: { building: Building;
   )
 }
 
-function RoomAsk({ ask, n, onOk, onCancel }: { ask: { w: number; d: number }; n: number; onOk: (label: string, people: number) => void; onCancel: () => void }) {
+function RoomAsk({ ask, n, L, onOk, onCancel }: { ask: { w: number; d: number }; n: number; L: (m: number) => string; onOk: (label: string, people: number) => void; onCancel: () => void }) {
   const [label, setLabel] = useState(`Room ${n}`)
   const [people, setPeople] = useState(String(Math.max(1, Math.round(ask.w * ask.d * 0.3))))
   return (
     <Modal title="New room" submit="Add room" onCancel={onCancel} onSubmit={() => onOk(label.trim() || `Room ${n}`, Math.max(0, Math.round(+people || 0)))}>
-      <p className="pf-small pf-muted">{ask.w} × {ask.d} m ({round1(ask.w * ask.d)} m²)</p>
+      <p className="pf-small pf-muted">{L(ask.w)} × {L(ask.d)} ({round1(ask.w * ask.d)} m²)</p>
       <label className="pf-field">Name on the plan<input value={label} onChange={e => setLabel(e.target.value)} /></label>
       <label className="pf-field">People on a busy day<input type="number" min="0" step="1" value={people} onChange={e => setPeople(e.target.value)} /></label>
       <p className="pf-small pf-muted">Rough guide per m²: office 0.15, lab 0.5, classroom 1.0, seated hall 1.5.</p>
@@ -714,27 +920,27 @@ function RoomAsk({ ask, n, onOk, onCancel }: { ask: { w: number; d: number }; n:
   )
 }
 
-function StairAsk({ a, c, group, floorName, onOk, onCancel }: { a: BuildingNode; c: BuildingNode; group: string; floorName: (id: string | undefined) => string; onOk: (w: number, l: number, g: string) => void; onCancel: () => void }) {
-  const [w, setW] = useState('1.2')
-  const [l, setL] = useState(String(STAIR_LENGTH))
+function StairAsk({ a, c, group, floorName, units, onOk, onCancel }: { a: BuildingNode; c: BuildingNode; group: string; floorName: (id: string | undefined) => string; units: 'm' | 'ft'; onOk: (w: number, l: number, g: string) => void; onCancel: () => void }) {
+  const [w, setW] = useState(String(numU(1.2, units)))
+  const [l, setL] = useState(String(numU(STAIR_LENGTH, units)))
   const [g, setG] = useState(group)
   return (
-    <Modal title="Stair between floors" submit="Add stair" onCancel={onCancel} onSubmit={() => onOk(Math.max(0.3, +w || 1.2), Math.max(0.5, +l || STAIR_LENGTH), g.trim())}>
+    <Modal title="Stair between floors" submit="Add stair" onCancel={onCancel} onSubmit={() => onOk(Math.max(0.3, round2(fromU(+w, units)) || 1.2), Math.max(0.5, round2(fromU(+l, units)) || STAIR_LENGTH), g.trim())}>
       <p className="pf-small">{a.label ?? a.id} ({floorName(a.floor_id)}) ↔ {c.label ?? c.id} ({floorName(c.floor_id)})</p>
-      <label className="pf-field">Clear width (m)<input type="number" step="0.1" min="0.3" value={w} onChange={e => setW(e.target.value)} /></label>
-      <label className="pf-field">Walking length on the flights (m)<input type="number" step="0.1" min="0.5" value={l} onChange={e => setL(e.target.value)} /></label>
+      <label className="pf-field">Clear width ({units})<input type="number" step="0.1" min="0.3" value={w} onChange={e => setW(e.target.value)} /></label>
+      <label className="pf-field">Walking length on the flights ({units})<input type="number" step="0.1" min="0.5" value={l} onChange={e => setL(e.target.value)} /></label>
       <label className="pf-field">Stair shaft (capacity group)<input value={g} onChange={e => setG(e.target.value)} /></label>
       <p className="pf-small pf-muted">Flights in one shaft share its capacity, so people from several floors queue for the same stairs.</p>
     </Modal>
   )
 }
 
-function ScaleAsk({ measured, onOk, onCancel }: { measured: number; onOk: (real: number) => void; onCancel: () => void }) {
-  const [v, setV] = useState(String(round2(measured)))
+function ScaleAsk({ measured, units, onOk, onCancel }: { measured: number; units: 'm' | 'ft'; onOk: (real: number) => void; onCancel: () => void }) {
+  const [v, setV] = useState(String(numU(measured, units)))
   return (
-    <Modal title="Set scale" submit="Apply scale" onCancel={onCancel} onSubmit={() => { const r = +v; if (r > 0) onOk(r) }}>
-      <p className="pf-small pf-muted">The two points are {round2(measured)} units apart on this floor. Type the real distance; the floor and its picture are stretched so that 1 unit is 1 metre.</p>
-      <label className="pf-field">Real distance (m)<input type="number" step="0.01" min="0.01" value={v} onChange={e => setV(e.target.value)} /></label>
+    <Modal title="Set scale" submit="Apply scale" onCancel={onCancel} onSubmit={() => { const r = fromU(+v, units); if (r > 0) onOk(r) }}>
+      <p className="pf-small pf-muted">The two points are {fmtLen(measured, units)} apart on this floor now. Type the real distance; the floor, its picture and its walls are stretched to match.</p>
+      <label className="pf-field">Real distance ({units})<input type="number" step="0.01" min="0.01" value={v} onChange={e => setV(e.target.value)} /></label>
     </Modal>
   )
 }
@@ -773,14 +979,35 @@ function VisionRead({ under, floorLabel, hasNodes, onRead }: { under: Underlay; 
   )
 }
 
-function SaveAsk({ building, origin, onSaved, onCancel }: { building: Building; origin: Origin; onSaved: (s: Site) => void; onCancel: () => void }) {
+function SaveAsk({ doc, origin, floorName, onSaved, onCancel }: { doc: Doc; origin: Origin; floorName: (id: string | undefined) => string; onSaved: (s: Site, warnings: string[]) => void; onCancel: () => void }) {
+  const building = doc.building
   const [name, setName] = useState(origin.demo && origin.name ? `${origin.name} (copy)` : origin.name || building.name || '')
   const [address, setAddress] = useState(origin.address)
   const [key, setKey] = useState('')
   const [needKey, setNeedKey] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [step, setStep] = useState('')
   const [err, setErr] = useState('')
   const copy = !!origin.demo
+  /** Plan pictures and walls of each floor go up after the building: POST /sites/{id}/media/{floor}. */
+  const uploadMedia = async (id: string) => {
+    const floorIds = building.floors?.length ? building.floors.map(f => f.id) : [SINGLE]
+    const keys = floorIds.filter(k => doc.underlays[k] || doc.walls?.[k])
+    const warn: string[] = []
+    for (const [n, k] of keys.entries()) {
+      const u = doc.underlays[k], g = doc.walls?.[k]
+      const where = building.floors?.length ? floorName(k) : 'The plan'
+      setStep(`Uploading ${where.toLowerCase() === 'the plan' ? 'the plan' : where} (${n + 1} of ${keys.length})…`)
+      const body: Record<string, unknown> = {}
+      if (u) {
+        body.plan = { x: round2(u.x), z: round2(u.z), w: round2(u.w), h: round2(u.h) }
+        try { body.image = await uploadJpeg(u.src) } catch (e) { warn.push(`${where}: picture not uploaded (${e instanceof Error ? e.message : String(e)}).`) }
+      }
+      if (g) body.walls = storable(g)
+      await api.post(`/sites/${encodeURIComponent(id)}/media/${encodeURIComponent(k)}`, body, true)
+    }
+    return warn
+  }
   const save = async () => {
     if (!name.trim()) { setErr('Give the building a name.'); return }
     if (needKey && key.trim()) setControlKey(key.trim())
@@ -790,13 +1017,18 @@ function SaveAsk({ building, origin, onSaved, onCancel }: { building: Building; 
       geo: origin.geo ?? null, assembly: origin.assembly ?? [],
     }
     if (origin.id && !copy) site.id = origin.id
+    let saved: Site | null = null
     try {
-      onSaved(await api.post<Site>('/sites', site, true))
+      setStep('Saving the building…')
+      saved = await api.post<Site>('/sites', site, true)
+      const warn = await uploadMedia(saved.id)
+      onSaved(saved, warn)
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) { setNeedKey(true); setErr(needKey ? 'That control key was not accepted.' : 'Saving needs this deployment’s control key.') }
+      if (e instanceof ApiError && e.status === 401) { setNeedKey(true); setErr(needKey ? 'That control key was not accepted.' : saved ? 'The building is saved; uploading its plan pictures needs this deployment’s control key.' : 'Saving needs this deployment’s control key.') }
+      else if (saved) onSaved(saved, [`plan pictures and walls were not uploaded (${e instanceof Error ? e.message : String(e)}).`])
       else setErr(e instanceof ApiError ? e.message : String(e))
     } finally {
-      setBusy(false)
+      setBusy(false); setStep('')
     }
   }
   return (
@@ -806,7 +1038,15 @@ function SaveAsk({ building, origin, onSaved, onCancel }: { building: Building; 
       <label className="pf-field">Address (optional)<input value={address} onChange={e => setAddress(e.target.value)} placeholder="Street, city" /></label>
       {needKey && <label className="pf-field">Control key<input type="password" autoComplete="off" value={key} onChange={e => setKey(e.target.value)} /></label>}
       {err && <div className="pf-alert bad" role="alert">{err}</div>}
-      <p className="pf-small pf-muted">The building must pass the checks to be saved. Plan pictures stay in this browser and are not uploaded.</p>
+      {step && <p className="pf-small pl-status" role="status"><span className="pl-spin" />{step}</p>}
+      <p className="pf-small pf-muted">The building must pass the checks to be saved. Plan pictures (as JPEG, at most 2400 px) and traced walls are uploaded with it.</p>
     </Modal>
   )
 }
+
+const isWallAt = (w: Walls, p: P) => {
+  const c = Math.floor((p.x - w.g.x0) / w.g.res), r = Math.floor((p.z - w.g.z0) / w.g.res)
+  return c >= 0 && r >= 0 && c < w.g.cols && r < w.g.rows && w.cells[r * w.g.cols + c] === 1
+}
+/** A box around a floor's drawing, with room to paint walls around it. */
+const padded = (bx: { x0: number; z0: number; x1: number; z1: number }) => ({ x: Math.floor(bx.x0 - 5), z: Math.floor(bx.z0 - 5), w: Math.ceil(bx.x1 - bx.x0 + 10), h: Math.ceil(bx.z1 - bx.z0 + 10) })

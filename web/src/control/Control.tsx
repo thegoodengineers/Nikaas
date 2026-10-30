@@ -8,6 +8,7 @@ import AlarmPanel from './AlarmPanel.tsx'
 import Kpis, { FloorsTable } from './Kpis.tsx'
 import PlanPanel from './PlanPanel.tsx'
 import PeoplePanel from './PeoplePanel.tsx'
+import SmsPanel from './SmsPanel.tsx'
 import ExitsPanel from './ExitsPanel.tsx'
 import WavesPanel from './WavesPanel.tsx'
 import SensorsPanel from './SensorsPanel.tsx'
@@ -149,6 +150,7 @@ export default function Control() {
                   <div className="cr-col">
                     <FloorsTable data={data} />
                     <PeoplePanel data={data} />
+                    <SmsPanel data={data} siteId={siteId} act={act} notify={notify} />
                   </div>
                   <div className="cr-col cr-col-side">
                     <WavesPanel data={data} />

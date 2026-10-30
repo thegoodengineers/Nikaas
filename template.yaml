@@ -20,6 +20,9 @@ Globals:
       "GET /sites/{sid}/me": # every checked-in phone polls its route every 3-8 s during an alarm (one DynamoDB query)
         ThrottlingRateLimit: 100
         ThrottlingBurstLimit: 200
+      "GET /r/{code}": # everyone opens the link in their emergency text within the same minute
+        ThrottlingRateLimit: 50
+        ThrottlingBurstLimit: 200
 
 Resources:
   # FastAPI app (nikaas/api.py) wrapped by Mangum. Every path and method goes to it.
@@ -39,6 +42,9 @@ Resources:
           NIKAAS_TABLE: !Ref LiveTable
           # control-room key lives in SSM so a redeploy never resets it (nikaas/api.py reads it once per instance)
           NIKAAS_CONTROL_KEY_PARAM: /nikaas/control-key
+          # where the short links in emergency texts open the phone app (the bucket's https address)
+          NIKAAS_SITE_URL: !Sub "https://${WebBucket.RegionalDomainName}/index.html"
+          NIKAAS_SMS: sns
       Policies:
         - Statement:
             - Effect: Allow
@@ -58,6 +64,12 @@ Resources:
             - Effect: Allow # second opinion on a camera's suspected fire or smoke (nikaas/detect.py)
               Action: [rekognition:DetectLabels]
               Resource: "*"
+            - Effect: Allow # emergency texts, and the SMS sandbox's own phone verification (nikaas/sms.py)
+              Action: [sns:Publish, sns:GetSMSSandboxAccountStatus, sns:ListSMSSandboxPhoneNumbers, sns:CreateSMSSandboxPhoneNumber, sns:VerifySMSSandboxPhoneNumber]
+              Resource: "*"
+            - Effect: Allow # floor plan pictures (written, then read through short-lived links)
+              Action: [s3:GetObject, s3:PutObject]
+              Resource: !Sub "${PhotoBucket.Arn}/sites/*"
             - Effect: Allow
               Action: [ssm:GetParameter]
               Resource: !Sub "arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/nikaas/control-key"
@@ -73,6 +85,11 @@ Resources:
           Type: HttpApi # phones poll their route: own route for its own rate limit
           Properties:
             Path: /sites/{sid}/me
+            Method: GET
+        TextLink:
+          Type: HttpApi # the link in an emergency text: own route for its own rate limit
+          Properties:
+            Path: /r/{code}
             Method: GET
 
   # Live state of the platform: one partition per site (pk SITE#<id>), people expire through the `exp` TTL.
@@ -99,11 +116,22 @@ Resources:
         IgnorePublicAcls: true
         BlockPublicPolicy: true
         RestrictPublicBuckets: true
+      CorsConfiguration: # plan pictures are drawn as textures in the 3D view (WebGL needs CORS for images)
+        CorsRules:
+          - AllowedMethods: [GET, HEAD]
+            AllowedOrigins: ["*"]
+            AllowedHeaders: ["*"]
+            MaxAge: 3600
       LifecycleConfiguration:
         Rules:
           - Id: expire-uploads
             Status: Enabled
             ExpirationInDays: 30
+            Prefix: photos/
+          - Id: expire-results
+            Status: Enabled
+            ExpirationInDays: 30
+            Prefix: results/
 
   # Static web build (Vite `dist/`). Upload with:
   #   aws s3 sync web/dist s3://<WebBucketName> --delete

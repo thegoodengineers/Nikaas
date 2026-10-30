@@ -30,16 +30,19 @@ export class CrowdView {
   constructor(n: number, scene: any, rnd: () => number) {
     this.n = n
     const mat = new THREE.MeshStandardMaterial({ roughness: 0.75, metalness: 0 })
-    const cap = (r: number, len: number, drop: boolean) => { const g = new THREE.CapsuleGeometry(r, len, 3, 8); if (drop) g.translate(0, -(len / 2 + r), 0); return g }
-    const torsoG = new THREE.CapsuleGeometry(0.16, 0.34, 4, 10); torsoG.scale(1.18, 1, 0.7); torsoG.translate(0, 0.33, 0)
-    const hairG = new THREE.SphereGeometry(0.122, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.55); hairG.translate(0, 0.008, -0.012)
-    const mk = (g: any, count: number, m: any = mat) => {
-      const im = new THREE.InstancedMesh(g, m, count)
-      im.castShadow = true; im.frustumCulled = false; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
+    // big crowds get lighter figures (about 40 % of the triangles) and only bodies cast shadows: same look from the
+    // usual camera distance, a much lighter frame on laptop graphics
+    const lite = n > 250
+    const cap = (r: number, len: number, drop: boolean) => { const g = new THREE.CapsuleGeometry(r, len, lite ? 2 : 3, lite ? 6 : 8); if (drop) g.translate(0, -(len / 2 + r), 0); return g }
+    const torsoG = new THREE.CapsuleGeometry(0.16, 0.34, lite ? 3 : 4, lite ? 8 : 10); torsoG.scale(1.18, 1, 0.7); torsoG.translate(0, 0.33, 0)
+    const hairG = new THREE.SphereGeometry(0.122, lite ? 9 : 12, lite ? 5 : 8, 0, Math.PI * 2, 0, Math.PI * 0.55); hairG.translate(0, 0.008, -0.012)
+    const mk = (g: any, count: number, shadow = true) => {
+      const im = new THREE.InstancedMesh(g, mat, count)
+      im.castShadow = shadow; im.frustumCulled = false; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
       scene.add(im); return im
     }
-    this.torso = mk(torsoG, n); this.head = mk(new THREE.SphereGeometry(0.108, 14, 10), n); this.hair = mk(hairG, n)
-    this.arms = mk(cap(0.048, 0.5, true), n * 2); this.thighs = mk(cap(0.072, 0.32, true), n * 2); this.shins = mk(cap(0.06, 0.34, true), n * 2)
+    this.torso = mk(torsoG, n); this.head = mk(new THREE.SphereGeometry(0.108, lite ? 10 : 14, lite ? 7 : 10), n); this.hair = mk(hairG, n, !lite)
+    this.arms = mk(cap(0.048, 0.5, true), n * 2, !lite); this.thighs = mk(cap(0.072, 0.32, true), n * 2); this.shins = mk(cap(0.06, 0.34, true), n * 2, !lite)
     const ringMat = new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false })
     const ringG = new THREE.RingGeometry(0.27, 0.38, 28); ringG.rotateX(-Math.PI / 2)
     this.ring = new THREE.InstancedMesh(ringG, ringMat, n); this.ring.frustumCulled = false; this.ring.renderOrder = 2

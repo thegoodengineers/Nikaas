@@ -75,3 +75,23 @@ body.go-mode { background: #f6f7f9; }
 .go-sheet { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); display: grid; align-items: end; z-index: 20; }
 .go-sheet-card { background: #fff; border-radius: 18px 18px 0 0; padding: 18px 16px 24px; display: grid; gap: 10px; max-width: 520px; width: 100%; margin: 0 auto; }
 .go-sheet-card h2 { font: 700 20px/1.2 var(--display); margin: 0 0 4px; }
+
+/* registration and the guided route */
+.go-phone { display: flex; align-items: stretch; border: 1px solid var(--rule); border-radius: 10px; background: #fff; overflow: hidden; }
+.go-phone > span { display: grid; place-items: center; padding: 0 12px; background: #f1f4f7; color: var(--text-2); font: 700 17px/1 var(--text); border-right: 1px solid var(--rule); }
+.go-phone input { border: 0 !important; border-radius: 0 !important; flex: 1; min-width: 0; font: 600 20px/1.2 var(--text) !important; padding: 12px !important; letter-spacing: .02em; }
+.go-phone:focus-within { outline: 2px solid var(--exit); outline-offset: 1px; }
+.go-code { font: 700 30px/1.1 var(--num) !important; letter-spacing: .35em; text-align: center; padding: 12px !important; }
+.go-consent { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; font-size: 15px; line-height: 1.45; }
+.go-consent input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--exit); }
+.pf-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.go-pick { display: grid; gap: 10px; }
+.go-rooms-big .go-room-btn { padding: 16px; font-size: 18px; }
+.go-wrong-room { justify-self: start; font-size: 14px; padding: 4px 6px; }
+.go-guide { display: grid; gap: 12px; }
+.go-now { display: grid; gap: 6px; padding: 12px 14px; border-radius: 12px; background: #f1f5f9; }
+.go-now-n { font: 700 13px/1 var(--text); letter-spacing: .06em; text-transform: uppercase; color: var(--text-2); }
+.go-now b { display: grid; grid-template-columns: 36px 1fr; gap: 10px; align-items: center; font: 700 20px/1.3 var(--display); }
+.go-step-ico.big { width: 36px; height: 36px; font-size: 18px; background: var(--text-1); color: #fff; }
+.go-next { flex: 1; padding: 14px 16px; font-size: 17px; }
+.go-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }

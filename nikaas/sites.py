@@ -80,6 +80,14 @@ def save_site(site: dict) -> dict:
     for a in s["assembly"]:
         a["exits"] = [e for e in a.get("exits", []) if e in exits]
     s.setdefault("geo", None)
+    # plan pictures and walls are only written through save_media: keep the stored ones for floors that still exist
+    s.pop("media", None)
+    old = get_site(s["id"]) if site.get("id") else None
+    if old and old.get("media"):
+        floors = {f["id"] for f in s["building"].get("floors") or []} or {"_"}
+        kept = {f: m for f, m in old["media"].items() if f in floors}
+        if kept:
+            s["media"] = kept
     s["updated_at"] = time.time()
     store().put(PK, s["id"], s)
     return s
@@ -216,3 +224,91 @@ def link_floors(building: dict, tolerance_m: float = 4.0) -> tuple[dict, list[di
             have.add(frozenset((a["id"], u["id"])))
             links.append({"from": u["id"], "to": a["id"], "group": g})
     return b, links
+
+
+# ---------- plan pictures and traced walls per floor (docs/PLATFORM.md, "Media") ----------
+MEDIA_IMAGE_MAX = 4_000_000  # bytes of JPEG/PNG; Lambda requests stop at 6 MB of base64
+MEDIA_WALLS_MAX = 250_000  # characters of run-length text per floor (sites live in one DynamoDB item, 400 KB)
+
+
+def _bucket():
+    import os
+
+    return os.environ.get("PHOTO_BUCKET")
+
+
+def save_media(site_id: str, floor: str, image: str | None = None, plan: dict | None = None, walls: dict | None = None) -> dict:
+    """Store a floor's plan picture (base64 or data URL) and/or its traced wall grid with the site."""
+    import base64
+    import binascii
+
+    s = get_site(site_id)
+    if s is None:
+        raise KeyError(site_id)
+    floors = {f["id"] for f in s["building"].get("floors") or []} or {"_"}
+    if floor not in floors:
+        raise ValueError(f"unknown floor {floor}")
+    media = s.setdefault("media", {})
+    m = media.setdefault(floor, {})
+    if plan is not None:
+        try:
+            m["plan"] = {**{k: m.get("plan", {}).get(k) for k in ("key", "data")}, **{k: float(plan[k]) for k in ("x", "z", "w", "h")}}
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("plan needs x, z, w, h in metres")
+    if image is not None:
+        head, _, body = image.partition(",") if image.startswith("data:") else ("", "", image)
+        try:
+            data = base64.b64decode(body, validate=True)
+        except (binascii.Error, ValueError):
+            raise ValueError("image is not base64")
+        if len(data) > MEDIA_IMAGE_MAX:
+            raise ValueError("image over 4 MB: send a smaller JPEG")
+        kind = "png" if data[:8] == b"\x89PNG\r\n\x1a\n" else "jpeg" if data[:3] == b"\xff\xd8\xff" else None
+        if kind is None:
+            raise ValueError("image must be JPEG or PNG")
+        m.setdefault("plan", {})
+        if _bucket():
+            import boto3
+
+            key = f"sites/{site_id}/{floor}.{'png' if kind == 'png' else 'jpg'}"
+            boto3.client("s3").put_object(Bucket=_bucket(), Key=key, Body=data, ContentType=f"image/{kind}")
+            m["plan"]["key"], m["plan"]["data"] = key, None
+        else:  # local runs: keep the picture inline
+            m["plan"]["data"] = f"data:image/{kind};base64,{base64.b64encode(data).decode()}"
+    if walls is not None:
+        try:
+            g = {"res": float(walls["res"]), "x0": float(walls["x0"]), "z0": float(walls["z0"]),
+                 "cols": int(walls["cols"]), "rows": int(walls["rows"]), "rle": str(walls["rle"])}
+        except (KeyError, TypeError, ValueError):
+            raise ValueError("walls need res, x0, z0, cols, rows, rle")
+        if not (0.05 <= g["res"] <= 1 and 0 < g["cols"] <= 4000 and 0 < g["rows"] <= 4000):
+            raise ValueError("walls grid out of range")
+        if len(g["rle"]) > MEDIA_WALLS_MAX:
+            raise ValueError("walls grid too detailed: use a coarser resolution")
+        try:
+            runs = [int(r) for r in g["rle"].split(",")] if g["rle"] else []
+        except ValueError:
+            raise ValueError("walls rle must be comma-separated counts")
+        if any(r < 0 for r in runs) or sum(runs) != g["cols"] * g["rows"]:
+            raise ValueError("walls rle does not cover the grid")
+        m["walls"] = g
+    s["updated_at"] = time.time()
+    store().put(PK, s["id"], s)
+    return s
+
+
+def media_public(site: dict) -> dict:
+    """Site media for the browser: plan pictures as short-lived links (private bucket) or inline data (local)."""
+    out = {}
+    for floor, m in (site.get("media") or {}).items():
+        fm = {k: v for k, v in m.items() if k != "plan"}
+        p = m.get("plan")
+        if p and all(p.get(k) is not None for k in ("x", "z", "w", "h")):
+            url = p.get("data")
+            if not url and p.get("key") and _bucket():
+                import boto3
+
+                url = boto3.client("s3").generate_presigned_url("get_object", Params={"Bucket": _bucket(), "Key": p["key"]}, ExpiresIn=12 * 3600)
+            fm["plan"] = {"url": url, "x": p["x"], "z": p["z"], "w": p["w"], "h": p["h"]}
+        out[floor] = fm
+    return out

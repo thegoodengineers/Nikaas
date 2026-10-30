@@ -2,11 +2,15 @@
 // turned into a Plan: rooms become boxes with a door facing whatever they connect to, corridors become strips
 // along their edges, exits get an assembly point outside, and every stairwell gets a switchback shaft placed
 // beside its landings. Walls are derived from the walkable shapes so the walls and the walking area agree.
+// When the site carries a floor's plan picture and the walls traced from it (media, docs/PLATFORM.md), those walls
+// replace the derived ones there: doors are cut where the graph crosses them and nobody walks through them.
 // No DOM and no three.js: the crowd model can be tested headless on these plans.
 import { R, WALL_T, SLAB, rect, inset, inRect, type Rect, type NavNode, type NavEdge, type Nav } from './layout.ts'
 import { Walk, rectBox, segBox, type Box } from './walk.ts'
 import { rectPoly, type Plan, type PlanRoom, type PlanExit, type PlanStair, type V3 } from './plan.ts'
 import type { Seat } from './build.ts'
+import { prepareTraced, pictureOnly, finishTraced, cutStraight, dilate, wallArea, inFoot, type Traced, type Seg } from './traced.ts'
+import type { PlanImage } from '../platform/walls.ts'
 
 export type GNode = { id: string; type?: string; x: number; z: number; w?: number; d?: number; people?: number; label?: string; floor_id?: string | null }
 export type GEdge = { from: string; to: string; width?: number; length?: number; kind?: string; capacity_group?: string | null }
@@ -15,6 +19,8 @@ export type Building = { name?: string; description?: string; floors?: GFloor[] 
 export type SiteDoc = {
   id?: string; name?: string; address?: string; building: Building
   assembly?: { id?: string; label?: string; x?: number | null; z?: number | null; exits?: string[] }[] | null
+  /** per floor id ("_" for a single-floor building): the plan picture and the walls traced from it */
+  media?: Record<string, { plan?: PlanImage | null; walls?: unknown } | null> | null
 }
 
 export type GStrip = { level: number; ax: number; az: number; bx: number; bz: number; w: number; kind: 'corr' | 'door' | 'exit' | 'access'; openA: boolean; openB: boolean }
@@ -26,13 +32,17 @@ export type GShaft = {
 }
 export type GExit = { id: string; level: number; x: number; z: number; nx: number; nz: number; w: number; asm: string }
 export type GRoom = PlanRoom & { fx: number; fz: number; kind: string }
-export type WallPiece = { ax: number; az: number; bx: number; bz: number; t: number }
+export type WallPiece = { ax: number; az: number; bx: number; bz: number; t: number; src: 'room' | 'shaft' | 'strip' }
 export type GraphGeo = {
   levels: number; fh: number; wallH: number
   rooms: GRoom[]; strips: GStrip[]; doors: GDoor[]; shafts: GShaft[]; exits: GExit[]; seats: Seat[]
   bounds: Rect; site: Rect; centre: [number, number]
   asms: { id: string; label: string; x: number; z: number }[]
   walls: (level: number) => { walls: WallPiece[]; gaps: WallPiece[] }
+  /** per storey: walls traced from its plan picture and/or the picture itself, or null */
+  traced: (Traced | null)[]
+  /** the storey's traced walls already cover this point (so no derived wall, floor or door is drawn there) */
+  covered: (level: number, x: number, z: number) => boolean
 }
 
 const MAX_FIGURES = 1200
@@ -100,9 +110,9 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
   const wallH = fh - SLAB
 
   // ---------- walking graph helpers ----------
-  const nn: NavNode[] = [], ne: NavEdge[] = [], seen = new Set<string>()
+  const nn: NavNode[] = [], ne: NavEdge[] = [], ew: number[] = [], seen = new Set<string>()
   const add = (n: Omit<NavNode, 'i'>) => { nn.push({ ...n, i: nn.length }); return nn.length - 1 }
-  const link = (a: number, b: number, rail = false) => {
+  const link = (a: number, b: number, rail = false, w = 1) => {
     if (a === b || a < 0 || b < 0) return
     const k = a < b ? `${a}:${b}` : `${b}:${a}`
     if (seen.has(k)) return
@@ -110,6 +120,7 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
     const A = nn[a], C = nn[b]
     // never zero: people follow the steepest descent of distance-to-exit, so a zero edge would make them ping-pong
     ne.push({ a, b, len: Math.max(0.1, Math.hypot(A.x - C.x, A.z - C.z) + Math.abs(A.level - C.level) * 2.5), rail })
+    ew.push(w)
   }
   const push = <T>(m: Map<string, T[]>, k: string, v: T) => { const l = m.get(k); if (l) l.push(v); else m.set(k, [v]) }
 
@@ -160,7 +171,7 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
       const depth = Math.max(0.2, Math.min(0.9, (nx ? r.x1 - r.x0 : r.z1 - r.z0) / 2 - 0.1))
       const inner = add({ level: room.level, x: x - nx * depth, z: z - nz * depth, kind: 'inner', room: room.id, axis: nx ? 'x' : 'z' })
       const door = add({ level: room.level, x, z, kind: 'door', room: room.id })
-      link(inner, door)
+      link(inner, door, false, dw)
       d = { inner, door }; doorAt.set(k, d); push(inners, room.id, inner)
       doors.push({ level: room.level, x, z, nx, nz, w: dw, room: room.id })
     }
@@ -173,16 +184,16 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
     if (along > 0.6 && Math.abs(side) > 0.35) {
       const ex = d.x + d.nx * along, ez = d.z + d.nz * along
       const el = add({ level, x: ex, z: ez, kind: 'corr' })
-      link(d.door, el); link(el, tn); elbows.push(el)
+      link(d.door, el, false, dw); link(el, tn, false, dw); elbows.push(el)
       strip(level, sx, sz, ex, ez, dw, 'door'); strip(level, ex, ez, tx, tz, dw, open ? 'exit' : 'door', false, open)
-    } else { link(d.door, tn); strip(level, sx, sz, tx, tz, dw, open ? 'exit' : 'door', false, open) }
+    } else { link(d.door, tn, false, dw); strip(level, sx, sz, tx, tz, dw, open ? 'exit' : 'door', false, open) }
   }
   function roomTo(room: GRoom, t: N, w: number) {
     const dw = clamp(w, 0.9, 2.4)
     if (inRect(inset(room.r, -0.3), t.x, t.z)) { // the node sits inside the room: no door, walk straight to it
       const q = inset(room.r, Math.min(0.6, (room.r.x1 - room.r.x0) / 2 - 0.05, (room.r.z1 - room.r.z0) / 2 - 0.05))
       const inner = add({ level: room.level, x: clamp(t.x, q.x0, q.x1), z: clamp(t.z, q.z0, q.z1), kind: 'inner', room: room.id, axis: 'z' })
-      push(inners, room.id, inner); link(inner, t.nav)
+      push(inners, room.id, inner); link(inner, t.nav, false, 1.2)
       extra.push({ level: room.level, b: rectBox(t.x - 0.6, t.z - 0.6, t.x + 0.6, t.z + 0.6) })
       return
     }
@@ -202,7 +213,7 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
       const iA = add({ level: A.level, x: clamp(x - nx * 0.9, qa.x0, qa.x1), z: clamp(z - nz * 0.9, qa.z0, qa.z1), kind: 'inner', room: A.id, axis: nx ? 'x' : 'z' })
       const iC = add({ level: A.level, x: clamp(x + nx * 0.9, qc.x0, qc.x1), z: clamp(z + nz * 0.9, qc.z0, qc.z1), kind: 'inner', room: C.id, axis: nx ? 'x' : 'z' })
       const dn = add({ level: A.level, x, z, kind: 'door', room: A.id })
-      link(iA, dn); link(dn, iC); push(inners, A.id, iA); push(inners, C.id, iC)
+      link(iA, dn, false, dw); link(dn, iC, false, dw); push(inners, A.id, iA); push(inners, C.id, iC)
       strip(A.level, nn[iA].x, nn[iA].z, nn[iC].x, nn[iC].z, dw, 'door')
       doors.push({ level: A.level, x, z, nx, nz, w: dw, room: A.id })
       return
@@ -229,7 +240,7 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
     else {
       const [p, q] = a.type === 'exit' && b.type !== 'exit' ? [b, a] : [a, b] // exits at the open end
       strip(a.level, p.x, p.z, q.x, q.z, clamp(w, 1.0, 6), q.type === 'exit' ? 'exit' : 'corr', p.type === 'exit', q.type === 'exit')
-      link(p.nav, q.nav); corrEdges.push({ level: a.level, a: p.nav, b: q.nav, w: clamp(w, 1.0, 6) })
+      link(p.nav, q.nav, false, clamp(w, 1.0, 6)); corrEdges.push({ level: a.level, a: p.nav, b: q.nav, w: clamp(w, 1.0, 6) })
     }
   }
   // an elbow that lands on a corridor joins it both ways (no walking past the junction and back)
@@ -240,7 +251,7 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
       const A = nn[c.a], C = nn[c.b], dx = C.x - A.x, dz = C.z - A.z, L2 = dx * dx + dz * dz
       if (L2 < 1e-6) continue
       const t = ((E.x - A.x) * dx + (E.z - A.z) * dz) / L2
-      if (t > 0.02 && t < 0.98 && Math.hypot(A.x + dx * t - E.x, A.z + dz * t - E.z) < c.w / 2) { link(el, c.a); link(el, c.b) }
+      if (t > 0.02 && t < 0.98 && Math.hypot(A.x + dx * t - E.x, A.z + dz * t - E.z) < c.w / 2) { link(el, c.a, false, c.w); link(el, c.b, false, c.w) }
     }
   } }
   // rooms nobody linked: give them a door to the nearest corridor on their floor
@@ -251,6 +262,26 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
     for (const n of nodes.values()) if (n.type !== 'room' && n.level === r.level) { const d = Math.hypot(n.x - cx, n.z - cz); if (d < bd) { bd = d; best = n } }
     if (best) roomTo(r, best, 1.0)
   }
+
+  // ---------- traced walls and plan pictures (site media) ----------
+  const traced: (Traced | null)[] = [...Array(LV)].map(() => null)
+  for (const [key, m] of Object.entries(site?.media && typeof site.media === 'object' ? site.media : {})) {
+    const L = key === '_' ? (LV === 1 ? 0 : levelOf.get('_')) : levelOf.get(key)
+    if (L === undefined || !m || typeof m !== 'object') continue
+    const p = m.plan
+    const plan = p && typeof p.url === 'string' && p.url && [p.x, p.z, p.w, p.h].every(v => typeof v === 'number' && Number.isFinite(v)) && p.w > 0 && p.h > 0
+      ? { url: p.url, x: p.x, z: p.z, w: p.w, h: p.h } : null
+    const seeds: [number, number][] = []
+    for (const r of rooms) if (r.level === L) seeds.push([(r.r.x0 + r.r.x1) / 2, (r.r.z0 + r.r.z1) / 2])
+    for (const n of nn) if (n.level === L && n.kind !== 'exit') seeds.push([n.x, n.z])
+    for (const s of strips) if (s.level === L) seeds.push([(s.ax + s.bx) / 2, (s.az + s.bz) / 2])
+    try {
+      traced[L] = (m.walls ? prepareTraced(m.walls, plan, seeds) : null)
+        ?? (plan ? pictureOnly(plan, rooms.filter(r => r.level === L).map(r => r.r), strips.filter(s => s.level === L).map(s => stripPoly(s, s.openA ? 0 : s.w / 2, s.openB ? 0 : s.w / 2))) : null)
+    } catch { traced[L] = null } // a broken grid never stops the building from loading
+    if (traced[L] && !traced[L]!.plan && plan) traced[L]!.plan = plan
+  }
+  const tw = (L: number) => (traced[L]?.hasWalls ? traced[L] : null)
 
   // ---------- stairwells ----------
   const shafts: GShaft[] = [], stairs: PlanStair[] = []
@@ -289,6 +320,7 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
       for (const q of placed) s += area(g, q) * 100
       for (const q of roomsNear) s += area(g, q) * 10
       for (const q of sq) s += area(r, q) * 8
+      for (let L = lo; L <= hi; L++) { const t = tw(L); if (t) s += wallArea(t, g) * 30 } // keep off drawn walls
       if (s >= best.s) continue
       const ex = px + ux * back, ez = pz + uz * back // the access walk: out along the door's line, then in
       for (let k = 1; k <= 8; k++) {
@@ -307,16 +339,16 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
       const [lx, lz] = P(ld / 2, 0)
       const land = add({ level: L, x: lx, z: lz, kind: 'landing', stair: id })
       const door = add({ level: L, x: sh.px, z: sh.pz, kind: 'door', stair: id })
-      link(door, land); landing.set(L, land)
+      link(door, land, false, wf); landing.set(L, land)
       const [ix, iz] = P(0.35, 0)
       for (const a of byLevel.get(L)!) {
         const back = (a.x - sh.px) * sh.ux + (a.z - sh.pz) * sh.uz, side = -(a.x - sh.px) * sh.uz + (a.z - sh.pz) * sh.ux
         if (Math.abs(side) > 0.4 && back < -0.4) {
           const ex = sh.px + sh.ux * back, ez = sh.pz + sh.uz * back
           const el = add({ level: L, x: ex, z: ez, kind: 'corr' })
-          link(a.nav, el); link(el, door); elbows.push(el)
+          link(a.nav, el, false, aw); link(el, door, false, aw); elbows.push(el)
           strip(L, a.x, a.z, ex, ez, aw, 'access'); strip(L, ex, ez, ix, iz, aw, 'access')
-        } else { link(a.nav, door); strip(L, a.x, a.z, ix, iz, aw, 'access') }
+        } else { link(a.nav, door, false, aw); strip(L, a.x, a.z, ix, iz, aw, 'access') }
       }
     }
     const pairSeen = new Set<string>()
@@ -328,9 +360,9 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
       const lv = [L, L + k / 2, L + k / 2, L + k / 2, L + k / 2, L + k]
       const pts: [number, number][] = [[ld, q1], [ld + run, q1], [sm, q1], [sm, -q1], [ld + run, -q1], [ld, -q1]]
       const ids = pts.map(([a, b], i) => { const [x, z] = P(a, b); return add({ level: lv[i], x, z, kind: 'stair', stair: id, rail: i > 0 && i < 5 }) })
-      link(landing.get(L)!, ids[0])
+      link(landing.get(L)!, ids[0], false, wf)
       for (let i = 1; i < ids.length; i++) link(ids[i - 1], ids[i], true)
-      link(ids[5], landing.get(q.level)!)
+      link(ids[5], landing.get(q.level)!, false, wf)
     }
     const zr = shaftRect(sh), axis: 'x' | 'z' = sh.ux ? 'x' : 'z', [bx, bz] = P(ld, 0)
     stairs.push({
@@ -342,11 +374,29 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
 
   joinElbows()
 
+  // traced walls: cut a door wherever a link of the walking graph has to cross one, clear the stair shafts
+  const ways: { level: number; e: NavEdge; w: number; pts: [number, number][] }[] = []
+  for (let L = 0; L < LV; L++) {
+    const t = tw(L)
+    if (!t) continue
+    const segs: Seg[] = [], es: NavEdge[] = []
+    ne.forEach((e, k) => {
+      const A = nn[e.a], C = nn[e.b]
+      if (!e.rail && A.level === L && C.level === L) { segs.push({ ax: A.x, az: A.z, bx: C.x, bz: C.z, w: ew[k] }); es.push(e) }
+    })
+    const clear = shafts.filter(s => L >= s.lo && L <= s.hi).map(s => inset(shaftRect(s), -0.15))
+    try {
+      finishTraced(t, segs, clear, R + 0.05).forEach((pts, i) => { if (pts && pts.length > 2) ways.push({ level: L, e: es[i], w: segs[i].w, pts }) })
+    } catch { traced[L] = null }
+  }
+
   // ---------- footprint ----------
   const bounds = rect(Infinity, Infinity, -Infinity, -Infinity)
   for (const r of rooms) grow(bounds, r.r.x0, r.r.z0, r.r.x1, r.r.z1)
   for (const s of strips) for (const [x, z] of stripPoly(s, 0, 0)) grow(bounds, x, z, x, z)
   for (const s of shafts) { const q = shaftRect(s); grow(bounds, q.x0, q.z0, q.x1, q.z1) }
+  const gb = { ...bounds } // a traced outline may add a veranda or a wing, never a whole stray picture
+  for (const t of traced) if (t?.hasWalls && t.ext) grow(bounds, Math.max(t.ext.x0, gb.x0 - 15), Math.max(t.ext.z0, gb.z0 - 15), Math.min(t.ext.x1, gb.x1 + 15), Math.min(t.ext.z1, gb.z1 + 15))
   const centre: [number, number] = [(bounds.x0 + bounds.x1) / 2, (bounds.z0 + bounds.z1) / 2]
 
   // ---------- exits and assembly points ----------
@@ -399,6 +449,11 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
     walk[L].push(segBox(ax, az, bx, bz, sh.width / 2 - R - 0.1, 0))
   }
   for (const x of extra) walk[x.level].push(x.b)
+  // links that bend round traced walls: walkable along their way too (through the door cut for them)
+  for (const wy of ways) {
+    const hv = Math.max(0.2, Math.min(1.2, wy.w / 2) - R - 0.08)
+    for (let i = 0; i + 1 < wy.pts.length; i++) walk[wy.level].push(segBox(wy.pts[i][0], wy.pts[i][1], wy.pts[i + 1][0], wy.pts[i + 1][1], hv, hv))
+  }
 
   // ---------- seats: each room's people inside its rectangle ----------
   const seats: Seat[] = [], rnd = lcg(1234)
@@ -444,17 +499,20 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
   function walls(L: number) {
     const hit = wallCache.get(L)
     if (hit) return hit
-    const polys: [number, number][][] = [], cands: { a: [number, number]; b: [number, number]; t: number; own: number }[] = []
+    const polys: [number, number][][] = [], cands: { a: [number, number]; b: [number, number]; t: number; own: number; src: WallPiece['src'] }[] = []
     const outline = (pts: [number, number][], t: number, own: number, ends: boolean[]) => {
       pts.forEach((p, i) => {
         if (!ends[i]) return
         const q = pts[(i + 1) % pts.length], l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1, e = t / 2
         const ux = (q[0] - p[0]) / l, uz = (q[1] - p[1]) / l
-        cands.push({ a: [p[0] - ux * e, p[1] - uz * e], b: [q[0] + ux * e, q[1] + uz * e], t, own })
+        cands.push({ a: [p[0] - ux * e, p[1] - uz * e], b: [q[0] + ux * e, q[1] + uz * e], t, own, src })
       })
     }
+    let src: WallPiece['src'] = 'room'
     for (const r of rooms) if (r.level === L) { const p = rectPoly(r.r); outline(p, WALL_T, polys.length, [true, true, true, true]); polys.push(p) }
+    src = 'shaft'
     for (const s of shafts) if (L >= s.lo && L <= s.hi) { const p = rectPoly(shaftRect(s)); outline(p, WALL_T, polys.length, [true, true, true, true]); polys.push(p) }
+    src = 'strip'
     for (const s of strips) if (s.level === L) {
       const h = s.w / 2, p = stripPoly(s, s.openA ? 0 : h, s.openB ? 0 : h)
       outline(p, 0.14, polys.length, [true, !s.openB, true, !s.openA]); polys.push(p)
@@ -468,8 +526,8 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
       let cur = 0, prevEnd = -1
       const solid = (t0: number, t1: number) => {
         if ((t1 - t0) * len < 0.12) return
-        if (prevEnd >= 0 && (t0 - prevEnd) * len > 0.4 && (t0 - prevEnd) * len < 4.5) { const [ax, az] = at(prevEnd), [bx, bz] = at(t0); out.gaps.push({ ax, az, bx, bz, t: c.t }) }
-        const [ax, az] = at(t0), [bx, bz] = at(t1); out.walls.push({ ax, az, bx, bz, t: c.t }); prevEnd = t1
+        if (prevEnd >= 0 && (t0 - prevEnd) * len > 0.4 && (t0 - prevEnd) * len < 4.5) { const [ax, az] = at(prevEnd), [bx, bz] = at(t0); out.gaps.push({ ax, az, bx, bz, t: c.t, src: c.src }) }
+        const [ax, az] = at(t0), [bx, bz] = at(t1); out.walls.push({ ax, az, bx, bz, t: c.t, src: c.src }); prevEnd = t1
       }
       for (const [t0, t1] of iv) { if (t0 > cur) solid(cur, t0); cur = Math.max(cur, t1) }
       if (cur < 1) solid(cur, 1)
@@ -481,11 +539,71 @@ export function graphPlan(doc: Building | SiteDoc, key = 'graph'): Plan {
   // ---------- the plan ----------
   const nav: Nav = { nodes: nn, edges: ne, adj: nn.map(() => []), walk: walk.map(w => new Walk(w)) }
   for (const e of ne) { nav.adj[e.a].push({ to: e.b, len: e.len, rail: e.rail }); nav.adj[e.b].push({ to: e.a, len: e.len, rail: e.rail }) }
+  for (let L = 0; L < LV; L++) {
+    const t = tw(L)
+    if (!t) continue
+    const W = nav.walk[L]
+    W.setWalls(t)
+    // every link must be walkable: straight, round the drawn walls along its way, or (rarely) a straight cut
+    const N = nn.length, via = (nav.via ??= new Map())
+    for (const wy of ways) if (wy.level === L) {
+      via.set(wy.e.a * N + wy.e.b, wy.pts.slice(1))
+      via.set(wy.e.b * N + wy.e.a, wy.pts.slice().reverse().slice(1))
+    }
+    const links = ne.filter(e => !e.rail && nn[e.a].level === L && nn[e.b].level === L)
+    const walkable = (e: NavEdge) => {
+      const A = nn[e.a], C = nn[e.b], v = via.get(e.a * N + e.b)
+      if (!v) return W.clear(A.x, A.z, C.x, C.z) || !!W.path(A.x, A.z, C.x, C.z, 6)
+      let p: [number, number] = [A.x, A.z]
+      for (const q of v) { if (!W.clear(p[0], p[1], q[0], q[1]) && !W.path(p[0], p[1], q[0], q[1], 4)) return false; p = q }
+      return true
+    }
+    const bad = links.filter(e => !walkable(e))
+    if (bad.length) {
+      cutStraight(t, bad.map(e => ({ ax: nn[e.a].x, az: nn[e.a].z, bx: nn[e.b].x, bz: nn[e.b].z, w: ew[ne.indexOf(e)] })), R + 0.05)
+      for (const e of bad) { via.delete(e.a * N + e.b); via.delete(e.b * N + e.a) }
+      W.setWalls(t)
+    }
+    // walls nowhere near a walkable place stand low, so they never hide the building behind them
+    if (W.open) {
+      const near = dilate(W.open, t, Math.round(1.8 / t.res)), low = new Uint8Array(t.wall.length)
+      for (let i = 0; i < low.length; i++) low[i] = t.wall[i] && !near[i] ? 1 : 0
+      t.low = low
+    }
+    // everyone starts in the room as drawn (the largest walled area of its box, connected to its door): seats on a
+    // wall, or past a drawn wall, move to the nearest spot of it (and stand, as there is no desk there)
+    const avoid = dilate(t.cut, t, 1)
+    for (const room of rooms) {
+      if (room.level !== L || !room.people) continue
+      const starts = (inners.get(room.id) ?? []).map(i => [nn[i].x, nn[i].z] as [number, number])
+      const box: [number, number, number, number] = [room.r.x0 - 0.2, room.r.z0 - 0.2, room.r.x1 + 0.2, room.r.z1 + 0.2]
+      const reach = W.region(starts, box), area = W.largest(box, avoid), linked = new Set(reach)
+      const cells = area.length * t.res * t.res >= 2 && area.some(k => linked.has(k)) ? area : reach
+      if (!cells.length) continue
+      const ok = new Set(cells), taken = new Set<number>()
+      const mine = seats.filter(s => s.room === room.id)
+      const fits = mine.map(s => { const k = W.cellOf(s.x, s.z); return k >= 0 && ok.has(k) && !taken.has(k) && (taken.add(k), true) })
+      mine.forEach((s, i) => {
+        if (fits[i]) return
+        let best = -1, bd = Infinity
+        for (const k of cells) {
+          if (taken.has(k)) continue
+          const r = (k / t.cols) | 0, c = k - r * t.cols, d = (t.x0 + (c + 0.5) * t.res - s.x) ** 2 + (t.z0 + (r + 0.5) * t.res - s.z) ** 2
+          if (d < bd) { bd = d; best = k }
+        }
+        if (best < 0) best = cells[i % cells.length]
+        const r = (best / t.cols) | 0, c = best - r * t.cols
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) taken.add(best + dr * t.cols + dc)
+        s.x = t.x0 + (c + 0.5) * t.res; s.z = t.z0 + (r + 0.5) * t.res; s.sit = false
+      })
+    }
+  }
+  const covered = (L: number, x: number, z: number) => { const t = tw(L); return !!t && inFoot(t, x, z) }
   const corridorNodes = [...nodes.values()].filter(n => n.type !== 'room' && n.type !== 'exit')
   const startRooms = [...rooms].filter(r => r.people > 0 && inners.has(r.id)).sort((p, q) => q.people - p.people || q.level - p.level).slice(0, 8).map(r => r.id)
   const S = Math.max(bounds.x1 - bounds.x0, bounds.z1 - bounds.z0, 20)
   const name = String(site?.name || B.name || 'Building').replace(/\s*\(synthetic\)\s*/i, '')
-  const geo: GraphGeo = { levels: LV, fh, wallH, rooms, strips, doors, shafts, exits: gexits, seats, bounds, site: siteR, centre, asms, walls }
+  const geo: GraphGeo = { levels: LV, fh, wallH, rooms, strips, doors, shafts, exits: gexits, seats, bounds, site: siteR, centre, asms, walls, traced, covered }
   return {
     kind: 'graph', key, name, sub: `${LV} ${LV === 1 ? 'storey' : 'storeys'} · ${exits.length} ${exits.length === 1 ? 'exit' : 'exits'}${per > 1 ? ` · 1 figure = ${per} people` : ''}`,
     levels: LV, levelNames: floors.map(f => f.name), fh,

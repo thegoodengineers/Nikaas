@@ -1,5 +1,7 @@
 /* Nikaas service worker: emergency alerts while the page is closed (Web Push), and the app shell offline. */
-const CACHE = 'nikaas-shell-v1'
+const CACHE = 'nikaas-shell-v2'
+// The app is always index.html: the https bucket address has no default page, so "/" must never be requested.
+const SHELL = new URL('index.html', self.registration.scope).href
 
 self.addEventListener('install', () => self.skipWaiting())
 self.addEventListener('activate', e => e.waitUntil((async () => {
@@ -14,8 +16,12 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url)
   if (url.origin !== self.location.origin) return // the API is another origin: never cached here
   if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).then(res => { const copy = res.clone(); caches.open(CACHE).then(c => c.put('./', copy)); return res })
-      .catch(() => caches.match('./').then(r => r || Response.error())))
+    // the bucket answers "/" with an XML error: always serve the app page instead
+    const target = url.pathname.endsWith('/') ? SHELL : req.url
+    e.respondWith(fetch(target).then(res => {
+      if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(SHELL, copy)) }
+      return res.ok ? res : caches.match(SHELL).then(r => r || res)
+    }).catch(() => caches.match(SHELL).then(r => r || Response.error())))
     return
   }
   if (url.pathname.includes('/assets/') || url.pathname.includes('/fonts/') || url.pathname.includes('/icons/')) {
@@ -44,7 +50,8 @@ self.addEventListener('push', e => {
 
 self.addEventListener('notificationclick', e => {
   e.notification.close()
-  const target = new URL(e.notification.data?.url || './#/go', self.registration.scope).href
+  const raw = e.notification.data?.url || './#/go'
+  const target = new URL(raw.replace(/^\/?#/, 'index.html#').replace(/^\.\/#/, 'index.html#'), self.registration.scope).href
   e.waitUntil((async () => {
     for (const c of await self.clients.matchAll({ type: 'window', includeUncontrolled: true })) {
       if (c.url.split('#')[0] === target.split('#')[0]) { await c.navigate(target).catch(() => {}); return c.focus() }
