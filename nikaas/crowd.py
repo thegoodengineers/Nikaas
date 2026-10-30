@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 
 CRUSH_THRESHOLD = 4.0    # p/m²  — our cautious early-warning flag, below G.K. Still's 5 p/m² "Maximum" (gkstill.com)
-CONCERN_THRESHOLD = 2.7  # p/m²  — LoS E boundary; UK Green Guide cap for stadia
+CONCERN_THRESHOLD = 2.7  # p/m²  — our early 'concern' flag (Fruin LoS E/F as in our notes; primary source not checked)
 PHYSICAL_CAP = 10.0      # p/m²  — absolute physical maximum for standing humans; clamped because
                           #         the simulator stacks queuing people at grid nodes, not spread physically
 

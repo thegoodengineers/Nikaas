@@ -49,6 +49,13 @@ For stadia and spectator areas:
 **Source:** UK Home Office / Sports Grounds Safety Authority, *Guide to Safety at Sports Grounds*, 6th ed., 2018.
 https://sgsa.org.uk/greenguide/
 
+> **Check (30 Oct 18:20).** We could not access the Green Guide (a paid SGSA publication) or Fruin's original
+> tables, so the 2.7 p/m² "cap" and the LoS ranges above are **not checked against their primary sources**; treat
+> `CONCERN_THRESHOLD = 2.7` as our own early flag. A secondary source agrees with the order of magnitude we use:
+> Wikipedia, "Crowd collapses and crushes" (read 30 Oct 2026): at three or four people per square metre the risk
+> is low; "there is risk of a crush when crowd density exceeds about five people per square meter"; at six to
+> seven, people are pressed against each other and may be unable to move voluntarily.
+
 ## Chinnaswamy Stadium crush — 4 June 2025, Bengaluru
 
 11 people killed and 56 injured outside M. Chinnaswamy Stadium during the RCB IPL title celebration.
