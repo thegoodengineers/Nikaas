@@ -136,7 +136,7 @@ function SiteApp({ siteId, onChangeSite }: { siteId: string; onChangeSite: () =>
   useEffect(() => {
     if (!registered) return
     void refresh()
-    const id = setInterval(refresh, alarmOn ? 3000 : 10000)
+    const id = setInterval(refresh, alarmOn ? 3000 : 5000)
     const onMsg = (e: MessageEvent) => { if (e.data?.type === 'nikaas-push') void refresh() }
     navigator.serviceWorker?.addEventListener('message', onMsg)
     const onVis = () => { if (document.visibilityState === 'visible') void refresh() }
@@ -350,6 +350,54 @@ function Registered({ me, pushState, onPush, onTest, onRoom, onChangeNumber, onU
   )
 }
 
+/** Before the phone knows the room: which exits are open right now, so nobody waits on the screen to start moving. */
+function ExitsNow({ me }: { me: Me }) {
+  const shut = new Set(me.blocked_exits ?? [])
+  const floorName = (id: string) => {
+    const f = me.map.nodes.find(n => n[0] === id)?.[6]
+    return f ? me.site.floors.find(x => x.id === f)?.name ?? null : null
+  }
+  const open = me.site.exits.filter(([id]) => !shut.has(id)), closed = me.site.exits.filter(([id]) => shut.has(id))
+  return (
+    <div className="pf-card go-exits-now">
+      <p className="pf-eyebrow">Start moving now</p>
+      <b>Head for the nearest green EXIT sign</b>
+      <ul className="go-exit-list">
+        {open.map(([id, label]) => <li key={id} className="ok"><ExitIcon color="var(--exit)" /><span>{label}{floorName(id) && <span className="pf-muted"> · {floorName(id)}</span>}</span><span className="pf-chip ok">open</span></li>)}
+        {closed.map(([id, label]) => <li key={id} className="bad"><ExitIcon color="var(--danger, #c2410c)" /><span>{label}</span><span className="pf-chip bad">do not use</span></li>)}
+      </ul>
+      {me.hazards.length > 0 && <p className="pf-small">Avoid: {me.hazards.map(h => h.label).join(', ')}.</p>}
+      <p className="pf-small pf-muted">No lifts. Walk, do not run. Choose your room below for your own route.</p>
+    </div>
+  )
+}
+
+/** Choose your room: tap it on the plan, or pick it from a list. */
+function FindRoom({ me, onPick }: { me: Me; onPick: (id: string) => void }) {
+  const [view, setView] = useState<'map' | 'list'>(() => (me.site.rooms.length > 0 ? 'map' : 'list'))
+  const floors = me.site.floors
+  const [floor, setFloor] = useState<string | null>(() => me.person.floor ?? (floors.length ? floors[floors.length - 1].id : null))
+  const labels = Object.fromEntries(me.site.rooms.map(r => [r[0], r[1]]))
+  return (
+    <div className="go-stack">
+      <div className="go-seg" role="tablist" aria-label="Choose your room">
+        <button role="tab" aria-selected={view === 'map'} className={view === 'map' ? 'on' : ''} onClick={() => setView('map')}>Tap on the map</button>
+        <button role="tab" aria-selected={view === 'list'} className={view === 'list' ? 'on' : ''} onClick={() => setView('list')}>Pick from a list</button>
+      </div>
+      {view === 'map' ? (
+        <div className="go-map">
+          {floors.length > 1 && <FloorTabs floors={floors} value={floor} onChange={setFloor} />}
+          <div className="go-find-map" key={floor ?? 'all'} ref={el => { if (el && !el.dataset.c) { el.dataset.c = '1'; el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2 } }}>
+            <PlanView nodes={me.map.nodes} edges={me.map.edges} floor={floors.length ? floor : null} hazards={me.hazards.map(h => h.node)} blocked={me.blocked_exits}
+              onNode={id => { if (labels[id]) onPick(id) }} roomsOnly showLabels labels={labels} here={me.person.room} label="Tap your room on the plan" />
+          </div>
+          <p className="pf-muted pf-small go-legend"><span className="lg-exit" /> Exit <span className="lg-fire" /> Hazard · tap a room</p>
+        </div>
+      ) : <RoomList me={me} big onPick={onPick} />}
+    </div>
+  )
+}
+
 function RoomList({ me, onPick, big }: { me: Me; onPick: (id: string) => void; big?: boolean }) {
   const [q, setQ] = useState('')
   const floors = me.site.floors.length ? [...me.site.floors].reverse() : [{ id: null as string | null, name: '' }]
@@ -391,6 +439,8 @@ function Emergency({ me, siteId, tok, onUpdate, onSilence, silenced, onRoom }: {
   useEffect(() => { const id = setInterval(() => setNow(Date.now() / 1000), 1000); return () => clearInterval(id) }, [])
   useEffect(() => { if (route?.changed) { setChangedAt(Date.now()); navigator.vibrate?.([300, 100, 300]) } }, [route?.changed, route?.exit])
   useEffect(() => setAt(0), [route?.exit, route?.mode, p.room])
+  // a room was chosen (or changed): bring the exit card into view
+  useEffect(() => { if (p.room) window.scrollTo({ top: 0, behavior: 'smooth' }) }, [p.room])
   const status = async (status: 'safe' | 'help' | 'inside', need?: string) => {
     setWorking(status)
     const send = (extra: object = {}) => api.post<Me>(`/sites/${siteId}/status`, { token: tok, status, need, ...extra }).then(onUpdate).finally(() => setWorking(''))
@@ -410,11 +460,15 @@ function Emergency({ me, siteId, tok, onUpdate, onSilence, silenced, onRoom }: {
         {!silenced && <button className="pf-btn go-silence" onClick={onSilence}>Silence alarm sound</button>}
       </div>
       {p.status === 'safe' ? <SafeCard me={me} onBack={() => status('inside')} /> : needRoom ? (
-        <div className="pf-card go-pick">
-          <h1 className="go-title">Which room are you in?</h1>
-          <p className="pf-muted">Your exit depends on your room: each room is sent to the exit that keeps the stairs and doors from crowding.</p>
-          <RoomList me={me} big onPick={r => { setPicking(false); onRoom(r) }} />
-        </div>
+        <>
+          <ExitsNow me={me} />
+          <div className="pf-card go-pick">
+            <h1 className="go-title">Where are you?</h1>
+            <p className="pf-muted">Tap your room for your fastest route. Each room is sent to the exit that keeps stairs and doors from crowding.</p>
+            <FindRoom me={me} onPick={r => { setPicking(false); onRoom(r) }} />
+            {picking && p.room && <button className="pf-btn ghost" onClick={() => setPicking(false)}>Keep {p.room_label}</button>}
+          </div>
+        </>
       ) : !route ? (
         <div className="pf-alert warn">Working out your route…</div>
       ) : (

@@ -41,6 +41,7 @@ self.addEventListener('push', e => {
       body: m.body || '', tag: m.tag || 'nikaas', renotify: true, requireInteraction: alarm,
       icon: 'icons/icon-192.png', badge: 'icons/badge-96.png',
       vibrate: alarm ? [600, 200, 600, 200, 600, 200, 1200] : [300, 120, 300],
+      actions: alarm ? [{ action: 'route', title: 'Show my exit route' }] : [],
       data: { url: m.url || './#/go' },
     })
     // an open page refreshes straight away instead of waiting for its next poll
