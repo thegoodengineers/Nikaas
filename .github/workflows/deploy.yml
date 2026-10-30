@@ -34,7 +34,7 @@ jobs:
         with: { node-version: '22', cache: npm, cache-dependency-path: web/package-lock.json }
       - name: Python tests
         run: |
-          pip install -r requirements.txt
+          pip install -r requirements.txt boto3 # boto3 comes with the Lambda runtime, so it is not in requirements.txt
           python -m pytest -q -p no:faulthandler
       - name: Website type-check and build
         working-directory: web
