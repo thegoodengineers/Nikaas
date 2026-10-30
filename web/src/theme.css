@@ -18,7 +18,7 @@
 
   /* names used by the simulator page */
   --bg: var(--night); --card: var(--deck); --ink: var(--text-1); --muted: var(--text-2); --line: var(--rule); --accent: var(--exit);
-  --walk: var(--evac); --queue: var(--alarm); --route: #22c55e; --wall: #c9ced3; --inside: #8f9aa4;
+  --walk: var(--evac); --queue: var(--alarm); --route: #22c55e; --wall: #c9ced3; --inside: #8f9aa4; --refuge: #a855f7;
   --tile: var(--rule); --ink-2: var(--text-2); --paper: var(--deck);
 
   --display: "Bricolage Grotesque", "Segoe UI", sans-serif;

@@ -10,6 +10,7 @@ type Run = {
   frames: Frame[]; door_routes?: Record<string, string[][]>
   lower_bound_s?: number; nearest_s?: number // set for Nikaas plans
   plan?: Record<string, string>; compliance?: number; profile?: string
+  wheelchair_refuge?: number
 }
 
 type CompareResult = { label: string; compliance: number; run: Run }
@@ -40,10 +41,10 @@ const SOURCES = [
     saved: { '': 'data/frames_tower_nearest.json', 'nikaas:': 'data/frames_tower_nikaas.json' } as Record<string, string> },
 ]
 
-const STATE_VAR: Record<string, string> = { walking: '--walk', queuing: '--queue', stairs: '--stairs', inside: '--inside' }
+const STATE_VAR: Record<string, string> = { walking: '--walk', queuing: '--queue', stairs: '--stairs', inside: '--inside', refuge: '--refuge' }
 const LEGEND: [string, string, string][] = [
   ['out', 'Evacuated', '--ink'], ['stairs', 'On the stairs', '--stairs'], ['queuing', 'Queuing', '--queue'],
-  ['walking', 'Walking', '--walk'], ['inside', 'Still inside', '--inside'],
+  ['walking', 'Walking', '--walk'], ['inside', 'Still inside', '--inside'], ['refuge', '♿ At refuge point', '--refuge'],
 ]
 const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 const cssVar = (v: string) => getComputedStyle(document.documentElement).getPropertyValue(v).trim()
@@ -55,19 +56,19 @@ async function post(path: string, body: unknown) {
 }
 
 // plan 'nearest' = today's rule; 'nikaas' = Ayush's optimiser (/optimise), then simulated with that plan
-async function fetchRun(building: Building, blocked: string[], src: typeof SOURCES[number], plan: string, compliance = 1.0): Promise<Run> {
+async function fetchRun(building: Building, blocked: string[], src: typeof SOURCES[number], plan: string, compliance = 1.0, wheelchairFraction = 0): Promise<Run> {
   const SAVED = src.saved, frame_every = src.frameEvery ?? 1
   const b = blocked.slice().sort().join('+')
   const key = plan === 'nikaas' ? `nikaas:${b}` : b
   // saved runs are always 100% compliance; use live API for compliance < 1
-  if (compliance >= 1.0 && (!API || DEMO || src.offline) && key in SAVED) return (await fetch(SAVED[key])).json()
+  if (compliance >= 1.0 && wheelchairFraction === 0 && (!API || DEMO || src.offline) && key in SAVED) return (await fetch(SAVED[key])).json()
   if (!API) throw new Error('This scenario needs the live API (set VITE_API_URL).')
-  if (plan !== 'nikaas') return post('/simulate', { building, blocked, frame_every, compliance })
+  if (plan !== 'nikaas') return post('/simulate', { building, blocked, frame_every, compliance, wheelchair_fraction: wheelchairFraction })
   const [opt, nearest] = await Promise.all([
     post('/optimise', { building, blocked, simulate: true, frame_every }),
     post('/simulate', { building, blocked, frame_every: 1e6 }),
   ])
-  const run = opt.run ?? await post('/simulate', { building, blocked, plan: opt.plan, frame_every, compliance })
+  const run = opt.run ?? await post('/simulate', { building, blocked, plan: opt.plan, frame_every, compliance, wheelchair_fraction: wheelchairFraction })
   return { ...run, lower_bound_s: opt.lower_bound_s, nearest_s: nearest.total_time_s }
 }
 
@@ -84,6 +85,7 @@ export default function App() {
   const [mode3d, setMode3d] = useState(true)
   const [plan, setPlan] = useState<'nearest' | 'nikaas'>('nearest')
   const [compliance, setCompliance] = useState(1.0)
+  const [wheelchairPct, setWheelchairPct] = useState(0)
   const [qa, setQa] = useState<{ score: number; status: string; warnings: { severity: string; message: string }[] }>()
   const [comparing, setComparing] = useState(false)
   const [compareResults, setCompareResults] = useState<CompareResult[]>([])
@@ -95,11 +97,11 @@ export default function App() {
     if (!building) return
     let live = true
     setRun(undefined); setError(''); setI(0)
-    fetchRun(building, blocked, source, plan, compliance)
+    fetchRun(building, blocked, source, plan, compliance, wheelchairPct / 100)
       .then(r => { if (live) { setRun(r); if (!blocked.length) setBaseline(b => ({ ...b, [plan]: r.total_time_s })) } })
       .catch(e => live && setError(String(e.message ?? e)))
     return () => { live = false }
-  }, [building, blocked, plan, compliance])
+  }, [building, blocked, plan, compliance, wheelchairPct])
   useEffect(() => {
     if (!run || !playing) return
     const id = setInterval(() => setI(k => Math.min(k + 1, run.frames.length - 1)), 1000 / speed)
@@ -259,7 +261,7 @@ export default function App() {
                   { label: 'Full plan (100%)', compliance: 1.0 },
                 ]
                 const results = await Promise.all(
-                  scenarios.map(s => fetchRun(building, blocked, source, plan, s.compliance).then(run => ({ ...s, run })))
+                  scenarios.map(s => fetchRun(building, blocked, source, plan, s.compliance, wheelchairPct / 100).then(run => ({ ...s, run })))
                 )
                 setCompareResults(results)
               } catch (e) { setError(String((e as Error).message ?? e)) }
@@ -269,6 +271,29 @@ export default function App() {
             {comparing ? 'Running comparison…' : 'Compare Panic / Guided / Full side by side'}
           </button>
           {!API && <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 10 }}>Live API required</span>}
+        </div>
+      </div>
+      <div className="ctl-row">
+        <div className="ctl">
+          <span>Wheelchair / mobility users</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4, flexWrap: 'wrap' }}>
+            {[0, 5, 10, 20].map(v => (
+              <button key={v} className={wheelchairPct === v ? 'on' : ''} onClick={() => setWheelchairPct(v)}>
+                {v === 0 ? 'None' : `${v}%`}
+              </button>
+            ))}
+            <input type="range" min={0} max={30} step={1} value={wheelchairPct} style={{ width: 100 }}
+              aria-label="Wheelchair fraction"
+              onChange={e => setWheelchairPct(Number(e.target.value))} />
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 13, minWidth: 32 }}>
+              ♿ {wheelchairPct}%
+            </span>
+          </div>
+          {wheelchairPct > 0 && (
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+              Stair-free routes only · speed {(0.69).toFixed(2)} m/s · routed to refuge if no accessible exit
+            </div>
+          )}
         </div>
       </div>
       <div className="ctl-row">
@@ -315,6 +340,12 @@ export default function App() {
           {run?.p95_time_s !== undefined && <Stat label="95th-percentile (last 5% out)" value={`${run.p95_time_s} s`} />}
           {run?.compliance !== undefined && run.compliance < 1.0 && (
             <Stat label="Compliance modelled" value={`${Math.round(run.compliance * 100)}% follow plan · ${Math.round((1 - run.compliance) * 100)}% take nearest exit`} />
+          )}
+          {run?.wheelchair_refuge !== undefined && run.wheelchair_refuge > 0 && (
+            <div style={{ background: '#f3e8ff', border: '1px solid #a855f7', padding: '8px 10px', marginTop: 8 }}>
+              <div style={{ fontFamily: 'var(--serif)', fontSize: 22, color: '#7c3aed' }}>♿ {run.wheelchair_refuge}</div>
+              <div style={{ fontSize: 13 }}>wheelchair users at refuge points — awaiting steward assistance</div>
+            </div>
           )}
           {run?.nearest_s !== undefined && (
             <div style={{ background: '#ecfdf3', border: '1px solid var(--accent)', padding: '8px 10px', marginTop: 8 }}>

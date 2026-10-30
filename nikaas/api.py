@@ -32,6 +32,7 @@ class SimRequest(BaseModel):
     compliance: float = 1.0  # fraction of occupants who follow the plan (0-1); rest take nearest exit
     # preset profiles override compliance: "guidance" = 0.9, "mixed" = 0.65, "panic" = 0.3
     profile: str | None = None  # "guidance" | "mixed" | "panic" | null
+    wheelchair_fraction: float = 0.0  # fraction who need stair-free routes; routed to refuge if none exists
 
 _PROFILES = {"guidance": 0.9, "mixed": 0.65, "panic": 0.3}
 
@@ -85,7 +86,9 @@ def run(req: SimRequest):
         plan = req.plan or nearest_plan(b, blocked)
         compliance = _PROFILES.get(req.profile, req.compliance) if req.profile else req.compliance
         compliance = max(0.0, min(1.0, compliance))
-        out = simulate(b, plan, blocked, frame_every=max(0.25, req.frame_every), compliance=compliance)
+        wc = max(0.0, min(1.0, req.wheelchair_fraction))
+        out = simulate(b, plan, blocked, frame_every=max(0.25, req.frame_every), compliance=compliance,
+                       wheelchair_fraction=wc)
     except (KeyError, ValueError) as e:
         raise HTTPException(422, str(e))
     out["plan"] = plan

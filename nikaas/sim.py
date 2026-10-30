@@ -16,6 +16,7 @@ FT = 0.3048  # metres per foot
 # Thunderhead Pathfinder docs, "SFPE Example 1", verified 30 Oct 2026) and the SFPE Handbook chapter
 # "Employing the Hydraulic Model in Assessing Emergency Movement" (Gwynne & Rosenbaum).
 WALK_SPEED = 3.9 * FT  # 1.19 m/s unimpeded horizontal speed
+WHEELCHAIR_SPEED = 0.69  # m/s; SFPE Handbook "Accessibility and Egress" mean unimpeded wheelchair speed
 STAIR_SPEED = 0.85 * 212 * FT / 60  # 0.915 m/s along a 7/11 in stair at maximum flow
 SPECIFIC_FLOW = {  # persons / s / metre of EFFECTIVE width
     "door": 24 / 60 / FT,  # 1.312
@@ -42,11 +43,42 @@ class Person:
     path: list  # node ids, room ... exit
     leg: int = 0  # index of the edge being walked (path[leg] -> path[leg+1])
     s: float = 0.0  # metres walked on current edge
-    state: str = "inside"  # inside | walking | queuing | stairs | out
+    state: str = "inside"  # inside | walking | queuing | stairs | out | refuge
     start: float = 0.0  # pre-movement delay, s
     ox: float = 0.0  # spawn offset inside the room
     oz: float = 0.0
     t_out: float = math.nan
+    is_wheelchair: bool = False  # uses WHEELCHAIR_SPEED; cannot traverse stair edges
+
+
+def _stair_free_path(b, src, dst, blocked=()):
+    """Dijkstra that refuses stair edges. Returns (distance, [node ids]) or (inf, [])."""
+    import heapq
+    stair_pairs = {(e.a, e.b) for e in b.edges if e.kind == "stair"} | \
+                  {(e.b, e.a) for e in b.edges if e.kind == "stair"}
+    dist, prev, pq = {src: 0.0}, {}, [(0.0, src)]
+    while pq:
+        d, u = heapq.heappop(pq)
+        if u == dst:
+            break
+        if d > dist.get(u, math.inf):
+            continue
+        for v, e in b.adj[u]:
+            if v in blocked or (u, v) in stair_pairs:
+                continue
+            nd = d + e.length
+            if nd < dist.get(v, math.inf):
+                dist[v], prev[v] = nd, u
+                heapq.heappush(pq, (nd, v))
+    if dst not in prev and src != dst:
+        return math.inf, []
+    path, cur = [], dst
+    while cur != src:
+        path.append(cur); cur = prev.get(cur)
+        if cur is None:
+            return math.inf, []
+    path.append(src); path.reverse()
+    return dist.get(dst, math.inf), path
 
 
 def door_paths(b: Building, room, ex, blocked=()):
@@ -66,7 +98,7 @@ def door_paths(b: Building, room, ex, blocked=()):
 
 
 def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_every=1.0, premove=(0.0, 0.0),
-             compliance: float = 1.0, nearest: dict | None = None):
+             compliance: float = 1.0, nearest: dict | None = None, wheelchair_fraction: float = 0.0):
     """Run one evacuation. plan: room -> exit. Returns a dict in the API contract shape.
 
     compliance: fraction of occupants who follow `plan` (1.0 = everyone obeys).
@@ -85,12 +117,17 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
         edge_of[(e.a, e.b)] = e
         edge_of[(e.b, e.a)] = e
     people, pid, routes, door_routes = [], 0, {}, {}
+    wheelchair_fraction = max(0.0, min(1.0, wheelchair_fraction))
     for room, n in b.people().items():
         node = b.nodes[room]
 
-        # split occupants: compliant follow plan, rebels follow rebel_plan
-        n_compliant = round(n * compliance)
-        groups = [(plan[room], n_compliant), (rebel_plan[room], n - n_compliant)]
+        # split: wheelchair users first, then ambulatory (compliant vs rebel)
+        n_wheelchair = round(n * wheelchair_fraction)
+        n_ambulatory = n - n_wheelchair
+
+        # compliant vs rebel split applies only to ambulatory occupants
+        n_compliant = round(n_ambulatory * compliance)
+        groups = [(plan[room], n_compliant, False), (rebel_plan[room], n_ambulatory - n_compliant, False)]
 
         primary_ex = plan[room]  # used for the UI route ribbons
         if primary_ex in blocked:
@@ -101,11 +138,44 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
         door_routes[room] = [path for _, path in primary_doors]
         routes[room] = max(primary_doors, key=lambda d: d[0])[1]
 
-        for ex, count in groups:
+        # wheelchair group: find the best stair-free exit for this room
+        if n_wheelchair > 0:
+            best_wc = min(
+                ((_stair_free_path(b, room, x, blocked)[0], x) for x in b.exits if x not in blocked),
+                default=(math.inf, None),
+            )
+            if best_wc[1] is not None and best_wc[0] < math.inf:
+                groups.append((best_wc[1], n_wheelchair, True))
+            else:
+                # no stair-free exit: put them all in refuge immediately
+                for _ in range(n_wheelchair):
+                    p = Person(pid, room, primary_ex, [room, primary_ex],
+                               state="refuge", start=0.0, is_wheelchair=True,
+                               ox=(rng.random() - .5) * node.get("w", 4) * .8,
+                               oz=(rng.random() - .5) * node.get("d", 4) * .8)
+                    people.append(p); pid += 1
+
+        for ex, count, is_wc in groups:
             if count == 0:
                 continue
             if ex in blocked:
                 ex = primary_ex  # fall back to compliant exit if rebel exit is blocked
+            if is_wc:
+                _, wc_path = _stair_free_path(b, room, ex, blocked)
+                if not wc_path:
+                    for _ in range(count):
+                        p = Person(pid, room, ex, [room, ex], state="refuge", is_wheelchair=True,
+                                   ox=(rng.random() - .5) * node.get("w", 4) * .8,
+                                   oz=(rng.random() - .5) * node.get("d", 4) * .8)
+                        people.append(p); pid += 1
+                else:
+                    for _ in range(count):
+                        people.append(Person(pid, room, ex, wc_path, start=rng.uniform(*premove),
+                                             is_wheelchair=True,
+                                             ox=(rng.random() - .5) * node.get("w", 4) * .8,
+                                             oz=(rng.random() - .5) * node.get("d", 4) * .8))
+                        pid += 1
+                continue
             doors = door_paths(b, room, ex, blocked)
             if not doors:
                 doors = primary_doors  # fallback
@@ -198,6 +268,7 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
     # and a running count of people out: the loop no longer scans all occupants twice per step
     waiting = [p for p in people if p.state == "inside"]
     n_out = sum(p.state == "out" for p in people)
+    n_refuge = sum(p.state == "refuge" for p in people)
     while t <= max_t:
         # 1) people whose pre-movement ended join the queue of their first edge
         if waiting:
@@ -303,7 +374,8 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
             if p.state not in ("walking", "stairs"):
                 continue
             e = edge_of[(p.path[p.leg], p.path[p.leg + 1])]
-            p.s += (STAIR_SPEED if e.kind == "stair" else WALK_SPEED) * DT
+            speed = WHEELCHAIR_SPEED if p.is_wheelchair else (STAIR_SPEED if e.kind == "stair" else WALK_SPEED)
+            p.s += speed * DT
             if p.s >= e.length:
                 p.leg += 1
                 if p.leg == len(p.path) - 1:  # reached the exit node
@@ -326,12 +398,14 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
                 f_dict["people_3d"] = frame_3d
             frames.append(f_dict)
             next_frame += frame_every
-        if n_out == len(people):
+        if n_out + n_refuge == len(people):
             break
 
-    done = all(p.state == "out" for p in people)
+    done = all(p.state in ("out", "refuge") for p in people)
     bottleneck = max(peak_q, key=peak_q.get) if peak_q else None
     tot_time = round(max(p.t_out for p in people), 2) if done and people else None
+    # refuge people never exit; count them but exclude from timing stats
+    refuge_count = sum(p.state == "refuge" for p in people)
     t_outs = sorted(p.t_out for p in people if not math.isnan(p.t_out))
     p95 = round(t_outs[int(len(t_outs) * 0.95)] if t_outs else 0, 2)
 
@@ -378,6 +452,7 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
         "p95_time_s": p95,
         "completed": done,
         "people": len(people),
+        "wheelchair_refuge": refuge_count,
         "compliance": round(compliance, 2),
         "per_exit": exit_count,
         "bottleneck": bottleneck,
