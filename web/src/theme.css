@@ -116,7 +116,14 @@ table.data { width: 100%; border-collapse: collapse; font-size: 15px; background
 table.data th, table.data td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--rule); }
 table.data th { font-weight: 700; color: var(--text-2); background: var(--deck-2); }
 table.data td.num { font: 600 20px/1 var(--num); font-variant-numeric: tabular-nums; }
-.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 12px; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--rule); border-radius: 12px;
+  /* scroll shadows: a soft edge appears on the side that has more columns (covers scroll with the content) */
+  background: linear-gradient(90deg, var(--deck) 30%, rgba(255, 255, 255, 0)) left / 40px 100% no-repeat local,
+    linear-gradient(270deg, var(--deck) 30%, rgba(255, 255, 255, 0)) right / 40px 100% no-repeat local,
+    radial-gradient(farthest-side at 0 50%, rgba(21, 25, 30, 0.2), transparent) left / 14px 100% no-repeat scroll,
+    radial-gradient(farthest-side at 100% 50%, rgba(21, 25, 30, 0.2), transparent) right / 14px 100% no-repeat scroll, var(--deck); }
+.table-wrap table.data { background: transparent; }
+@media (max-width: 640px) { table.data { font-size: 14px; } table.data th, table.data td { padding: 9px 10px; } table.data td.num { font-size: 17px; white-space: nowrap; } }
 
 @media (max-width: 860px) {
   .incidents, .steps, .stats { grid-template-columns: 1fr; }
