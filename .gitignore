@@ -8,3 +8,4 @@ web/dist/
 web/.env
 .aws-sam/
 build/
+video/out/
