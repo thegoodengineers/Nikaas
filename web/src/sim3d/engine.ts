@@ -178,6 +178,7 @@ export class DrillEngine {
     for (const g of this.world.levels) this.root.add(g)
     for (const g of this.world.flights) this.root.add(g)
     this.world.roof.visible = false; this.root.add(this.world.roof); this.applyGlass()
+    this.addRamps()
     this.loadOverlays()
     const bc: [number, number] = [(plan.bounds.x0 + plan.bounds.x1) / 2, (plan.bounds.z0 + plan.bounds.z1) / 2]
     const asmDone = new Set<string>()
@@ -205,6 +206,37 @@ export class DrillEngine {
   // ---------- public controls (from the HUD) ----------
   setMinimap(c: HTMLCanvasElement | null) { this.minimap = c }
   setScenario(s: Scenario) { this.scenario = s }
+  /** An accessible ramp along every stair flight, laid on the line wheelchair users follow (see Sim 'rail'). */
+  private addRamps() {
+    const { nodes, adj } = this.plan.nav, FH = this.plan.fh, seen = new Set<string>()
+    const slabM = new THREE.MeshStandardMaterial({ color: '#2f6fd0', roughness: 0.55 })
+    const railM = new THREE.MeshStandardMaterial({ color: '#c9d1d9', roughness: 0.3, metalness: 0.7 })
+    for (const A of nodes) for (const e of adj[A.i]) {
+      if (!e.rail) continue
+      const B = nodes[e.to]
+      if (Math.abs(B.level - A.level) < 0.01) continue
+      const key = A.i < B.i ? `${A.i}-${B.i}` : `${B.i}-${A.i}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const lo = A.level < B.level ? A : B, hi = lo === A ? B : A
+      const grp = this.world.flights[Math.floor(lo.level + 1e-6)]
+      const dx = hi.x - lo.x, dz = hi.z - lo.z, hl = Math.hypot(dx, dz)
+      if (!grp || hl < 0.5) continue
+      const y0 = (lo.level - Math.floor(lo.level + 1e-6)) * FH, rise = (hi.level - lo.level) * FH, len = Math.hypot(hl, rise)
+      const g = new THREE.Group(); g.rotation.order = 'YXZ'
+      g.position.set((lo.x + hi.x) / 2, y0 + rise / 2, (lo.z + hi.z) / 2)
+      g.rotation.y = Math.atan2(dx, dz); g.rotation.x = -Math.atan2(rise, hl)
+      const slab = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.5, len), slabM); slab.position.y = -0.1; slab.castShadow = slab.receiveShadow = true
+      g.add(slab)
+      for (const sx of [-1, 1]) {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.05, len), railM); rail.position.set(sx * 0.46, 0.85, 0); rail.castShadow = true
+        const kerb = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.12, len), railM); kerb.position.set(sx * 0.46, 0.04, 0)
+        g.add(rail, kerb)
+        for (const t of [-0.5, 0, 0.5]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.85, 0.04), railM); post.position.set(sx * 0.46, 0.42, t * len); g.add(post) }
+      }
+      grp.add(g)
+    }
+  }
   setCrowd(profile: CrowdProfile, wheelchair: boolean) {
     this.crowdProfile = profile; this.wheelchairOn = wheelchair
     if (this.phase === 'briefing' && this.ready) this.sim.configure({ follow: CROWD_PROFILES[profile].follow, wheelchair: wheelchair ? WHEELCHAIR_SHARE : 0 })
