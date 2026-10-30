@@ -6,29 +6,28 @@
     "name": "Tirumala Venkateswara Temple",
     "floors": [{ "id": "ground", "name": "Ground Level", "elevation_m": 0 }],
     "nodes": [
-      { "id": "main_hall", "type": "room",   "x": 0,   "z": 5,  "w": 26, "d": 14, "people": 80, "label": "Main Mandapam",    "floor_id": "ground" },
-      { "id": "inner_corr", "type": "room",  "x": 0,   "z": -7, "w": 10, "d": 10, "people": 20, "label": "Inner Corridor",   "floor_id": "ground" },
-      { "id": "queue_west", "type": "room",  "x": -20, "z": 2,  "w": 8,  "d": 16, "people": 40, "label": "Queue Hall West",  "floor_id": "ground" },
-      { "id": "queue_east", "type": "room",  "x": 20,  "z": 2,  "w": 8,  "d": 16, "people": 40, "label": "Queue Hall East",  "floor_id": "ground" },
-      { "id": "exit_main",   "type": "exit", "x": 0,   "z": 18,  "floor_id": "ground" },
-      { "id": "exit_west",   "type": "exit", "x": -30, "z": 2,   "floor_id": "ground" },
-      { "id": "exit_east",   "type": "exit", "x": 30,  "z": 2,   "floor_id": "ground" },
-      { "id": "exit_back",   "type": "exit", "x": 0,   "z": -22, "floor_id": "ground" }
+      { "id": "gate_court",  "type": "room", "x": 0,   "z": 15, "w": 14, "d": 6,  "people": 24, "label": "Mahadwaram Court (Padi Kavali)",       "floor_id": "ground" },
+      { "id": "main_hall",   "type": "room", "x": 0,   "z": 5,  "w": 26, "d": 14, "people": 80, "label": "Tirumala Raya Mandapam",               "floor_id": "ground" },
+      { "id": "inner_corr",  "type": "room", "x": 0,   "z": -7, "w": 10, "d": 10, "people": 20, "label": "Bangaru Vakili and Kulasekhara Padi",  "floor_id": "ground" },
+      { "id": "queue_west",  "type": "room", "x": -20, "z": 2,  "w": 8,  "d": 16, "people": 40, "label": "Vaikuntam Queue Hall",                 "floor_id": "ground" },
+      { "id": "queue_east",  "type": "room", "x": 20,  "z": 2,  "w": 8,  "d": 16, "people": 40, "label": "Hundi and Laddu Counter Hall",         "floor_id": "ground" },
+      { "id": "exit_main",   "type": "exit", "x": 0,   "z": 22,  "label": "Mahadwaram (main gate)",             "floor_id": "ground" },
+      { "id": "exit_west",   "type": "exit", "x": -30, "z": 2,   "label": "West gate (Vaikuntam queue exit)",   "floor_id": "ground" },
+      { "id": "exit_east",   "type": "exit", "x": 30,  "z": 2,   "label": "East gate (Laddu / Annadanam exit)", "floor_id": "ground" }
     ],
     "edges": [
+      { "from": "gate_court", "to": "main_hall",  "width": 6 },
+      { "from": "gate_court", "to": "exit_main",  "width": 6 },
       { "from": "main_hall",  "to": "inner_corr", "width": 3 },
       { "from": "main_hall",  "to": "queue_west", "width": 3 },
       { "from": "main_hall",  "to": "queue_east", "width": 3 },
-      { "from": "main_hall",  "to": "exit_main",  "width": 6 },
       { "from": "queue_west", "to": "exit_west",  "width": 3 },
-      { "from": "queue_east", "to": "exit_east",  "width": 3 },
-      { "from": "inner_corr", "to": "exit_back",  "width": 3 }
+      { "from": "queue_east", "to": "exit_east",  "width": 3 }
     ]
   },
   "assembly": [
-    { "id": "asm_main",  "label": "Main Gate Assembly",  "x": 0,   "z": 34,  "exits": ["exit_main"] },
-    { "id": "asm_west",  "label": "West Gate Assembly",  "x": -44, "z": 2,   "exits": ["exit_west"] },
-    { "id": "asm_east",  "label": "East Gate Assembly",  "x": 44,  "z": 2,   "exits": ["exit_east"] },
-    { "id": "asm_back",  "label": "Back Gate Assembly",  "x": 0,   "z": -36, "exits": ["exit_back"] }
+    { "id": "asm_main",  "label": "Mahadwaram Assembly", "x": 0,   "z": 34, "exits": ["exit_main"] },
+    { "id": "asm_west",  "label": "West Gate Assembly",  "x": -44, "z": 2,  "exits": ["exit_west"] },
+    { "id": "asm_east",  "label": "East Gate Assembly",  "x": 44,  "z": 2,  "exits": ["exit_east"] }
   ]
 }

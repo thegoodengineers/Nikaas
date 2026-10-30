@@ -81,8 +81,7 @@ export function buildTempleWorld(M: Mats, seats: Seat[] = []): World {
   // prakara walls with a gate gap in each side
   b.ext(M.templeWall, -PX, 0, PS - WT, -3.5, WH, PS); b.ext(M.templeWall, 3.5, 0, PS - WT, PX, WH, PS)
   b.ext(M.templeWall, -3.5, WH - 0.5, PS - WT, 3.5, WH, PS)
-  b.ext(M.templeWall, -PX, 0, -PN, -3, WH, -PN + WT); b.ext(M.templeWall, 3, 0, -PN, PX, WH, -PN + WT)
-  b.ext(M.templeWall, -3, WH - 0.5, -PN, 3, WH, -PN + WT)
+  b.ext(M.templeWall, -PX, 0, -PN, PX, WH, -PN + WT)
   b.ext(M.templeWall, PX - WT, 0, -PN, PX, WH, -2); b.ext(M.templeWall, PX - WT, 0, 2, PX, WH, PS)
   b.ext(M.templeWall, PX - WT, WH - 0.5, -2, PX, WH, 2)
   b.ext(M.templeWall, -PX, 0, -PN, -PX + WT, WH, -2); b.ext(M.templeWall, -PX, 0, 2, -PX + WT, WH, PS)
@@ -98,7 +97,6 @@ export function buildTempleWorld(M: Mats, seats: Seat[] = []): World {
   }
 
   gopuram(b, M, 0, PS + 3.5, 16, 5.5, 3.5)
-  gopuram(b, M, 0, -PN - 3.5, 10, 4.2, 3.0)
   gopuram(b, M, PX + 3, 0, 11, 3.2, 5.0)
   gopuram(b, M, -PX - 3, 0, 11, 3.2, 5.0)
 
@@ -192,7 +190,7 @@ export function buildTempleWorld(M: Mats, seats: Seat[] = []): World {
   b.cyl(M.templeGold2, 0.9, 0.9, 0.06, 0, 3.0, -15.9, 20)
   for (const lx of [-1.8, 1.8]) { b.cyl(M.templeGold, 0.1, 0.16, 0.8, lx, 0.6, -14.8, 8); b.sph(M.lamp, 0.12, lx, 1.1, -14.8) }
   // windows (dark niches) on every gopuram tier face
-  for (const [gx, gz, gh, hx, hz] of [[0, PS + 3.5, 16, 5.5, 3.5], [0, -PN - 3.5, 10, 4.2, 3.0], [PX + 3, 0, 11, 3.2, 5.0], [-PX - 3, 0, 11, 3.2, 5.0]] as number[][]) {
+  for (const [gx, gz, gh, hx, hz] of [[0, PS + 3.5, 16, 5.5, 3.5], [PX + 3, 0, 11, 3.2, 5.0], [-PX - 3, 0, 11, 3.2, 5.0]] as number[][]) {
     let wx = hx, wz = hz, y = 1.2
     for (let t = 0; t < 7; t++) {
       const th = (gh * 0.74) / 7 * Math.pow(0.95, t)
@@ -203,13 +201,21 @@ export function buildTempleWorld(M: Mats, seats: Seat[] = []): World {
       y += th; wx *= 0.87; wz *= 0.9
     }
   }
+  // Bangaru Vakili (golden door) at the sanctum passage, Vendi Vakili (silver door) at the mandapam entrance
+  for (const sx of [-1, 1]) { b.ext(M.templeGold, sx * 1.7 - 0.2, 0, -12.5, sx * 1.7 + 0.2, 3.3, -12.1); b.ext(M.steel, sx * 4.3 - 0.2, 0, 11.7, sx * 4.3 + 0.2, 3.3, 12.1) }
+  b.ext(M.templeGold, -1.9, 3.3, -12.5, 1.9, 3.6, -12.1); b.ext(M.steel, -4.5, 3.3, 11.7, 4.5, 3.6, 12.1)
+  for (let k = 0; k < 6; k++) b.sph(M.templeGold2, 0.09, (k - 2.5) * 0.55, 3.45, -12.55, 1, 6)
+  // hundi (offering chest) and laddu counter in the east hall
+  b.ext(M.red, 19.2, 0.15, -4.2, 20.8, 1.2, -3.2); b.ext(M.templeGold, 19.1, 1.2, -4.3, 20.9, 1.32, -3.1)
+  b.ext(M.counter, 17, 0.15, 7.4, 23, 1.1, 8.4); b.ext(M.templeGold, 16.9, 1.1, 7.3, 23.1, 1.18, 8.5)
+  // Mahadwaram court: colonnade along both sides
+  for (const px of [-6.6, 6.6]) for (const pz of [13, 15.5, 18]) { b.cyl(M.templeStone, 0.3, 0.3, 3.2, px, 1.6, pz, 8); b.ext(M.templeStone, px - 0.45, 3.2, pz - 0.45, px + 0.45, 3.4, pz + 0.45) }
   // sacred tank (pushkarini) with steps, and palms
   const water = new THREE.MeshStandardMaterial({ color: '#2f7f9e', roughness: 0.1, metalness: 0.3 })
   b.ext(M.templeStone, -50, 0, 4, -34, 0.4, 18)
   b.ext(M.templeGold, -50.1, 0.4, 3.9, -33.9, 0.5, 5.2); b.ext(M.templeGold, -50.1, 0.4, 16.8, -33.9, 0.5, 18.1)
   b.ext(M.templeGold, -50.1, 0.4, 5.2, -48.8, 0.5, 16.8); b.ext(M.templeGold, -35.2, 0.4, 5.2, -33.9, 0.5, 16.8)
   b.floor(water, rect(-48.6, 5.4, -35.4, 16.6), 0.43)
-  b.sph(M.templeGold2, 0.3, -42, 0.7, 11)
   for (const [tx, tz] of [[-40, -40], [40, -40], [-42, 30], [42, 28], [-58, -10], [58, 6], [-30, 34], [30, 40], [52, -26], [-52, -30]]) {
     b.cyl(M.bark, 0.2, 0.3, 7, tx, 3.5, tz, 7)
     for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; b.rod(M.plantDark, 0.09, [tx, 7, tz], [tx + Math.cos(a) * 2.6, 6.1, tz + Math.sin(a) * 2.6], 5) }
@@ -217,7 +223,7 @@ export function buildTempleWorld(M: Mats, seats: Seat[] = []): World {
   }
 
   const pickMat = new THREE.MeshBasicMaterial({ visible: false })
-  for (const [x0, z0, x1, z1] of [[-13, -2, 13, 12], [-24, -6, -16, 10], [16, -6, 24, 10], [-5, -12, 5, -2]]) {
+  for (const [x0, z0, x1, z1] of [[-13, -2, 13, 12], [-24, -6, -16, 10], [16, -6, 24, 10], [-7, 12, 7, 18], [-5, -12, 5, -2]]) {
     const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.4, z1 - z0), pickMat)
     m.position.set((x0 + x1) / 2, 0.2, (z0 + z1) / 2); m.userData.level = 0
     picks.push(m)
