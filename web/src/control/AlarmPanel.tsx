@@ -32,13 +32,14 @@ function Standby({ data, siteId, act, origin, setOrigin, asking, setAsking }: Pr
   const [busy, setBusy] = useState(false)
   const groups = nodeGroups(b)
   const n = data.counts.checked_in
+  const alerts = data.push?.on ?? 0
   const where = origin ? `${nodeLabel(b, origin)}${floorName(b, b.nodes.find(x => x.id === origin)?.floor_id) ? `, ${floorName(b, b.nodes.find(x => x.id === origin)?.floor_id)}` : ''}` : ''
 
   const start = async () => {
     setBusy(true)
     const r = await act(() => api.post(`/sites/${encodeURIComponent(siteId)}/alarm`, {
       type, message: message.trim(), origin: origin || null, phased: multi && phased, wave_gap_s: gap,
-    }, true), `${ALARM_LABEL[type]} alarm started. Phones are being alerted.`)
+    }, true), `${ALARM_LABEL[type]} alarm started. ${alerts ? `Notifying ${alerts} ${alerts === 1 ? 'phone' : 'phones'}.` : 'No phone has notifications on.'}`)
     setBusy(false)
     setAsking(false)
     if (r) { setMessage(''); setOrigin('') }
@@ -49,7 +50,7 @@ function Standby({ data, siteId, act, origin, setOrigin, asking, setAsking }: Pr
       <span className="cr-state-dot" aria-hidden="true" />
       <div className="cr-state-main">
         <h2 id="cr-state-h">No alarm</h2>
-        <p>{n} {n === 1 ? 'phone' : 'phones'} checked in. Each gets an alert and its own route out the moment you start one.</p>
+        <p>{n} {n === 1 ? 'phone' : 'phones'} checked in, {alerts} with notifications on. Each gets an alert and its own route out the moment you start one.</p>
       </div>
       <button type="button" className="pf-btn danger cr-start-btn" onClick={() => setAsking(true)}>Start alarm…</button>
 
@@ -64,6 +65,7 @@ function Standby({ data, siteId, act, origin, setOrigin, asking, setAsking }: Pr
             ))}
           </div>
         </div>
+        {alerts === 0 && <p className="pf-alert warn pf-small">No phone in this building has notifications on, so nobody gets a pop-up. Phones see the alarm only while their page is open. Scan this building's QR code (QR codes tab) and tap Turn on alerts.</p>}
         <label className="pf-field"><span>Where it started <span className="cr-opt">optional, routes keep away from it</span></span>
           <select value={origin} onChange={e => setOrigin(e.target.value)}>
             <option value="">Not known</option>

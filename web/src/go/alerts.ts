@@ -41,9 +41,25 @@ export async function enablePush(site: string, token: string): Promise<PushState
   const want = keyBytes(public_key)
   const current = sub?.options?.applicationServerKey ? new Uint8Array(sub.options.applicationServerKey as ArrayBuffer) : null
   if (sub && current && (current.length !== want.length || current.some((v, i) => v !== want[i]))) { await sub.unsubscribe(); sub = null }
-  sub ??= await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: want })
+  // a push service that never answers must not leave the button spinning: give up after 20 s
+  sub ??= await Promise.race([
+    reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: want }),
+    new Promise<never>((_, no) => setTimeout(() => no(new Error('The push service did not answer')), 20000)),
+  ])
   await api.post(`/sites/${site}/push`, { token, subscription: sub.toJSON() })
   return 'on'
+}
+
+/** Resolves true when the service worker reports a push with this tag (the page is open), false after `ms`. */
+export function waitForPush(tag: string, ms: number): Promise<boolean> {
+  return new Promise(resolve => {
+    const sw = navigator.serviceWorker
+    if (!sw) { resolve(false); return }
+    const done = (v: boolean) => { sw.removeEventListener('message', on); clearTimeout(t); resolve(v) }
+    const on = (e: MessageEvent) => { if (e.data?.type === 'nikaas-push' && e.data.message?.tag === tag) done(true) }
+    const t = setTimeout(() => done(false), ms)
+    sw.addEventListener('message', on)
+  })
 }
 
 let ctx: AudioContext | null = null

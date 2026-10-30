@@ -684,7 +684,8 @@ def replan(sid: str, reason: str, notify: bool = True) -> dict | None:
     return a
 
 
-def _notify(sid: str, ppl: list[dict], message_for) -> None:
+def _notify(sid: str, ppl: list[dict], message_for) -> tuple[int, int]:
+    """Push to every phone in `ppl` with notifications on. Returns (accepted by the push service, failed)."""
     items = [(p["token"], p["push"]) for p in ppl if p.get("push")]
     by_tok = {p["token"]: p for p in ppl}
     codes = push.send_many(items, lambda tok: message_for(by_tok[tok]))
@@ -694,6 +695,16 @@ def _notify(sid: str, ppl: list[dict], message_for) -> None:
             if p:
                 p["push"] = None
                 _save_person(sid, p)
+    ok = sum(1 for c in codes.values() if 200 <= c < 300)
+    return ok, len(codes) - ok
+
+
+def _notified(sid: str, what: str, counts: tuple[int, int]) -> None:
+    ok, failed = counts
+    if ok + failed == 0:
+        event(sid, "warn", f"{what}: no phone in this building has notifications on, so none was notified")
+    else:
+        event(sid, "info" if not failed else "warn", f"{what}: notification sent to {ok} {'phone' if ok == 1 else 'phones'}" + (f", {failed} failed" if failed else ""))
 
 
 def start_alarm(sid: str, type_: str = "fire", message: str = "", origin: str | None = None, phased: bool = False, wave_gap_s: float = 60, link_base: str = "") -> dict:
@@ -729,7 +740,7 @@ def start_alarm(sid: str, type_: str = "fire", message: str = "", origin: str | 
             body = (f"{first}{go}eave now by the nearest open exit: {', '.join(open_exits[:3])}." + (f" Do not use {', '.join(shut[:2])}." if shut else "")
                     + " Tap to choose your room for your fastest route.")
         return {"title": title, "body": body, "tag": a["id"], "url": f"/#/go?site={sid}", "alarm": True}
-    _notify(sid, people(sid), msg)
+    _notified(sid, "Alarm", _notify(sid, people(sid), msg))
     # the text message: short and plain (one SMS part), with this person's own link to their route
     head = {"earthquake": "EARTHQUAKE", "fire": "FIRE ALARM", "gas": "GAS LEAK", "collapse": "COLLAPSE", "drill": "EVACUATION DRILL"}.get(type_, "EMERGENCY")
     first = "Drop, cover, hold on. When shaking stops, leave." if type_ == "earthquake" else "Leave now. No lifts."
@@ -746,7 +757,7 @@ def stop_alarm(sid: str) -> None:
         p["status"], p["need"], p["safe_verified"] = "inside", None, None
         _save_person(sid, p)
     event(sid, "good", "All clear. The alarm is off.")
-    _notify(sid, people(sid), lambda p: {"title": f"All clear · {site['name']}", "body": "The alarm is over. Follow staff instructions before going back in.", "tag": "all-clear", "url": f"/#/go?site={sid}"})
+    _notified(sid, "All clear", _notify(sid, people(sid), lambda p: {"title": f"All clear · {site['name']}", "body": "The alarm is over. Follow staff instructions before going back in.", "tag": "all-clear", "url": f"/#/go?site={sid}"}))
     _text_people(sid, people(sid), lambda p: f"ALL CLEAR at {_ascii(site['name'])[:40]}. The emergency is over. Follow staff instructions before going back in.", "all clear")
 
 
