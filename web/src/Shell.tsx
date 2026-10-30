@@ -5,6 +5,7 @@ import App from './App.tsx'
 import Challenge from './Challenge.tsx'
 import Evidence from './Evidence.tsx'
 import Drill from './Drill.tsx'
+import Sim3D from './sim3d/Sim3D.tsx'
 import Phone from './Phone.tsx'
 import Sign from './Sign.tsx'
 
@@ -12,6 +13,7 @@ import Sign from './Sign.tsx'
 const PAGES: Record<string, { label: string; render: () => React.ReactElement }> = {
   '': { label: 'Home', render: () => <Home /> },
   twin: { label: 'Twin', render: () => <App /> },
+  sim: { label: '3D Sim', render: () => <Sim3D /> },
   beat: { label: 'Beat Nikaas', render: () => <Challenge /> },
   drill: { label: 'Live drill', render: () => <Drill /> },
   evidence: { label: 'Evidence', render: () => <Evidence /> },
@@ -34,6 +36,7 @@ export default function Shell() {
   }, [])
   if (route === 'me') return <Phone /> // the judge's phone: no site chrome
   if (route === 'sign') return <Sign /> // a phone taped beside a door: a live exit sign
+  if (route === 'sim') return <Sim3D /> // full-screen 3D evacuation game with its own HUD
   const page = PAGES[route] ?? PAGES['']
   return (
     <>
