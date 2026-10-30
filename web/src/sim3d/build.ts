@@ -480,6 +480,8 @@ export type World = {
   levels: any[]; flights: any[]; roof: any; site: any; seats: Seat[]; picks: any[]; lights: any[][]
   /** plan pictures laid on the floors (graph buildings with site media); `userData.url` is the picture to load */
   overlays?: any[]
+  /** temple scene: the hall-wall material, see-through while the roof is off */
+  seeThrough?: any
 }
 
 export function buildWorld(M: Mats): World {

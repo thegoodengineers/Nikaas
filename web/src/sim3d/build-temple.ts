@@ -3,7 +3,7 @@
 // queue halls and a golden vimana over the sanctum. Positions follow data/tirumala_temple.json.
 import * as THREE from 'three'
 import { rect } from './layout.ts'
-import { Batch, type World } from './build.ts'
+import { Batch, type Seat, type World } from './build.ts'
 import type { Mats } from './materials.ts'
 
 function gopuram(b: Batch, M: Mats, cx: number, cz: number, totalH: number, hx: number, hz: number) {
@@ -57,8 +57,9 @@ function vimana(b: Batch, M: Mats, cx: number, cz: number, hw: number, y0: numbe
   void base
 }
 
-export function buildTempleWorld(M: Mats): World {
-  const b = new Batch()
+export function buildTempleWorld(M: Mats, seats: Seat[] = []): World {
+  const b = new Batch(), R = new Batch(), H = new Batch()
+  const glass = (M.templeStone as any).clone(); glass.transparent = true; glass.opacity = 0.2; glass.depthWrite = false; glass.userData.noShadow = true
   const level = new THREE.Group(); level.name = 'level-0'
   const site = new THREE.Group(); site.name = 'site'
   const roof = new THREE.Group(); roof.name = 'roof'
@@ -82,7 +83,10 @@ export function buildTempleWorld(M: Mats): World {
   b.ext(M.templeWall, PX - WT, WH - 0.5, -2, PX, WH, 2)
   b.ext(M.templeWall, -PX, 0, -PN, -PX + WT, WH, -2); b.ext(M.templeWall, -PX, 0, 2, -PX + WT, WH, PS)
   b.ext(M.templeWall, -PX, WH - 0.5, -2, -PX + WT, WH, 2)
-  b.ext(M.templeStone, -PX - 0.15, WH, -PN - 0.15, PX + 0.15, WH + 0.2, PS + 0.15)
+  b.ext(M.templeStone, -PX - 0.15, WH, -PN - 0.15, PX + 0.15, WH + 0.2, -PN + WT + 0.15)
+  b.ext(M.templeStone, -PX - 0.15, WH, PS - WT - 0.15, PX + 0.15, WH + 0.2, PS + 0.15)
+  b.ext(M.templeStone, -PX - 0.15, WH, -PN, -PX + WT + 0.15, WH + 0.2, PS)
+  b.ext(M.templeStone, PX - WT - 0.15, WH, -PN, PX + 0.15, WH + 0.2, PS)
   for (const [cx, cz] of [[-PX, -PN], [PX, -PN], [-PX, PS], [PX, PS]]) {
     b.ext(M.templeWall, cx - 1, 0, cz - 1, cx + 1, WH + 1.4, cz + 1)
     b.sph(M.gopuramCream, 1.0, cx, WH + 2.2, cz, 0.45)
@@ -96,13 +100,13 @@ export function buildTempleWorld(M: Mats): World {
 
   // mandapam
   b.floor(M.marble, rect(-13, -2, 13, 12), 0.15)
-  b.ext(M.templeStone, -13, MH, -2.8, 13, MH + 0.45, 12)
-  b.ext(M.templeStone, -13, MH + 0.45, -2.8, 13, MH + 0.6, 12)
-  b.ext(M.templeStone, -13, 0, 11.2, -4, MH, 12); b.ext(M.templeStone, 4, 0, 11.2, 13, MH, 12)
-  b.ext(M.templeStone, -4, 2.9, 11.2, 4, MH, 12)
-  b.ext(M.templeStone, 12.2, 0, -2, 13, MH, 12); b.ext(M.templeStone, -13, 0, -2, -12.2, MH, 12)
-  b.ext(M.templeStone, -13, 0, -2.8, -3, MH, -2); b.ext(M.templeStone, 3, 0, -2.8, 13, MH, -2)
-  b.ext(M.templeStone, -3, 2.9, -2.8, 3, MH, -2)
+  R.ext(M.templeStone, -13, MH, -2.8, 13, MH + 0.45, 12)
+  R.ext(M.templeStone, -13, MH + 0.45, -2.8, 13, MH + 0.6, 12)
+  H.ext(glass, -13, 0, 11.2, -4, MH, 12); H.ext(glass, 4, 0, 11.2, 13, MH, 12)
+  H.ext(glass, -4, 2.9, 11.2, 4, MH, 12)
+  H.ext(glass, 12.2, 0, -2, 13, MH, 12); H.ext(glass, -13, 0, -2, -12.2, MH, 12)
+  H.ext(glass, -13, 0, -2.8, -3, MH, -2); H.ext(glass, 3, 0, -2.8, 13, MH, -2)
+  H.ext(glass, -3, 2.9, -2.8, 3, MH, -2)
   const colH = MH - 0.85
   for (const cx of [-8, 0, 8]) for (const cz of [1, 6, 10]) {
     b.ext(M.templeStone, cx - 0.65, 0.15, cz - 0.65, cx + 0.65, 0.5, cz + 0.65)
@@ -111,28 +115,28 @@ export function buildTempleWorld(M: Mats): World {
     b.ext(M.templeStone, cx - 0.72, 0.8 + colH, cz - 0.72, cx + 0.72, MH, cz + 0.72)
   }
   // mandapam dome with golden finial
-  b.sph(M.gopuramCream, 4.2, 0, MH + 0.6, 5, 0.55, 14)
-  b.cyl(M.templeGold2, 0.08, 0.22, 1.6, 0, MH + 0.6 + 2.3 + 0.8, 5)
-  b.sph(M.templeGold2, 0.35, 0, MH + 0.6 + 2.3 + 1.8, 5)
+  R.sph(M.gopuramCream, 4.2, 0, MH + 0.6, 5, 0.55, 14)
+  R.cyl(M.templeGold2, 0.08, 0.22, 1.6, 0, MH + 0.6 + 2.3 + 0.8, 5)
+  R.sph(M.templeGold2, 0.35, 0, MH + 0.6 + 2.3 + 1.8, 5)
 
   // queue halls
   for (const [sx, ex] of [[-24, -16], [16, 24]]) {
     const east = sx > 0, innerX0 = east ? sx : ex - 0.8, innerX1 = east ? sx + 0.8 : ex
     b.floor(M.checker, rect(sx, -6, ex, 10), 0.15)
-    b.ext(M.templeStone, sx, QH, -6, ex, QH + 0.35, 10)
-    b.ext(M.templeStone, sx, 0, 9.2, ex, QH, 10); b.ext(M.templeStone, sx, 0, -6, ex, QH, -5.2)
-    b.ext(M.templeStone, east ? ex - 0.8 : sx, 0, -6, east ? ex : sx + 0.8, QH, 10)
-    b.ext(M.templeStone, innerX0, 0, -6, innerX1, QH, -1.5); b.ext(M.templeStone, innerX0, 0, 4, innerX1, QH, 10)
-    b.ext(M.templeStone, innerX0, 2.8, -1.5, innerX1, QH, 4)
+    R.ext(M.templeStone, sx, QH, -6, ex, QH + 0.35, 10)
+    H.ext(glass, sx, 0, 9.2, ex, QH, 10); H.ext(glass, sx, 0, -6, ex, QH, -5.2)
+    H.ext(glass, east ? ex - 0.8 : sx, 0, -6, east ? ex : sx + 0.8, QH, 10)
+    H.ext(glass, innerX0, 0, -6, innerX1, QH, -1.5); H.ext(glass, innerX0, 0, 4, innerX1, QH, 10)
+    H.ext(glass, innerX0, 2.8, -1.5, innerX1, QH, 4)
     for (const cz of [-2, 4]) b.cyl(M.templeStone, 0.3, 0.3, QH - 0.4, (sx + ex) / 2, (QH - 0.4) / 2, cz, 8)
-    b.sph(M.gopuramCream, 2.2, (sx + ex) / 2, QH + 0.35, 2, 0.5, 12)
-    b.cyl(M.templeGold2, 0.05, 0.14, 1.0, (sx + ex) / 2, QH + 0.35 + 1.5, 2)
+    R.sph(M.gopuramCream, 2.2, (sx + ex) / 2, QH + 0.35, 2, 0.5, 12)
+    R.cyl(M.templeGold2, 0.05, 0.14, 1.0, (sx + ex) / 2, QH + 0.35 + 1.5, 2)
   }
 
   // inner corridor
   b.floor(M.marble, rect(-5, -12, 5, -2), 0.15)
-  b.ext(M.templeStone, -5, IH, -12, 5, IH + 0.35, -2)
-  b.ext(M.templeStone, -5, 0, -12, -4.2, IH, -2); b.ext(M.templeStone, 4.2, 0, -12, 5, IH, -2)
+  R.ext(M.templeStone, -5, IH, -12, 5, IH + 0.35, -2)
+  H.ext(glass, -5, 0, -12, -4.2, IH, -2); H.ext(glass, 4.2, 0, -12, 5, IH, -2)
 
   // sanctum
   b.floor(M.marble, rect(-4.6, -18, 4.6, -12), 0.2)
@@ -167,6 +171,6 @@ export function buildTempleWorld(M: Mats): World {
   const glow = new THREE.PointLight(new THREE.Color(1.5, 0.9, 0.25), 22, 14, 2)
   glow.position.set(0, 4, -15); lights[0].push(glow); level.add(glow)
 
-  b.flush(level)
-  return { levels: [level], flights: [], roof, site, seats: [], picks, lights }
+  b.flush(level); H.flush(level, false); R.flush(roof)
+  return { levels: [level], flights: [], roof, site, seats, picks, lights, seeThrough: glass }
 }

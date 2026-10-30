@@ -236,7 +236,7 @@ function DrillRun({ plan, source, opts, onRestart }: { plan: Plan; source: Sourc
           )}
           <div className="d-seg" role="group" aria-label="View options">
             {LV > 1 && <button className={hud?.explode ? 'on' : ''} aria-pressed={!!hud?.explode} onClick={() => e?.setExplode(!hud?.explode)} title="Separate the floors (X)">Separate floors</button>}
-            <button className={hud?.roof ? 'on' : ''} aria-pressed={!!hud?.roof} onClick={() => e?.setRoof(!hud?.roof)}>Roof</button>
+            <button className={hud?.roof ? 'on' : ''} aria-pressed={!!hud?.roof} onClick={() => e?.setRoof(!hud?.roof)}>{plan.key.endsWith('tirumala_temple.json') ? 'Solid roof & walls' : 'Roof'}</button>
             {hud?.overlay != null && <button className={hud.overlay ? 'on' : ''} aria-pressed={hud.overlay} onClick={() => e?.setOverlay(!hud.overlay)} title="The evacuation plan picture on the floor (P)">Plan overlay</button>}
             <button className={hud?.cinematic ? 'on' : ''} aria-pressed={!!hud?.cinematic} onClick={() => e?.setCinematic(!hud?.cinematic)} title="Automatic camera (C)">Auto camera</button>
           </div>

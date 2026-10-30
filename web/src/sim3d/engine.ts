@@ -168,11 +168,11 @@ export class DrillEngine {
     const all: any[] = []
     for (const v of Object.values(this.M)) { if (Array.isArray(v)) all.push(...v); else all.push(v) }
     for (const m of all) if (m.isMeshStandardMaterial) m.envMapIntensity = 0.42
-    this.world = plan.key.endsWith('tirumala_temple.json') ? buildTempleWorld(this.M) : plan.geo ? buildGraphWorld(this.M, plan.geo) : buildWorld(this.M)
+    this.world = plan.key.endsWith('tirumala_temple.json') ? buildTempleWorld(this.M, plan.geo?.seats ?? []) : plan.geo ? buildGraphWorld(this.M, plan.geo) : buildWorld(this.M)
     scene.add(this.root, this.world.site)
     for (const g of this.world.levels) this.root.add(g)
     for (const g of this.world.flights) this.root.add(g)
-    this.world.roof.visible = false; this.root.add(this.world.roof)
+    this.world.roof.visible = false; this.root.add(this.world.roof); this.applyGlass()
     this.loadOverlays()
     const bc: [number, number] = [(plan.bounds.x0 + plan.bounds.x1) / 2, (plan.bounds.z0 + plan.bounds.z1) / 2]
     const asmDone = new Set<string>()
@@ -219,7 +219,8 @@ export class DrillEngine {
   setMapLevel(L: number) { this.mapLevel = L }
   setExplode(on: boolean) { this.explodeTarget = on ? 1 : 0 }
   setCinematic(on: boolean) { this.cinematic = on; if (!on) { this.tween = null; this.controls.autoRotate = false } }
-  setRoof(on: boolean) { this.roofOn = on }
+  setRoof(on: boolean) { this.roofOn = on; this.applyGlass() }
+  private applyGlass() { const g = this.world?.seeThrough; if (g) { g.opacity = this.roofOn ? 1 : 0.2; g.transparent = !this.roofOn; g.depthWrite = this.roofOn; g.needsUpdate = true } }
   setMuted(m: boolean) { this.sound.setMuted(m) }
   setFlash(f: boolean) { this.flash = f }
   setOverlay(on: boolean) { this.overlayOn = on; for (const m of this.world?.overlays ?? []) m.visible = on && !!m.material.map; this.emitHud() }
@@ -669,7 +670,7 @@ export class DrillEngine {
     this.maxLevel.value = this.focus
     this.world.levels.forEach((g: any, L: number) => { g.position.y = this.floorY(L); g.visible = L <= this.focus })
     this.world.flights.forEach((g: any, L: number) => { g.position.y = this.floorY(L); g.scale.y = this.step.value / FH; g.visible = L + 1 <= this.focus })
-    this.world.roof.position.y = this.floorY(LV); this.world.roof.visible = this.roofOn && this.focus === LV - 1
+    if (!this.world.seeThrough) this.world.roof.position.y = this.floorY(LV); this.world.roof.visible = this.roofOn && this.focus === LV - 1
     for (const e of this.plan.exits) if (e.level) this.beacons[e.id].group.position.y = this.floorY(e.level)
     // shaking
     const quaking = sim.t < this.quakeUntil
