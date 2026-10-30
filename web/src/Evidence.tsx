@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 type Result = { building: string; plan: string; blocked: string; people: number; total_time_s: number; bottleneck: string; peak_queue: number; commit: string }
 type Wow = { building: string; blocked: string; people: number; nearest_s: number; nikaas_s: number; saved_s: number; pct_saved: number; lower_bound_s: number; gap_s: number }
+type Stadium = { plan: string; people: number; total_time_s: number; max_density: number; worst_edge: string; lower_bound_s: number | null }
 type Validation = { case: string; published_s: number; ours_s: number; error_pct: number; commit: string }
 
 const NAMES: Record<string, string> = {
@@ -16,10 +17,12 @@ export default function Evidence() {
   const [rows, setRows] = useState<Result[]>([])
   const [wow, setWow] = useState<Wow[]>([])
   const [val, setVal] = useState<Validation>()
+  const [stadium, setStadium] = useState<Stadium[]>([])
   useEffect(() => {
     fetch('data/results.json').then(r => r.json()).then(setRows).catch(() => {})
     fetch('data/wow.json').then(r => r.json()).then(setWow).catch(() => {})
     fetch('data/validation.json').then(r => r.json()).then(setVal).catch(() => {})
+    fetch('data/stadium.json').then(r => r.json()).then(setStadium).catch(() => {})
   }, [])
   return (
     <div className="page">
@@ -40,6 +43,19 @@ export default function Evidence() {
             <td className="num">{r.nearest_s} s</td><td className="num">{r.nikaas_s} s</td><td className="num">{r.pct_saved}%</td><td className="num">{r.lower_bound_s} s</td></tr>))}</tbody>
       </table></div>
       <p className="sources">“Fastest possible” is a proven lower bound from a time-expanded network-flow model (Ford and Fulkerson, 1962). No plan can beat it with the same exits and widths.</p>
+
+      <h3 style={{ marginTop: 40 }}>At stadium scale</h3>
+      <p>
+        The representative stadium holds 14,600 people. With everyone taking the nearest gate, our run did not finish within the
+        simulator’s 30-minute cap. Scaled to {stadium[0]?.people.toLocaleString('en-IN') ?? '…'} people with the same gates and widths:
+      </p>
+      <div className="table-wrap"><table className="data">
+        <thead><tr><th>Plan</th><th>People</th><th>Movement time</th><th>Peak density</th><th>Fastest possible ≥</th></tr></thead>
+        <tbody>{stadium.map(r => (
+          <tr key={r.plan}><td>{r.plan === 'nikaas' ? 'Nikaas plan' : 'Nearest exit'}</td><td className="num">{r.people}</td>
+            <td className="num">{r.total_time_s} s</td><td className="num">{r.max_density} p/m² ({r.worst_edge})</td><td className="num">{r.lower_bound_s ? `${r.lower_bound_s} s` : '-'}</td></tr>))}</tbody>
+      </table></div>
+      <p className="sources">Densities are estimated from the flow model, not a spatial crowd model, and capped at 10 p/m². Thresholds and their sources are in docs/CROWD_RESEARCH.md.</p>
 
       <h3 style={{ marginTop: 40 }}>Every scenario we ran</h3>
       <div className="table-wrap"><table className="data">

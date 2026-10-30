@@ -1,0 +1,18 @@
+[
+ {
+  "plan": "nearest",
+  "people": 2001,
+  "total_time_s": 348.5,
+  "max_density": 2.69,
+  "worst_edge": "cse-cn2",
+  "lower_bound_s": null
+ },
+ {
+  "plan": "nikaas",
+  "people": 2001,
+  "total_time_s": 203.0,
+  "max_density": 1.61,
+  "worst_edge": "cse-cn2",
+  "lower_bound_s": 107.11
+ }
+]

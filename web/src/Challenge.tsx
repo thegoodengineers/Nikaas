@@ -16,7 +16,7 @@ export default function Challenge() {
     <div className="page">
       <h2>Beat Nikaas</h2>
       <p className="lede">
-        Here is the IIT Kharagpur museum floor with 507 people in it. Send each room to an exit yourself, then time your plan.
+        Here is the IIT Kharagpur museum floor with {building ? building.nodes.reduce((n, x) => n + ((x as { people?: number }).people ?? 0), 0) : '…'} people in it. Send each room to an exit yourself, then time your plan.
         The list starts from today’s rule, everyone to the nearest exit. Nikaas has already planned the same floor.
       </p>
       <figure style={{ margin: '20px 0', maxWidth: 720 }}>

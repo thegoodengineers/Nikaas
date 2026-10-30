@@ -23,6 +23,7 @@ def test_drill_reroutes_rooms_when_their_exit_is_blocked():
     assert set(used_main) <= set(s2["changed"])  # every room that lost its exit gets an alert
     phone = c.get("/drill", params={"room": used_main[0], "since": s1["version"]}).json()
     assert phone["alert"] and phone["updated"] and phone["exit"] != "MAIN" and phone["blocked_labels"]
+    assert phone["blocked"] == ["MAIN"]  # the phone map marks the fire
 
 
 def test_unknown_room_is_a_clear_404():

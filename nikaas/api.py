@@ -223,4 +223,4 @@ def drill_get(room: str | None = None, since: int = 0):
     if room not in s["rooms"]:
         raise HTTPException(404, f"unknown room {room}")
     return {"version": s["version"], "updated": s["version"] > since, "room": room, "room_label": s["room_labels"].get(room, room),
-            "blocked_labels": s["blocked_labels"], "alert": room in s["changed"], "map": s.get("map"), **s["rooms"][room]}
+            "blocked": s["blocked"], "blocked_labels": s["blocked_labels"], "alert": room in s["changed"], "map": s.get("map"), **s["rooms"][room]}

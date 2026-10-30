@@ -11,7 +11,7 @@ type Run = { frames: Frame[]; door_routes?: Record<string, string[][]>; bottlene
 const CHAPTERS = [
   { at: 0.00, title: 'The map on the wall.', body: 'Every building has one. It says “go to the nearest exit”.' },
   { at: 0.16, title: 'It becomes a building.', body: 'Rooms, doors, corridors and stairs, read from the photo and checked before anything is trusted.' },
-  { at: 0.34, title: '507 people take the nearest exit.', body: 'Each door and stair lets through only as many people per second as its width allows.' },
+  { at: 0.34, title: '{people} people take the nearest exit.', body: 'Each door and stair lets through only as many people per second as its width allows.' },
   { at: 0.52, title: 'One door jams.', body: 'Everyone near the verandah door picks the same way out. The queue grows while other exits wait.' },
   { at: 0.70, title: 'Nikaas re-plans.', body: 'Each room gets the exit that empties the building fastest. The green routes are the new plan.' },
   { at: 0.88, title: '', body: '' }, // the number
@@ -20,6 +20,7 @@ const CHAPTERS = [
 // Every number on this page is loaded from files generated out of runs/.
 export default function Home() {
   const [val, setVal] = useState<Validation>()
+  const [qa, setQa] = useState<{ score: number }>()
   const [wow, setWow] = useState<Wow[]>([])
   const [building, setBuilding] = useState<Building>()
   const [nearest, setNearest] = useState<Run>()
@@ -30,6 +31,7 @@ export default function Home() {
 
   useEffect(() => {
     fetch('data/validation.json').then(r => r.json()).then(setVal).catch(() => {})
+    fetch('data/vision_nova_pro_qa.json').then(r => r.json()).then(setQa).catch(() => {})
     fetch('data/wow.json').then(r => r.json()).then(setWow).catch(() => {})
     fetch('data/iit_kgp_museum.json').then(r => r.json()).then(setBuilding).catch(() => {})
     fetch('data/frames_iit_kgp_nearest.json').then(r => r.json()).then(setNearest).catch(() => {})
@@ -74,7 +76,7 @@ export default function Home() {
           <div className="film-text">
             {ch < CHAPTERS.length - 1 ? (
               <div key={ch} className="film-card">
-                <h2>{CHAPTERS[ch].title}</h2>
+                <h2>{CHAPTERS[ch].title.replace('{people}', String(iit?.people ?? '…'))}</h2>
                 <p>{CHAPTERS[ch].body}</p>
               </div>
             ) : (
@@ -123,6 +125,30 @@ export default function Home() {
             <li><h3>Simulate every person</h3><p>Flow limits per metre of door and stair width, validated against the SFPE handbook.</p></li>
             <li><h3>Plan and re-plan</h3><p>Each room gets an exit. Block a stair and the plan is rebuilt in seconds.</p></li>
           </ol>
+        </section>
+
+        <section className="section faq">
+          <h2>Questions a fire engineer would ask.</h2>
+          <details>
+            <summary>How do you know the simulator is right?</summary>
+            <p>It reproduces the worked evacuation example in the SFPE fire-engineering guide: {val ? `${val.ours_s} s against the published ${val.published_s} s` : '…'}. Doors, corridors and stairs pass only as many people per second as their effective width allows, using the handbook’s flow rates. The check runs as a test on every change.</p>
+          </details>
+          <details>
+            <summary>Better than the nearest exit, but is the plan any good?</summary>
+            <p>We also compute a proven lower bound: a network-flow model that no plan can beat with the same exits and widths. On the IIT Kharagpur floor the Nikaas plan is {iit ? `${iit.gap_s} s above that bound (${iit.nikaas_s} s against ${iit.lower_bound_s} s)` : '…'}. Every row is on the Evidence page.</p>
+          </details>
+          <details>
+            <summary>What if the photo is read wrong?</summary>
+            <p>Nothing is trusted straight from the photo. A quality check scores the building first: missing exits, exits too narrow for the people behind them, too few exits under the National Building Code. The museum read by Amazon Nova Pro scored {qa ? `${qa.score} out of 100` : '…'}: it found only one exit, too narrow for everyone behind it. The Twin shows those warnings beside it, and we plan with the hand-checked building.</p>
+          </details>
+          <details>
+            <summary>Is this for a real fire?</summary>
+            <p>Today it is for planning and drills: which room should use which exit, and what changes when a stair is blocked. Re-planning runs on AWS in seconds. The times are movement times; detection, alarm and reaction time come on top and an exit plan does not change them.</p>
+          </details>
+          <details>
+            <summary>Why not use existing egress software?</summary>
+            <p>Tools such as Pathfinder and MassMotion are built for fire engineers working from CAD or BIM models. Many buildings have no such model. They do have the evacuation map on the wall, and Nikaas starts from that photo.</p>
+          </details>
         </section>
 
         <section className="closing">

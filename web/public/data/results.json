@@ -100,6 +100,16 @@
   "commit": "36c9916"
  },
  {
+  "building": "stadium_gates.json",
+  "plan": "nearest",
+  "blocked": "",
+  "people": 14600,
+  "total_time_s": null,
+  "bottleneck": "cn2-GATE_S",
+  "peak_queue": 4005,
+  "commit": "5f38644"
+ },
+ {
   "building": "whatif_lab_block_seminar_x2.json",
   "plan": "nearest",
   "blocked": "",

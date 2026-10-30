@@ -5,7 +5,7 @@ const API = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/,
 type MapNode = [string, string, number, number, number, number] // id, type, x, z, w, d
 type Me = {
   version: number; updated: boolean; room: string; room_label: string; exit: string; exit_label: string
-  distance_m: number; walk_s: number; path: string[]; alert: boolean; blocked_labels: string[]
+  distance_m: number; walk_s: number; path: string[]; alert: boolean; blocked: string[]; blocked_labels: string[]
   map?: { nodes: MapNode[]; edges: [string, string][] }
 }
 type State = { room_labels: Record<string, string>; version: number }
@@ -95,7 +95,7 @@ function MiniMap({ me }: { me: Me }) {
       {m.edges.map(([a, b], k) => pos[a] && pos[b] && <line key={k} x1={pos[a][2]} y1={pos[a][3]} x2={pos[b][2]} y2={pos[b][3]} className="pm-walk" />)}
       {m.nodes.filter(n => n[1] === 'room').map(n => <rect key={n[0]} x={n[2] - n[4] / 2} y={n[3] - n[5] / 2} width={n[4]} height={n[5]} className={n[0] === me.room ? 'pm-room pm-here' : 'pm-room'} />)}
       <polyline points={pts} className="pm-route" />
-      {m.nodes.filter(n => n[1] === 'exit').map(n => <circle key={n[0]} cx={n[2]} cy={n[3]} r={2.2} className={n[0] === me.exit ? 'pm-exit pm-mine' : me.blocked_labels.length && n[0] !== me.exit ? 'pm-exit' : 'pm-exit'} />)}
+      {m.nodes.filter(n => n[1] === 'exit').map(n => <circle key={n[0]} cx={n[2]} cy={n[3]} r={2.2} className={n[0] === me.exit ? 'pm-exit pm-mine' : me.blocked?.includes(n[0]) ? 'pm-exit pm-fire' : 'pm-exit'} />)}
       {here && <circle cx={here[2]} cy={here[3]} r={1.8} className="pm-me" />}
       {exit && <circle cx={exit[2]} cy={exit[3]} r={3.4} className="pm-target" />}
     </svg>

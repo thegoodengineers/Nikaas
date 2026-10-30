@@ -12,6 +12,7 @@
 | lab_block.json | nearest | C | 528 | 301.25 | {'A': 264, 'B': 264, 'C': 0} | m-34-A (175) | aab920d |
 | sample_floor.json | nearest | - | 300 | 156.5 | {'A': 174, 'B': 126} | c_w-A (91) | 36c9916 |
 | sample_floor.json | nearest | A | 300 | 262.25 | {'A': 0, 'B': 300} | c_e-B (184) | 36c9916 |
+| stadium_gates.json | nearest | - | 14600 | did not finish in 1800 s | {'GATE_N': 4800, 'GATE_S': 3706, 'GATE_E': 2400, 'GATE_W': 2400, 'GATE_NE': 0, 'GATE_VIP': 200} | cn2-GATE_S (4005) | 5f38644 |
 | whatif_lab_block_seminar_x2.json | nearest | - | 648 | 433.0 | {'A': 384, 'B': 194, 'C': 70} | m-34-A (254) | aab920d |
 
 ## Nikaas plan vs nearest exit (`runs/wow.csv`)
@@ -24,3 +25,10 @@
 | lab_block.json | B | 528 | 437.5 | 303.0 | 134.5 | 30.7 | 301.85 | 1.15 | 9d5fe35 |
 | sample_floor.json | - | 300 | 156.5 | 152.5 | 4.0 | 2.6 | 136.1 | 16.4 | 9d5fe35 |
 | sample_floor.json | A | 300 | 262.25 | 262.25 | 0.0 | 0.0 | 259.67 | 2.58 | 9d5fe35 |
+
+## Stadium, scaled to ~2,000 people (`runs/stadium_results.csv`)
+
+| Plan | People | Evacuation time (s) | Peak density (p/m²) | Worst edge | Lower bound (s) | Commit |
+|---|---|---|---|---|---|---|
+| nearest | 2001 | 348.5 | 2.69 | cse-cn2 | - | aacd983 |
+| nikaas | 2001 | 203.0 | 1.61 | cse-cn2 | 107.11 | aacd983 |

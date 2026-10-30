@@ -24,6 +24,7 @@ Outputs:
 import csv
 import json
 import pathlib
+import subprocess
 
 ROOT = pathlib.Path(__file__).parent.parent
 DATA = ROOT / "data" / "stadium_gates.json"
@@ -67,6 +68,7 @@ def main():
     building_out.write_text(json.dumps(scaled, indent=2), encoding="utf-8")
     print(f"Building saved: {building_out}")
 
+    commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True).stdout.strip() or "uncommitted"
     rows = []
     for name, (plan, bound) in plans.items():
         sim = simulate(b, plan, set(), max_t=2000, frame_every=5)
@@ -82,14 +84,14 @@ def main():
         print(f"Frames saved: {frames_out}  ({frames_out.stat().st_size / 1e6:.2f} MB)")
         rows.append(["stadium_gates.json (scaled)", name, "-", actual_total, sim["total_time_s"],
                      crowd["max_density"], crowd["worst_edge"], crowd.get("first_crush_t", ""),
-                     "" if bound is None else round(bound, 2)])
+                     "" if bound is None else round(bound, 2), commit])
 
     # ── headline CSV ──────────────────────────────────────────────────────────
     csv_out = RUNS / "stadium_results.csv"
     with csv_out.open("w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["building", "plan", "blocked_exit", "people", "total_time_s",
-                    "max_density_pm2", "worst_edge", "first_crush_t", "lower_bound_s"])
+                    "max_density_pm2", "worst_edge", "first_crush_t", "lower_bound_s", "commit"])
         w.writerows(rows)
     print(f"CSV saved: {csv_out}")
 
