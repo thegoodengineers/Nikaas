@@ -95,3 +95,8 @@ body.go-mode { background: #f6f7f9; }
 .go-step-ico.big { width: 36px; height: 36px; font-size: 18px; background: var(--text-1); color: #fff; }
 .go-next { flex: 1; padding: 14px 16px; font-size: 17px; }
 .go-steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+
+/* how alerts work: three numbered lines */
+.go-how { list-style: none; margin: 0; padding: 14px; display: grid; gap: 10px; background: #fff; border: 1px solid var(--rule); border-radius: 14px; }
+.go-how li { display: grid; grid-template-columns: 28px 1fr; gap: 10px; align-items: start; font: 500 15px/1.4 var(--text); }
+.go-how li > span:first-child { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--exit); color: #fff; font: 700 13px/1 var(--text); }

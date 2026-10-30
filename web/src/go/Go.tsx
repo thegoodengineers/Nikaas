@@ -112,6 +112,11 @@ function SiteApp({ siteId, onChangeSite }: { siteId: string; onChangeSite: () =>
   const lastAlarm = useRef<string | null>(null)
 
   useEffect(() => { void registerWorker() }, [])
+  // permission already given: renew this phone's subscription quietly (keys rotate, browsers drop old ones)
+  useEffect(() => {
+    if (!registered || typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+    enablePush(siteId, tok).then(setPushState).catch(() => {})
+  }, [registered, siteId, tok])
   useEffect(() => { api.get<Site>(`/sites/${siteId}`).then(setSite).catch(e => setErr(e instanceof ApiError && e.status === 404 ? 'This building is not on Nikaas any more.' : String(e.message ?? e))) }, [siteId])
 
   const keep = useCallback((m: Me) => { setMe(m); saved.set(cacheKey, JSON.stringify(m)) }, [cacheKey])
@@ -166,7 +171,7 @@ function SiteApp({ siteId, onChangeSite }: { siteId: string; onChangeSite: () =>
       <div className="go-app">
         <Brand name={name} onSite={registered ? undefined : onChangeSite} />
         {err && <div className="pf-alert bad">{err}</div>}
-        {site ? <Register site={site} tok={tok} roomParam={roomParam} onDone={done} onCancel={editing ? () => setEditing(false) : undefined} />
+        {site ? <Register site={site} tok={tok} roomParam={roomParam} onDone={done} onPush={setPushState} onCancel={editing ? () => setEditing(false) : undefined} />
           : !err && <p className="pf-muted">Loading the building…</p>}
       </div>
     )
@@ -182,14 +187,16 @@ function SiteApp({ siteId, onChangeSite }: { siteId: string; onChangeSite: () =>
         <Emergency me={me} siteId={siteId} tok={tok} onUpdate={keep} onSilence={() => { siren(false); setSilenced(me.alarm!.id) }} silenced={silenced === me.alarm.id} onRoom={setRoom} />
       ) : (
         <Registered me={me} pushState={pushState} onPush={async () => { unlockAudio(); try { setPushState(await enablePush(siteId, tok)) } catch { setPushState('off') } }}
+          onTest={() => api.post(`/sites/${siteId}/push/test`, { token: tok })}
           onRoom={setRoom} onChangeNumber={() => setEditing(true)} onUnregister={unregister} busy={busy} />
       )}
     </div>
   )
 }
 
-// ---------- register: phone number, then the code from the text message ----------
-function Register({ site, tok, roomParam, onDone, onCancel }: { site: Site; tok: string; roomParam: string | null; onDone: (m: Me) => void; onCancel?: () => void }) {
+// ---------- register: turn on notifications (main way), or a phone number for text messages ----------
+function Register({ site, tok, roomParam, onDone, onPush, onCancel }: { site: Site; tok: string; roomParam: string | null; onDone: (m: Me) => void; onPush: (s: PushState) => void; onCancel?: () => void }) {
+  const [mode, setMode] = useState<'alerts' | 'phone'>(onCancel ? 'phone' : 'alerts')
   const [stage, setStage] = useState<'phone' | 'code'>('phone')
   const [phone, setPhone] = useState('')
   const [agree, setAgree] = useState(false)
@@ -219,7 +226,43 @@ function Register({ site, tok, roomParam, onDone, onCancel }: { site: Site; tok:
     setBusy(true); setErr('')
     try { onDone(await api.post<Me>(`/sites/${site.id}/checkin`, { token: tok, room: room?.id ?? null })) } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
   }
+  const alerts = async () => {
+    setBusy(true); setErr('')
+    unlockAudio()
+    try {
+      // ask first, while the tap still counts as a user gesture (browsers refuse the prompt later)
+      if (typeof Notification !== 'undefined' && Notification.permission === 'default') await Notification.requestPermission().catch(() => 'default')
+      const m = await api.post<Me>(`/sites/${site.id}/checkin`, { token: tok, room: room?.id ?? null })
+      let s: PushState = 'off'
+      try { s = await enablePush(site.id, tok) } catch { s = 'off' }
+      onPush(s)
+      onDone({ ...m, person: { ...m.person, push: s === 'on' } })
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+  }
   const wait = Math.max(0, 30 - Math.floor((now - sentAt) / 1000))
+
+  if (mode === 'alerts') {
+    const support = pushSupport()
+    return (
+      <section className="go-stack">
+        <div>
+          <p className="pf-eyebrow">Emergency alerts</p>
+          <h1 className="go-title">Welcome to {site.name}</h1>
+          <p className="pf-muted">Turn on alerts for this phone. If there is a fire or another emergency while you are here, you get a notification with your own way out, even with the browser closed.</p>
+        </div>
+        <ol className="go-how">
+          <li><span>1</span><span>Tap <b>Turn on alerts</b>, then <b>Allow</b>.</span></li>
+          <li><span>2</span><span>When the alarm starts, a notification pops up.</span></li>
+          <li><span>3</span><span>Tap it, choose your room, and follow the route to your exit.</span></li>
+        </ol>
+        {support === 'needs-install' && <div className="pf-alert info">On iPhone: tap <b>Share</b>, then <b>Add to Home Screen</b>. Open Nikaas from the Home Screen and turn on alerts there.</div>}
+        {support === 'denied' && <div className="pf-alert warn">Notifications are blocked for this site. Tap the icon left of the address, allow Notifications, then try again.</div>}
+        {err && <div className="pf-alert bad" role="alert">{err}</div>}
+        <button type="button" className="pf-btn go big" onClick={() => void alerts()} disabled={busy}>{busy ? 'Turning on…' : 'Turn on alerts'}</button>
+        <button type="button" className="pf-btn ghost" onClick={() => { setMode('phone'); setErr('') }}>Get text messages instead</button>
+      </section>
+    )
+  }
 
   if (stage === 'code') return (
     <form className="go-stack" onSubmit={e => { e.preventDefault(); void verify() }}>
@@ -242,8 +285,8 @@ function Register({ site, tok, roomParam, onDone, onCancel }: { site: Site; tok:
   return (
     <form className="go-stack" onSubmit={e => { e.preventDefault(); void send() }}>
       <div>
-        <p className="pf-eyebrow">{onCancel ? 'Change number' : 'Emergency alerts · step 1 of 2'}</p>
-        <h1 className="go-title">Welcome to {site.name}</h1>
+        <p className="pf-eyebrow">{onCancel ? 'Text messages' : 'Text messages · step 1 of 2'}</p>
+        <h1 className="go-title">{onCancel ? 'Your mobile number' : `Welcome to ${site.name}`}</h1>
         <p className="pf-muted">Register your mobile number. If there is a fire or another emergency while you are here, you get a text message with your own way out.</p>
       </div>
       <label className="pf-field">Mobile number
@@ -255,34 +298,45 @@ function Register({ site, tok, roomParam, onDone, onCancel }: { site: Site; tok:
         <span>Text me emergency alerts for {site.name}. My number is used only for this and deleted 24 hours after my last update.</span></label>
       {err && <div className="pf-alert bad" role="alert">{err}</div>}
       {err.startsWith('Text messages cannot be sent') && !onCancel &&
-        <button type="button" className="pf-btn primary big" onClick={() => void withoutPhone()} disabled={busy}>Continue without a phone number</button>}
+        <button type="button" className="pf-btn primary big" onClick={() => { setMode('alerts'); setErr('') }}>Use notifications instead</button>}
       <button className="pf-btn go big" disabled={busy || !agree || phone.replace(/\D/g, '').length < 8}>{busy ? 'Sending the code…' : 'Send me a code'}</button>
       {onCancel ? <button type="button" className="pf-btn ghost" onClick={onCancel}>Keep my current number</button>
-        : <button type="button" className="pf-btn ghost" onClick={() => void withoutPhone()} disabled={busy}>Continue without a phone number</button>}
-      {!onCancel && <p className="pf-small pf-muted">Without a number, alerts only reach you while this page is open.</p>}
+        : <button type="button" className="pf-btn ghost" onClick={() => { setMode('alerts'); setErr('') }}>Use notifications instead</button>}
+      {!onCancel && <button type="button" className="pf-btn ghost pf-small" onClick={() => void withoutPhone()} disabled={busy}>Continue without alerts</button>}
     </form>
   )
 }
 
 // ---------- registered, no emergency ----------
-function Registered({ me, pushState, onPush, onRoom, onChangeNumber, onUnregister, busy }: { me: Me; pushState: PushState | null; onPush: () => void; onRoom: (r: string) => void; onChangeNumber: () => void; onUnregister: () => void; busy: boolean }) {
+function Registered({ me, pushState, onPush, onTest, onRoom, onChangeNumber, onUnregister, busy }: { me: Me; pushState: PushState | null; onPush: () => void; onTest: () => Promise<unknown>; onRoom: (r: string) => void; onChangeNumber: () => void; onUnregister: () => void; busy: boolean }) {
   const [rooms, setRooms] = useState(false)
+  const [test, setTest] = useState<{ ok: boolean; text: string } | null>(null)
+  const [testing, setTesting] = useState(false)
   const p = me.person
+  const pushOn = pushState === 'on' || (p.push && pushState !== 'denied')
+  const sendTest = async () => {
+    setTesting(true); setTest(null)
+    try { await onTest(); setTest({ ok: true, text: 'Test alert sent. It should pop up on this phone in a few seconds.' }) }
+    catch (e) { setTest({ ok: false, text: e instanceof Error ? e.message : String(e) }) } finally { setTesting(false) }
+  }
   return (
     <section className="go-stack">
       <div className="pf-card go-status">
-        {p.phone_verified ? <span className="pf-chip ok"><span className="pf-dot" />Registered for SMS alerts</span>
-          : p.verify_pending ? <span className="pf-chip warn"><span className="pf-dot" />Number not verified yet</span>
-            : <span className="pf-chip"><span className="pf-dot" />Registered without a phone number</span>}
-        <b className="go-room">{p.phone ?? me.site.name}</b>
-        <span className="pf-muted">{p.phone_verified ? 'If there is an emergency, you will get a text message with a link to your own exit route. You do not need to keep this page open.'
-          : p.verify_pending ? 'Finish verifying your number to get text messages.' : 'Keep this page open while you are in the building, or add a number for text alerts.'}</span>
+        {pushOn ? <span className="pf-chip ok"><span className="pf-dot" />Alerts on for this phone</span>
+          : p.phone_verified ? <span className="pf-chip ok"><span className="pf-dot" />Registered for text alerts</span>
+            : <span className="pf-chip warn"><span className="pf-dot" />Alerts are off</span>}
+        <b className="go-room">{me.site.name}</b>
+        <span className="pf-muted">{pushOn ? 'If there is an emergency, a notification pops up on this phone, even with the browser closed. Tap it for your own exit route.'
+          : p.phone_verified ? 'If there is an emergency, you will get a text message with a link to your own exit route.'
+            : 'Turn on alerts below, or keep this page open while you are in the building.'}</span>
+        {pushOn && <button className="pf-btn primary" onClick={() => void sendTest()} disabled={testing}>{testing ? 'Sending…' : 'Send a test alert'}</button>}
+        {test && <div className={`pf-alert ${test.ok ? 'ok' : 'bad'}`} role="status">{test.text}</div>}
         <div className="pf-row">
-          <button className="pf-btn" onClick={onChangeNumber}>{p.phone ? 'Change number' : 'Add a phone number'}</button>
+          <button className="pf-btn" onClick={onChangeNumber}>{p.phone ? `Text messages: ${p.phone}` : 'Also get text messages'}</button>
           <button className="pf-btn ghost" onClick={onUnregister} disabled={busy}>Unregister</button>
         </div>
       </div>
-      {!p.phone_verified && <PushNote state={pushState} onEnable={onPush} />}
+      {!pushOn && <PushNote state={pushState} onEnable={onPush} />}
       <div className="pf-card">
         <p className="pf-eyebrow">Optional</p>
         <b>{p.room_label ? `You said you are in ${p.room_label}` : 'Know which room you will be in?'}</b>
@@ -318,8 +372,10 @@ function RoomList({ me, onPick, big }: { me: Me; onPick: (id: string) => void; b
 
 function PushNote({ state, onEnable }: { state: PushState | null; onEnable: () => void }) {
   if (state === 'on') return <div className="pf-alert ok">Browser alerts are on for this phone.</div>
-  if (state === 'needs-install' || state === 'unsupported' || state === 'denied') return null
-  return <div className="pf-alert info pf-row"><span className="pf-grow">Also alert this browser, even with the page closed?</span><button className="pf-btn primary" onClick={onEnable}>Turn on</button></div>
+  if (state === 'needs-install') return <div className="pf-alert info">On iPhone, alerts need the app on the Home Screen: tap <b>Share</b>, then <b>Add to Home Screen</b>, and open Nikaas from there.</div>
+  if (state === 'denied') return <div className="pf-alert warn">Notifications are blocked for this site. Tap the icon left of the address, allow Notifications, then reload.</div>
+  if (state === 'unsupported') return <div className="pf-alert info">This browser cannot show alerts with the page closed. Keep this page open, or open it in Chrome.</div>
+  return <div className="pf-alert info pf-row"><span className="pf-grow">Get a notification on this phone when the alarm starts, even with the browser closed.</span><button className="pf-btn primary" onClick={onEnable}>Turn on alerts</button></div>
 }
 
 // ---------- emergency ----------

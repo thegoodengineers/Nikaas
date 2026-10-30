@@ -415,6 +415,11 @@ def site_push(sid: str, req: PushRequest):
     return {"ok": True}
 
 
+@app.post("/sites/{sid}/push/test")
+def site_push_test(sid: str, req: TokenRequest):
+    return _call(live.test_push, sid, req.token)
+
+
 @app.get("/push/key")
 def push_key():
     return {"public_key": vapid_keys()[1]}

@@ -182,3 +182,19 @@ def test_when_texts_cannot_be_sent_people_are_told_to_continue_without_a_number(
     monkeypatch.setenv("NIKAAS_SMS", "twilio")  # no credentials: every send fails
     r = client.post("/sites/office/register", json={"token": T1, "phone": "98765 43210"})
     assert r.status_code in (400, 422) and r.json()["detail"].startswith("Text messages cannot be sent")
+
+
+def test_phone_can_send_itself_a_test_notification(client, monkeypatch):
+    got = []
+    monkeypatch.setattr(push, "send", lambda sub, msg, ttl=600: got.append(msg) or 201)
+    assert client.post("/sites/office/checkin", json={"token": T1, "room": None}).status_code == 200
+    r = client.post("/sites/office/push/test", json={"token": T1})
+    assert r.status_code in (400, 422) and "not turned on" in r.json()["detail"]
+    sub = {"endpoint": "https://push.example/abc", "keys": {"p256dh": "x", "auth": "y"}}
+    assert client.post("/sites/office/push", json={"token": T1, "subscription": sub}).status_code == 200
+    assert client.post("/sites/office/push/test", json={"token": T1}).json() == {"ok": True}
+    assert got[-1]["title"].startswith("Test alert")
+    assert client.post("/sites/office/push/test", json={"token": T1}).status_code in (400, 422)  # once every 10 s
+    assert client.get("/sites/office/control").json()["push"] == {"on": 1, "total": 1}
+    client.post("/sites/office/alarm", json={"type": "fire"})
+    assert got[-1]["alarm"] is True and "FIRE" in got[-1]["title"]
