@@ -134,4 +134,4 @@ The control room prints both (A4 poster per entrance, a sheet of room stickers).
 
 `nikaas/store.py`: one DynamoDB table (`NIKAAS_TABLE`) keyed `pk` = `SITE#<id>`, `sk` = `META` | `P#<token>` |
 `ALARM` | `HAZ#<id>` | `SENSOR#<id>` | `CAM#<id>` | `EVENT#<time>`; local runs keep the same items in memory.
-Push needs HTTPS: the site is served through CloudFront.
+Push needs HTTPS: share the bucket's https address (`WebHttpsUrl` stack output), not the http website address.

@@ -130,27 +130,6 @@ Resources:
             Action: s3:GetObject
             Resource: !Sub "${WebBucket.Arn}/*"
 
-  # HTTPS in front of the website bucket: phones only allow push alerts, GPS and the camera on https pages.
-  WebCdn:
-    Type: AWS::CloudFront::Distribution
-    Properties:
-      DistributionConfig:
-        Enabled: true
-        Comment: Nikaas website over HTTPS
-        DefaultRootObject: index.html
-        HttpVersion: http2
-        PriceClass: PriceClass_200 # includes edge locations in India
-        Origins:
-          - Id: web
-            DomainName: !Select [2, !Split ["/", !GetAtt WebBucket.WebsiteURL]]
-            CustomOriginConfig:
-              OriginProtocolPolicy: http-only # S3 website endpoints only speak http; viewers get https
-        DefaultCacheBehavior:
-          TargetOriginId: web
-          ViewerProtocolPolicy: redirect-to-https
-          Compress: true
-          CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized: follows each file's Cache-Control
-
 Outputs:
   ApiUrl:
     Description: Public API URL (try /health)
@@ -159,8 +138,10 @@ Outputs:
     Description: Public website URL (http, S3)
     Value: !GetAtt WebBucket.WebsiteURL
   WebHttpsUrl:
+    # The bucket's https endpoint (S3 website endpoints are http only). Phones only allow push alerts, GPS and the
+    # camera on https pages. CloudFront would give a nicer address but needs the AWS account verified by Support.
     Description: "Public website URL over HTTPS. Use this one: push alerts, GPS and the camera need it"
-    Value: !Sub "https://${WebCdn.DomainName}"
+    Value: !Sub "https://${WebBucket.RegionalDomainName}/index.html"
   LiveTableName:
     Description: DynamoDB table with the platform's live state
     Value: !Ref LiveTable
