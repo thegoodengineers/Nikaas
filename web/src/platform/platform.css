@@ -63,6 +63,11 @@
 .plan-exit.is-blocked circle { fill: #b91c1c; }
 .plan-exit path { stroke: #fff; }
 .plan-route { stroke-linecap: round; fill: none; }
+.plan-target-label { fill: var(--exit); font: 800 1px/1 var(--text); text-anchor: middle; paint-order: stroke; stroke: #fff; stroke-width: .35px; letter-spacing: .04em; }
+.plan-step { fill: none; stroke: #111827; }
+@media (prefers-reduced-motion: no-preference) {
+  .plan-step { animation: plan-pulse 1.4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+}
 .plan-hazard circle { fill: #dc2626; }
 .plan-hazard .plan-hazard-glow { fill: rgba(220, 38, 38, .18); }
 .plan-you circle { fill: var(--evac); }

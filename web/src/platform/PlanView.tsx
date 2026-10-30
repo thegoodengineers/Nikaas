@@ -20,16 +20,30 @@ type Props = {
   className?: string
   showLabels?: boolean
   labels?: Record<string, string>
+  /** zoom to these nodes (those on the shown floor), with a margin; the whole building otherwise */
+  focus?: string[]
+  /** the node the current step leads to: marked with a pulsing ring */
+  stepNode?: string | null
+  /** moving dashes along the route */
+  animate?: boolean
+  targetLabel?: string
 }
 
-export default function PlanView({ nodes, edges, floor, route, routeColor = 'var(--exit)', hazards = [], here, target, roomFill, badges, blocked = [], onNode, selected, label, className, showLabels, labels }: Props) {
+export default function PlanView({ nodes, edges, floor, route, routeColor = 'var(--exit)', hazards = [], here, target, roomFill, badges, blocked = [], onNode, selected, label, className, showLabels, labels, focus, stepNode, animate, targetLabel }: Props) {
+  const reduced = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
   const on = (n: MapNode) => floor === null || n[6] === floor || n[6] === null
   const pos = Object.fromEntries(nodes.map(n => [n[0], n]))
-  // frame every floor the same way, so switching floors does not jump
-  const xs = nodes.flatMap(n => [n[2] - n[4] / 2, n[2] + n[4] / 2]), zs = nodes.flatMap(n => [n[3] - n[5] / 2, n[3] + n[5] / 2])
-  const pad = 4
-  const x0 = Math.min(...xs) - pad, z0 = Math.min(...zs) - pad, w = Math.max(...xs) + pad - x0, h = Math.max(...zs) + pad - z0
-  const unit = Math.max(w, h) / 100 // scale strokes and markers to the building's size
+  // frame every floor the same way, so switching floors does not jump; or zoom to the nodes in `focus` on this floor
+  const all = nodes.flatMap(n => [n[2] - n[4] / 2, n[2] + n[4] / 2]), allz = nodes.flatMap(n => [n[3] - n[5] / 2, n[3] + n[5] / 2])
+  const unit = Math.max(Math.max(...all) - Math.min(...all), Math.max(...allz) - Math.min(...allz)) / 100 // strokes follow building size
+  const fx = (focus ?? []).map(id => pos[id]).filter(n => n && on(n))
+  const frame = fx.length ? fx : nodes
+  const xs = frame.flatMap(n => [n[2] - n[4] / 2, n[2] + n[4] / 2]), zs = frame.flatMap(n => [n[3] - n[5] / 2, n[3] + n[5] / 2])
+  const pad = fx.length ? Math.max(6, unit * 8) : 4
+  let x0 = Math.min(...xs) - pad, z0 = Math.min(...zs) - pad, w = Math.max(...xs) + pad - x0, h = Math.max(...zs) + pad - z0
+  const minSide = unit * 30 // never zoom so far in that the surroundings disappear
+  if (w < minSide) { x0 -= (minSide - w) / 2; w = minSide }
+  if (h < minSide * 0.7) { z0 -= (minSide * 0.7 - h) / 2; h = minSide * 0.7 }
   const vis = nodes.filter(on)
   const visIds = new Set(vis.map(n => n[0]))
   const landings = new Set(edges.filter(e => e[2] === 'stair').flatMap(e => [e[0], e[1]]))
@@ -72,7 +86,10 @@ export default function PlanView({ nodes, edges, floor, route, routeColor = 'var
         <circle key={n[0]} cx={n[2]} cy={n[3]} r={unit * 1.5} className={`plan-node is-click ${n[0] === selected ? 'is-selected' : ''}`} onClick={() => onNode(n[0])} />
       ))}
       {segs.map(([a, b], k) => (
-        <line key={`r${k}`} x1={a[2]} y1={a[3]} x2={b[2]} y2={b[3]} className="plan-route" stroke={routeColor} style={{ strokeWidth: 1.4 * unit }} markerEnd={k === segs.length - 1 ? 'url(#plan-arrow)' : undefined} />
+        <line key={`r${k}`} x1={a[2]} y1={a[3]} x2={b[2]} y2={b[3]} className="plan-route" stroke={routeColor}
+          style={{ strokeWidth: 1.4 * unit, strokeDasharray: animate ? `${unit * 2.4} ${unit * 1.6}` : undefined }} markerEnd={k === segs.length - 1 ? 'url(#plan-arrow)' : undefined}>
+          {animate && !reduced && <animate attributeName="stroke-dashoffset" from="0" to={-unit * 4} dur="0.8s" repeatCount="indefinite" />}
+        </line>
       ))}
       {vis.filter(n => n[1] === 'exit').map(n => {
         const off = blockedSet.has(n[0])
@@ -89,6 +106,12 @@ export default function PlanView({ nodes, edges, floor, route, routeColor = 'var
           <circle cx={pos[id][2]} cy={pos[id][3]} r={unit * 1.8} />
         </g>
       ))}
+      {target && targetLabel && pos[target] && on(pos[target]) && (
+        <text x={pos[target][2]} y={pos[target][3] - unit * 4.2} className="plan-target-label" style={{ fontSize: unit * 3.2 }}>{targetLabel}</text>
+      )}
+      {stepNode && pos[stepNode] && on(pos[stepNode]) && stepNode !== here && (
+        <circle cx={pos[stepNode][2]} cy={pos[stepNode][3]} r={unit * 3} className="plan-step" style={{ strokeWidth: unit * 0.6 }} />
+      )}
       {here && pos[here] && on(pos[here]) && (
         <g className="plan-you">
           <circle cx={pos[here][2]} cy={pos[here][3]} r={unit * 3.2} className="plan-you-ring" />

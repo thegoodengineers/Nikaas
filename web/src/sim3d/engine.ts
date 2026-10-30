@@ -34,6 +34,8 @@ export type HudState = {
   log: LogItem[]; tool: Tool; focus: number; explode: boolean; cinematic: boolean; roof: boolean; muted: boolean; flash: boolean
   startRoom: string; startLabel: string; startLevel: number; startCount: number; scenario: Scenario
   summary: Summary | null; mapLevel: number; hint: string; ready: boolean
+  /** plan picture on the floor: null when the building has none (or it could not be loaded) */
+  overlay: boolean | null
 }
 
 const fmt = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`
@@ -86,6 +88,10 @@ export class DrillEngine {
   private ray = new THREE.Raycaster(); private ndc = new THREE.Vector2(); private v3 = new THREE.Vector3()
   private ro: ResizeObserver
   private shakeOff = new THREE.Vector3()
+  private overlayOn = true; private overlayReady = false
+  private wallMaps = new Map<number, HTMLCanvasElement | null>()
+  private warm = new THREE.Color('#ffdcb4'); private red = new THREE.Color('#ff3a2a')
+  private pose = { x: 0, y: 0, z: 0, yaw: 0, scale: 1, sit: 0, crouch: 0, phase: 0, move: 0, wave: 0, alarm: 0, lean: 0, t: 0 }
 
   constructor(host: HTMLElement, labelLayer: HTMLElement, onHud: (s: HudState) => void, opts: { plan: Plan; scenario: Scenario; startRoom: string; muted: boolean; flash: boolean }) {
     this.host = host; this.labelLayer = labelLayer; this.onHud = onHud
@@ -144,11 +150,14 @@ export class DrillEngine {
     scene.add(sky)
     const pm = new THREE.PMREMGenerator(this.renderer)
     scene.environment = pm.fromScene(new RoomEnvironment(this.renderer), 0.04).texture
-    const st = plan.site, scx = (st.x0 + st.x1) / 2, scz = (st.z0 + st.z1) / 2, half = Math.max(52, (st.x1 - st.x0) / 2 + 6, (st.z1 - st.z0) / 2 + 6)
+    // the sun's shadow covers the building (not the whole site) with a map sized to it: crisp and cheap
+    const st = plan.kind === 'demo' ? plan.site : { x0: plan.bounds.x0 - 10, z0: plan.bounds.z0 - 10, x1: plan.bounds.x1 + 10, z1: plan.bounds.z1 + 10 }
+    const scx = (st.x0 + st.x1) / 2, scz = (st.z0 + st.z1) / 2, half = Math.max(plan.kind === 'demo' ? 52 : 24, (st.x1 - st.x0) / 2 + 6, (st.z1 - st.z0) / 2 + 6)
     const hemi = new THREE.HemisphereLight('#a9b8d2', '#2a2724', 0.8)
     const sun = new THREE.DirectionalLight('#e2e8f5', 1.5)
     sun.position.set(scx - 38, 70 + plan.levels * plan.fh, scz + 46); sun.target.position.set(scx, 0, scz)
-    sun.castShadow = true; sun.shadow.mapSize.set(4096, 4096)
+    const size = Math.min(this.renderer.capabilities.maxTextureSize || 4096, plan.kind === 'demo' || half > 70 ? 4096 : half > 22 ? 2048 : 1024)
+    sun.castShadow = true; sun.shadow.mapSize.set(size, size)
     Object.assign(sun.shadow.camera, { left: -half, right: half, top: half, bottom: -half, near: 10, far: 260 + half })
     sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.025
     scene.add(hemi, sun, sun.target)
@@ -163,6 +172,7 @@ export class DrillEngine {
     for (const g of this.world.levels) this.root.add(g)
     for (const g of this.world.flights) this.root.add(g)
     this.world.roof.visible = false; this.root.add(this.world.roof)
+    this.loadOverlays()
     const bc: [number, number] = [(plan.bounds.x0 + plan.bounds.x1) / 2, (plan.bounds.z0 + plan.bounds.z1) / 2]
     const asmDone = new Set<string>()
     for (const e of plan.exits) {
@@ -211,12 +221,27 @@ export class DrillEngine {
   setRoof(on: boolean) { this.roofOn = on }
   setMuted(m: boolean) { this.sound.setMuted(m) }
   setFlash(f: boolean) { this.flash = f }
+  setOverlay(on: boolean) { this.overlayOn = on; for (const m of this.world?.overlays ?? []) m.visible = on && !!m.material.map; this.emitHud() }
   setTool(t: Tool) { this.tool = t; this.marker.visible = false; this.hover = null; this.renderer.domElement.style.cursor = t ? 'crosshair' : '' }
   view(which: 'room' | 'overview' | 'top') {
     if (which === 'room') { this.startView(false); return }
     const v = this.plan.views(this.step.value)
     const [p, t] = which === 'overview' ? v.overview : v.top
     this.flyTo(p, t, 2.2)
+  }
+
+  /** Plan pictures on the floors: loaded with CORS (presigned bucket links), shown once ready, skipped on error. */
+  private loadOverlays() {
+    const list = this.world.overlays ?? []
+    if (!list.length) return
+    const loader = new THREE.TextureLoader(); loader.setCrossOrigin('anonymous')
+    const aniso = Math.min(8, this.renderer.capabilities.getMaxAnisotropy?.() ?? 1)
+    for (const m of list) loader.load(m.userData.url, (tex: any) => {
+      if (this.disposed) { tex.dispose(); return }
+      tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = aniso
+      m.material.map = tex; m.material.needsUpdate = true; m.visible = this.overlayOn
+      this.overlayReady = true; this.emitHud()
+    }, undefined, () => { if (!this.disposed) console.warn('The plan picture could not be loaded; showing the building without it.') })
   }
 
   // ---------- incidents ----------
@@ -598,11 +623,33 @@ export class DrillEngine {
     pointScale.value = (h * this.renderer.getPixelRatio()) / (2 * Math.tan((this.camera.fov * Math.PI) / 360))
   }
 
+  /** Keep the view smooth on laptop graphics: when frames stay under ~30 fps, step down once every few seconds:
+   * bloom off, then a lower pixel ratio, then a smaller shadow map. Never steps back up (no flicker). */
+  private quality = 3; private qSum = 0; private qN = 0; private qFrom = 0
+  private adapt(ms: number) {
+    if (!this.ready || this.quality <= 0) return
+    if (ms > 250) { this.qSum = 0; this.qN = 0; return } // a hidden tab or a hitch, not a slow GPU
+    if (this.realT < 3 || this.realT - this.qFrom < 2.5) { this.qSum = 0; this.qN = 0; return } // shaders warming up / just changed
+    this.qSum += ms; this.qN++
+    if (this.qSum < 2000) return
+    const fps = (1000 * this.qN) / this.qSum
+    this.qSum = 0; this.qN = 0
+    if (fps >= 29) return
+    this.quality--; this.qFrom = this.realT
+    if (this.quality === 2) this.bloom.enabled = false
+    else if (this.quality === 1) { const pr = Math.min(window.devicePixelRatio || 1, 1); this.renderer.setPixelRatio(pr); this.composer.setPixelRatio?.(pr); this.resize() }
+    else if (this.lights) {
+      const sh = this.lights.sun.shadow
+      if (sh.mapSize.x > 1024) { sh.mapSize.set(sh.mapSize.x / 2, sh.mapSize.y / 2); sh.map?.dispose(); sh.map = null }
+    }
+  }
+
   // ---------- frame ----------
   private loop = () => {
     if (this.disposed) return
     this.raf = requestAnimationFrame(this.loop)
     const now = performance.now(), rdt = Math.min(0.05, (now - this.last) / 1000)
+    this.adapt(now - this.last)
     this.last = now; this.realT += rdt
     let simDt = 0
     if (!this.paused && this.phase !== 'briefing') {
@@ -655,7 +702,7 @@ export class DrillEngine {
     const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2 * 0.9)
     const strobe = alarm && (t * 1.25) % 1 < 0.1
     this.M.strobe.emissiveIntensity = strobe ? 3.5 : alarm ? 0.3 : 0
-    const warm = new THREE.Color('#ffdcb4'), red = new THREE.Color('#ff3a2a')
+    const warm = this.warm, red = this.red
     for (const ls of this.world.lights) for (const l of ls) {
       if (alarm) { l.color.copy(warm).lerp(red, 0.3 + 0.2 * pulse); l.intensity = 12 + 4 * pulse }
       else { l.color.copy(warm); l.intensity = 14 }
@@ -698,11 +745,11 @@ export class DrillEngine {
       if (!this.placed[i]) { this.rx[i] = tx; this.ry[i] = y; this.rz[i] = tz; this.placed[i] = 1 }
       else { this.rx[i] += (tx - this.rx[i]) * k; this.ry[i] += (y - this.ry[i]) * k; this.rz[i] += (tz - this.rz[i]) * k }
       const trapped = a.mode === 'trapped'
-      cv.pose(i, {
-        x: this.rx[i], y: this.ry[i], z: this.rz[i], yaw: a.yaw, scale: a.scale, sit: a.sit, crouch: a.crouch,
-        phase: a.phase, move: a.move, wave: trapped ? 1 : 0, alarm: a.mode === 'mill' ? 1 : 0,
-        lean: a.danger > 0 ? 0.22 : a.move * 0.07, t,
-      })
+      const p = this.pose
+      p.x = this.rx[i]; p.y = this.ry[i]; p.z = this.rz[i]; p.yaw = a.yaw; p.scale = a.scale; p.sit = a.sit; p.crouch = a.crouch
+      p.phase = a.phase; p.move = a.move; p.wave = trapped ? 1 : 0; p.alarm = a.mode === 'mill' ? 1 : 0
+      p.lean = a.danger > 0 ? 0.22 : a.move * 0.07; p.t = t
+      cv.pose(i, p)
       // floor ring: red for people who need rescue, group colour once the crowd is assigned, dim once safe
       if (trapped) { const f = (t * 2 + i * 0.1) % 1 < 0.5 ? 1.6 : 0.5; cv.setRing(i, f, 0.1 * f, 0.07 * f) }
       else if (evac && a.group >= 0 && sim.groups[a.group]) {
@@ -716,7 +763,8 @@ export class DrillEngine {
 
   private placeLabels() {
     const w = this.host.clientWidth, h = this.host.clientHeight, v = this.v3
-    for (const l of [...this.labels, ...this.groupLabels]) {
+    for (let k = 0, n = this.labels.length + this.groupLabels.length; k < n; k++) {
+      const l = k < this.labels.length ? this.labels[k] : this.groupLabels[k - this.labels.length]
       const p = l.at()
       if (!p) { if (l.el.style.display !== 'none') l.el.style.display = 'none'; continue }
       v.set(p[0], p[1], p[2]).project(this.camera)
@@ -770,6 +818,7 @@ export class DrillEngine {
       log: this.log.slice(0, 14), tool, focus: this.focus, explode: this.explodeTarget > 0.5, cinematic: this.cinematic, roof: this.roofOn,
       muted: this.sound.muted, flash: this.flash, startRoom: this.startRoom, startLabel: this.startLabel(), startLevel: this.startLevel(),
       startCount: sim.agents.filter(a => a.room === this.startRoom).length, scenario: this.scenario, summary: this.summary, mapLevel: this.mapLevel, hint, ready: this.ready,
+      overlay: this.overlayReady ? this.overlayOn : null,
     })
   }
 
@@ -808,12 +857,20 @@ export class DrillEngine {
         g.fillStyle = 'rgba(148,163,184,0.08)'; g.fill(); g.strokeStyle = 'rgba(74,222,128,0.45)'; g.lineWidth = 1; g.stroke()
       }
     }
-    g.fillStyle = 'rgba(148,163,184,0.10)'; g.strokeStyle = 'rgba(203,213,225,0.45)'; g.lineWidth = 1
-    for (const m of plan.mapBase) if (m.level === L) { poly(m.poly); g.fill(); g.stroke() }
-    for (const r of plan.rooms) if (r.level === L) {
-      const q = R(r.r.x0, r.r.z0, r.r.x1, r.r.z1)
-      g.fillStyle = r.id === this.startRoom ? 'rgba(125,166,224,0.22)' : 'rgba(15,23,42,0.6)'; g.fillRect(...q)
-      g.strokeStyle = 'rgba(148,163,184,0.45)'; g.lineWidth = 1; g.strokeRect(...q)
+    const tr = plan.geo?.traced[L], wm = tr?.hasWalls ? this.wallMap(L) : null
+    if (wm && tr) {
+      // traced walls: the building as drawn; of the room boxes only the start room, as a highlight
+      const [ax, ay] = P(tr.x0, tr.z0)
+      g.imageSmoothingEnabled = true; g.drawImage(wm, ax, ay, tr.cols * tr.res * s, tr.rows * tr.res * s)
+      for (const r of plan.rooms) if (r.level === L && r.id === this.startRoom) { g.fillStyle = 'rgba(125,166,224,0.25)'; g.fillRect(...R(r.r.x0, r.r.z0, r.r.x1, r.r.z1)) }
+    } else {
+      g.fillStyle = 'rgba(148,163,184,0.10)'; g.strokeStyle = 'rgba(203,213,225,0.45)'; g.lineWidth = 1
+      for (const m of plan.mapBase) if (m.level === L) { poly(m.poly); g.fill(); g.stroke() }
+      for (const r of plan.rooms) if (r.level === L) {
+        const q = R(r.r.x0, r.r.z0, r.r.x1, r.r.z1)
+        g.fillStyle = r.id === this.startRoom ? 'rgba(125,166,224,0.22)' : 'rgba(15,23,42,0.6)'; g.fillRect(...q)
+        g.strokeStyle = 'rgba(148,163,184,0.45)'; g.lineWidth = 1; g.strokeRect(...q)
+      }
     }
     for (const st of plan.stairs) for (const z of st.zones) if (z.level === L) {
       const q = R(z.r.x0, z.r.z0, z.r.x1, z.r.z1), wide = q[2] > q[3]
@@ -863,6 +920,25 @@ export class DrillEngine {
     g.restore()
   }
 
+  /** A storey's traced walls and outline as a small picture for the minimap (drawn once, then scaled). */
+  private wallMap(L: number) {
+    if (this.wallMaps.has(L)) return this.wallMaps.get(L)!
+    const t = this.plan.geo?.traced[L]
+    let c: HTMLCanvasElement | null = null
+    if (t?.hasWalls) {
+      c = document.createElement('canvas'); c.width = t.cols; c.height = t.rows
+      const g = c.getContext('2d')!, img = g.createImageData(t.cols, t.rows), d = img.data
+      for (let i = 0; i < t.wall.length; i++) {
+        const o = i * 4
+        if (t.wall[i]) { d[o] = 226; d[o + 1] = 232; d[o + 2] = 240; d[o + 3] = 235 }
+        else if (t.foot[i]) { d[o] = 148; d[o + 1] = 163; d[o + 2] = 184; d[o + 3] = 34 }
+      }
+      g.putImageData(img, 0, 0)
+    }
+    this.wallMaps.set(L, c)
+    return c
+  }
+
   dispose() {
     this.disposed = true
     cancelAnimationFrame(this.raf)
@@ -873,6 +949,7 @@ export class DrillEngine {
     this.sound.dispose()
     this.controls.dispose()
     this.scene.traverse((o: any) => { o.geometry?.dispose?.() })
+    for (const m of this.world?.overlays ?? []) { m.material.map?.dispose?.(); m.material.dispose() }
     this.composer.dispose?.()
     this.renderer.dispose()
     el.remove()

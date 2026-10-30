@@ -7,6 +7,8 @@ import { SLAB, DOOR_H } from './layout.ts'
 import { Batch, kit, worldUV, type World } from './build.ts'
 import { labelTex, mulberry32, type Mats } from './materials.ts'
 import { shaftPoint, shaftRect, type GraphGeo, type GShaft } from './graph.ts'
+import { tracedStorey, planOverlay, prisms, outlineBoxes, apronBoxes } from './traced3d.ts'
+import { cellAt } from './traced.ts'
 
 /** Rotation about y that turns a box's local x axis onto the direction (ux, uz). */
 const yawOf = (ux: number, uz: number) => Math.atan2(-uz, ux)
@@ -20,6 +22,13 @@ export function buildGraphWorld(M: Mats, g: GraphGeo): World {
   const floorOf: Record<string, any> = { lab: M.epoxy, hall: M.carpetBlue, office: M.carpetGrey, lobby: M.marble, wash: M.tile, cafe: M.checker, library: M.woodFloor, store: M.concrete, class: M.vinyl }
   const perLevel = Math.max(1, Math.min(3, Math.floor(8 / g.levels)))
   const signY = Math.min(2.62, wallH - 0.35)
+  // storeys with traced walls: the drawn walls replace the derived ones wherever they cover the plan
+  const capMat = new THREE.MeshStandardMaterial({ color: '#59616d', roughness: 0.72, metalness: 0.05 })
+  const overlays: any[] = []
+  const share = (L: number, pts: [number, number][]) => pts.length > 0 && pts.filter(([x, z]) => g.covered(L, x, z)).length / pts.length >= 0.6
+  const rectPts = (r: { x0: number; z0: number; x1: number; z1: number }) => { const o: [number, number][] = []; for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) o.push([r.x0 + ((r.x1 - r.x0) * (i + 0.5)) / 5, r.z0 + ((r.z1 - r.z0) * (j + 0.5)) / 5]); return o }
+  const segPts = (ax: number, az: number, bx: number, bz: number) => { const o: [number, number][] = []; for (let k = 0; k <= 6; k++) o.push([ax + ((bx - ax) * k) / 6, az + ((bz - az) * k) / 6]); return o }
+  const nearWall = (L: number, x: number, z: number) => { const t = g.traced[L]; if (!t?.hasWalls) return false; const i = cellAt(t, x, z); return i >= 0 && t.block[i] === 1 }
 
   for (let L = 0; L < g.levels; L++) {
     const group = new THREE.Group(); group.name = `level-${L}`
@@ -28,13 +37,17 @@ export function buildGraphWorld(M: Mats, g: GraphGeo): World {
     const obox = (mat: any, len: number, h: number, w: number, x: number, y: number, z: number, ux: number, uz: number) => b.box(mat, len, h, w, x, y, z, yawOf(ux, uz))
 
     // ---- floors ----
-    for (const r of g.rooms) if (r.level === L) { b.ext(M.concrete, r.r.x0, -SLAB, r.r.z0, r.r.x1, 0, r.r.z1); b.floor(floorOf[r.kind] ?? M.vinyl, r.r, 0.014) }
+    const T = g.traced[L], walled = !!T?.hasWalls
+    const roomCovered = new Set(g.rooms.filter(r => r.level === L && walled && share(L, rectPts(r.r))).map(r => r.id))
+    for (const r of g.rooms) if (r.level === L && !roomCovered.has(r.id)) { b.ext(M.concrete, r.r.x0, -SLAB, r.r.z0, r.r.x1, 0, r.r.z1); b.floor(floorOf[r.kind] ?? M.vinyl, r.r, 0.014) }
     for (const s of g.strips) if (s.level === L) {
       const len = Math.hypot(s.bx - s.ax, s.bz - s.az), ux = (s.bx - s.ax) / len, uz = (s.bz - s.az) / len
       const ea = s.openA ? 0 : s.w / 2, eb = s.openB ? 0 : s.w / 2, full = len + ea + eb
       const mx = (s.ax + s.bx) / 2 + (ux * (eb - ea)) / 2, mz = (s.az + s.bz) / 2 + (uz * (eb - ea)) / 2
-      obox(M.concrete, full, SLAB, s.w, mx, -SLAB / 2, mz, ux, uz)
-      obox(M.tile, full, 0.02, s.w, mx, 0, mz, ux, uz)
+      if (!walled || !share(L, segPts(s.ax, s.az, s.bx, s.bz))) {
+        obox(M.concrete, full, SLAB, s.w, mx, -SLAB / 2, mz, ux, uz)
+        obox(M.tile, full, 0.02, s.w, mx, 0, mz, ux, uz)
+      }
       if ((s.kind === 'corr' || s.kind === 'exit') && len > 1.5) { // photoluminescent egress line along one edge
         const o = s.w / 2 - 0.22
         obox(M.egress, len, 0.012, 0.05, (s.ax + s.bx) / 2 - uz * o, 0.022, (s.az + s.bz) / 2 + ux * o, ux, uz)
@@ -50,7 +63,8 @@ export function buildGraphWorld(M: Mats, g: GraphGeo): World {
     }
 
     // ---- walls, lintels over openings, door frames and open leaves ----
-    const { walls, gaps } = g.walls(L)
+    const wl = g.walls(L), keep = (w: { ax: number; az: number; bx: number; bz: number; src: string }) => !walled || w.src === 'shaft' || !share(L, segPts(w.ax, w.az, w.bx, w.bz))
+    const walls = wl.walls.filter(keep), gaps = wl.gaps.filter(keep)
     for (const w of walls) {
       const len = Math.hypot(w.bx - w.ax, w.bz - w.az)
       if (len > 0.01) obox(M.plaster, len, wallH, w.t, (w.ax + w.bx) / 2, wallH / 2, (w.az + w.bz) / 2, (w.bx - w.ax) / len, (w.bz - w.az) / len)
@@ -61,7 +75,7 @@ export function buildGraphWorld(M: Mats, g: GraphGeo): World {
       for (const [x, z] of [[w.ax, w.az], [w.bx, w.bz]]) obox(M.frame, 0.06, DOOR_H, w.t + 0.05, x, DOOR_H / 2, z, ux, uz)
       obox(M.frame, len, 0.06, w.t + 0.05, (w.ax + w.bx) / 2, DOOR_H - 0.03, (w.az + w.bz) / 2, ux, uz)
     }
-    for (const d of g.doors) if (d.level === L) {
+    for (const d of g.doors) if (d.level === L && !(walled && g.covered(L, d.x, d.z))) {
       const tx = -d.nz, tz = d.nx, lw = Math.max(0.5, d.w - 0.12)
       const hx = d.x - tx * (d.w / 2 - 0.04), hz = d.z - tz * (d.w / 2 - 0.04)
       obox(M.wood, lw, DOOR_H - 0.06, 0.045, hx - d.nx * (lw / 2 + 0.1) + tx * 0.03, (DOOR_H - 0.06) / 2, hz - d.nz * (lw / 2 + 0.1) + tz * 0.03, -d.nx, -d.nz)
@@ -78,13 +92,14 @@ export function buildGraphWorld(M: Mats, g: GraphGeo): World {
     // ---- furniture: a chair and a small desk for every seated person, a board on the wall they face ----
     for (const s of g.seats) if (s.level === L && s.sit) {
       const fx = Math.sin(s.yaw), fz = Math.cos(s.yaw)
+      if (nearWall(L, s.x + fx * 0.5, s.z + fz * 0.5) || nearWall(L, s.x - fx * 0.2, s.z - fz * 0.2)) continue // no desk through a drawn wall
       K.pb(M.fabricBlue, 0.44, 0.06, 0.42, s.x, s.z, s.yaw, 0, 0.46, 0); K.pb(M.fabricBlue, 0.44, 0.4, 0.05, s.x, s.z, s.yaw, 0, 0.72, -0.2)
       K.pb(M.darkMetal, 0.05, 0.44, 0.05, s.x, s.z, s.yaw, 0, 0.22, 0)
       const dx = s.x + fx * 0.5, dz = s.z + fz * 0.5
       K.pb(M.whiteLam, 0.64, 0.04, 0.42, dx, dz, s.yaw, 0, 0.74, 0)
       for (const side of [-1, 1]) K.pb(M.greyMetal, 0.03, 0.72, 0.38, dx, dz, s.yaw, side * 0.3, 0.36, 0)
     }
-    for (const r of g.rooms) if (r.level === L) {
+    for (const r of g.rooms) if (r.level === L && !roomCovered.has(r.id)) {
       const w = r.r.x1 - r.r.x0, d = r.r.z1 - r.r.z0, rcx = (r.r.x0 + r.r.x1) / 2, rcz = (r.r.z0 + r.r.z1) / 2
       const half = Math.abs(r.fx) > 0.5 ? w / 2 : d / 2, span = Math.abs(r.fx) > 0.5 ? d : w
       if (r.kind !== 'store' && r.kind !== 'wash' && span > 2.5 && half > 1.5) {
@@ -95,6 +110,11 @@ export function buildGraphWorld(M: Mats, g: GraphGeo): World {
       if (r.kind === 'store') for (let k = 0; k < Math.min(6, Math.floor(w * d / 6)); k++) K.boxes(r.r.x0 + 0.6 + rnd() * (w - 1.2), r.r.z0 + 0.6 + rnd() * (d - 1.2))
     }
     b.flush(group)
+    if (T) {
+      for (const m of tracedStorey(T, wallH, { side: M.plaster, cap: capMat, slab: M.concrete, floor: M.tile })) group.add(m)
+      const ov = planOverlay(T)
+      if (ov) { group.add(ov); overlays.push(ov) }
+    }
 
     // room names on the floor, just inside the main door
     for (const r of g.rooms) if (r.level === L) {
@@ -105,7 +125,7 @@ export function buildGraphWorld(M: Mats, g: GraphGeo): World {
       const depth = Math.abs(tx) > 0.5 ? r.r.z1 - r.r.z0 : r.r.x1 - r.r.x0
       const x = door ? door.x - door.nx * Math.min(1.4, depth / 2) : (r.r.x0 + r.r.x1) / 2, z = door ? door.z - door.nz * Math.min(1.4, depth / 2) : (r.r.z0 + r.r.z1) / 2
       const m = new THREE.Mesh(new THREE.PlaneGeometry(lw, lw * 0.156), new THREE.MeshBasicMaterial({ map: labelTex(r.label), transparent: true, depthWrite: false }))
-      m.rotation.set(-Math.PI / 2, 0, Math.atan2(-tz, tx)); m.position.set(x, 0.026, z); group.add(m)
+      m.rotation.set(-Math.PI / 2, 0, Math.atan2(-tz, tx)); m.position.set(x, T?.plan ? 0.045 : 0.026, z); m.renderOrder = 2; group.add(m)
     }
     const pick = new THREE.Mesh(new THREE.PlaneGeometry(bd.x1 - bd.x0 + 12, bd.z1 - bd.z0 + 12), pickMat)
     pick.rotation.x = -Math.PI / 2; pick.position.set(cx, 0.03, cz); pick.userData.level = L
@@ -127,7 +147,7 @@ export function buildGraphWorld(M: Mats, g: GraphGeo): World {
     for (const sh of g.shafts) if (sh.pairs.some(([p, q]) => p === L && q === L + 1)) buildFlights(b, M, sh, g.fh)
     b.flush(grp); flights.push(grp)
   }
-  return { levels, flights, roof: buildRoof(M, g), site: buildSite(M, g), seats: g.seats, picks, lights }
+  return { levels, flights, roof: buildRoof(M, g), site: buildSite(M, g), seats: g.seats, picks, lights, overlays }
 }
 
 function buildFlights(b: Batch, M: Mats, sh: GShaft, fh: number) {
@@ -174,16 +194,30 @@ function buildRoof(M: Mats, g: GraphGeo) {
   }
   for (const sh of g.shafts) if (sh.hi === top) { const q = shaftRect(sh); b.ext(M.concrete, q.x0 - 0.1, -SLAB, q.z0 - 0.1, q.x1 + 0.1, 0.05, q.z1 + 0.1) }
   b.flush(grp)
+  const t = g.traced[top]
+  if (t?.hasWalls) {
+    const ob = outlineBoxes(t)
+    if (ob.length) { const m = new THREE.Mesh(prisms(ob, -SLAB, 0.05), [M.concrete, M.concrete]); m.castShadow = true; m.receiveShadow = true; grp.add(m) }
+  }
   return grp
 }
 
 function buildSite(M: Mats, g: GraphGeo) {
   const grp = new THREE.Group(), b = new Batch(), rnd = mulberry32(3), bd = g.bounds, st = g.site
-  const S = Math.max(420, (st.x1 - st.x0) * 3, (st.z1 - st.z0) * 3)
+  const S = Math.max(1400, (st.x1 - st.x0) * 4, (st.z1 - st.z0) * 4) // past the fog: no visible edge of the world
   const ground = new THREE.Mesh(new THREE.PlaneGeometry(S, S), M.grass)
   ground.rotation.x = -Math.PI / 2; ground.position.set((st.x0 + st.x1) / 2, -0.08, (st.z0 + st.z1) / 2); ground.receiveShadow = true
   worldUV(ground.geometry); grp.add(ground)
-  b.ext(M.paving, bd.x0 - 2.5, -0.08, bd.z0 - 2.5, bd.x1 + 2.5, -0.04, bd.z1 + 2.5)
+  const t0 = g.traced[0]
+  if (t0?.hasWalls) {
+    // a paved apron that follows the traced outline, plus any room or corridor the tracing left out
+    for (const [x0, z0, x1, z1] of apronBoxes(t0, 2.5)) b.ext(M.paving, x0, -0.08, z0, x1, -0.04, z1)
+    for (const r of g.rooms) if (r.level === 0) b.ext(M.paving, r.r.x0 - 2.5, -0.08, r.r.z0 - 2.5, r.r.x1 + 2.5, -0.04, r.r.z1 + 2.5)
+    for (const s of g.strips) if (s.level === 0) {
+      const len = Math.hypot(s.bx - s.ax, s.bz - s.az)
+      if (len > 0.05) b.box(M.paving, len + s.w + 5, 0.04, s.w + 5, (s.ax + s.bx) / 2, -0.06, (s.az + s.bz) / 2, yawOf((s.bx - s.ax) / len, (s.bz - s.az) / len))
+    }
+  } else b.ext(M.paving, bd.x0 - 2.5, -0.08, bd.z0 - 2.5, bd.x1 + 2.5, -0.04, bd.z1 + 2.5)
   // a paved path from every exit to its assembly point
   const paths: [number, number, number, number][] = []
   for (const e of g.exits) {

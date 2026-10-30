@@ -2,7 +2,7 @@
   "name": "Nikaas: building safety",
   "short_name": "Nikaas",
   "description": "Check in to a building, get emergency alerts and your own way out.",
-  "start_url": "./#/go",
+  "start_url": "./index.html#/go",
   "scope": "./",
   "display": "standalone",
   "background_color": "#ffffff",

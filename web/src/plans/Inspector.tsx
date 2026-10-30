@@ -2,7 +2,9 @@
 // gets focus and ends when it loses it.
 import { useState } from 'react'
 import type { Building, BuildingEdge, BuildingNode } from '../platform/api.ts'
-import { dist, edgeKind, isStair, nodeMap, patchEdge, patchNode, round1, WIDTH } from './model.ts'
+import { dist, edgeKind, isStair, nodeMap, patchEdge, patchNode, round1, round2, WIDTH } from './model.ts'
+import { fmtLen, fromU, numU, type Units } from './units.ts'
+import { BOUNDARY, CONF_TONE, effWidth, FLOW, fmtDuration, passTime, perMin, type Measure } from './widths.ts'
 
 export type Sel = { kind: 'node'; id: string } | { kind: 'edge'; i: number } | null
 export type Edit = { begin: () => void; change: (fn: (b: Building) => Building) => void; end: () => void; commit: (fn: (b: Building) => Building) => void }
@@ -10,10 +12,14 @@ export type Edit = { begin: () => void; change: (fn: (b: Building) => Building) 
 type Props = {
   building: Building; sel: Sel; edit: Edit; floorName: (id: string | undefined) => string
   onSelect: (s: Sel) => void; onPickNode: (id: string) => void; onDelete: () => void; onMeasure: (i: number) => void; measuring: boolean
+  units: Units
+  /** Width read from the traced walls for the selected link (undefined: not measured yet). */
+  auto?: Measure | null; canAuto: boolean; onAuto: (i: number) => void; onAccept: (i: number, w: number) => void
 }
 
-export default function Inspector({ building, sel, edit, floorName, onSelect, onPickNode, onDelete, onMeasure, measuring }: Props) {
+export default function Inspector({ building, sel, edit, floorName, onSelect, onPickNode, onDelete, onMeasure, measuring, units: u, auto, canAuto, onAuto, onAccept }: Props) {
   const by = nodeMap(building)
+  const L = (m: number) => fmtLen(m, u)
   if (!sel) return <p className="pf-empty">Select a room, point, exit or link to see its details. Shortcuts: V select, R room, C walkway, E exit, S stair, L connect, D delete, F fit.</p>
   if (sel.kind === 'node') {
     const n = by[sel.id]
@@ -36,8 +42,8 @@ export default function Inspector({ building, sel, edit, floorName, onSelect, on
           <div className="pl-grid2">
             <NumField label="People" value={n.people ?? 0} step={1} min={0} edit={edit} onChange={v => set({ people: Math.max(0, Math.round(v)) })} />
             <span />
-            <NumField label="Width w (m)" value={n.w ?? 0} step={0.1} min={0.5} edit={edit} onChange={v => set({ w: Math.max(0.5, round1(v)) })} />
-            <NumField label="Depth d (m)" value={n.d ?? 0} step={0.1} min={0.5} edit={edit} onChange={v => set({ d: Math.max(0.5, round1(v)) })} />
+            <LenField units={u} label="Width w" value={n.w ?? 0} step={0.1} edit={edit} onChange={v => set({ w: Math.max(0.5, round2(v)) })} />
+            <LenField units={u} label="Depth d" value={n.d ?? 0} step={0.1} edit={edit} onChange={v => set({ d: Math.max(0.5, round2(v)) })} />
           </div>
         )}
         {n.type === 'corridor' && (
@@ -46,8 +52,8 @@ export default function Inspector({ building, sel, edit, floorName, onSelect, on
         )}
         {n.type === 'corridor' && n.stair !== true && isStair(n) && <p className="pf-small pf-muted">Counts as a stair landing because its name contains “stair”.</p>}
         <div className="pl-grid2">
-          <NumField label="x (m)" value={n.x} step={0.1} edit={edit} onChange={v => set({ x: round1(v) })} />
-          <NumField label="z (m)" value={n.z} step={0.1} edit={edit} onChange={v => set({ z: round1(v) })} />
+          <LenField units={u} label="x" value={n.x} step={0.1} edit={edit} onChange={v => set({ x: round2(v) })} />
+          <LenField units={u} label="z" value={n.z} step={0.1} edit={edit} onChange={v => set({ z: round2(v) })} />
         </div>
         <div>
           <p className="pf-eyebrow">Links ({links.length})</p>
@@ -57,7 +63,7 @@ export default function Inspector({ building, sel, edit, floorName, onSelect, on
               const other = e.from === n.id ? e.to : e.from
               return (
                 <li key={i}><button className="pl-linkbtn" onClick={() => onSelect({ kind: 'edge', i })}>
-                  <span className="pf-chip">{edgeKind(building, e)}</span>{by[other]?.label ?? other}<span className="pf-muted">{e.width} m</span>
+                  <span className="pf-chip">{edgeKind(building, e)}</span>{by[other]?.label ?? other}<span className="pf-muted">{L(e.width)}</span>
                   {by[other]?.floor_id !== n.floor_id && <span className="pf-muted">· {floorName(by[other]?.floor_id)}</span>}
                 </button></li>
               )
@@ -75,6 +81,10 @@ export default function Inspector({ building, sel, edit, floorName, onSelect, on
   const cross = (A?.floor_id ?? null) !== (B?.floor_id ?? null)
   const set = (patch: Record<string, unknown>) => edit.change(b => patchEdge(b, sel.i, patch))
   const straight = A && B ? round1(dist(A, B)) : 0
+  const room = A?.type === 'room' ? A : B?.type === 'room' ? B : null
+  const people = kind === 'door' && room ? Number(room.people ?? 0) : 0
+  const eff = effWidth(kind, e.width)
+  const t = passTime(kind, e.width, people)
   return (
     <div className="pf-stack pl-insp">
       <div className="pl-insp-ends">
@@ -93,17 +103,36 @@ export default function Inspector({ building, sel, edit, floorName, onSelect, on
         </select>
       </label>
       <div className="pl-measure-row">
-        <NumField label="Clear width (m)" value={e.width} step={0.1} min={0.1} edit={edit} onChange={v => set({ width: Math.max(0.1, round1(v)) })} />
-        <button className={`pf-btn ${measuring ? 'primary' : ''}`} onClick={() => onMeasure(sel.i)} title="Click two points across the corridor or door on the plan">Measure width</button>
+        <LenField units={u} label="Clear width" value={e.width} step={0.05} edit={edit} onChange={v => set({ width: Math.max(0.1, round2(v)) })} />
+        <button className={`pf-btn ${measuring ? 'primary' : ''}`} onClick={() => onMeasure(sel.i)} title="Click two points across the corridor or door on the plan; they snap to the traced walls">Measure</button>
+        {kind !== 'stair' && <button className="pf-btn" onClick={() => onAuto(sel.i)} disabled={!canAuto} title={canAuto ? 'Read the width from the traced walls' : 'Trace the walls of this floor first'}>From walls</button>}
       </div>
-      <p className="pf-small pf-muted">Typical: door {WIDTH.door} m, corridor {WIDTH.corridor} m. Measure on the plan picture after setting the scale.</p>
-      {kind === 'stair' || e.length !== undefined ? (
-        <NumField label={kind === 'stair' ? 'Walking length on the stairs (m)' : 'Length (m)'} value={e.length ?? straight} step={0.1} min={0.1} edit={edit}
-          onChange={v => set({ length: Math.max(0.1, round1(v)) })} />
-      ) : (
-        <p className="pf-small pf-muted">Length: {straight} m (straight line). <button className="pl-textbtn" onClick={() => edit.commit(b => patchEdge(b, sel.i, { length: straight }))}>Set a length</button></p>
+      {auto !== undefined && (
+        <div className={`pl-auto ${auto?.conf ?? 'low'}`}>
+          {auto?.width ? (
+            <>
+              <p><b>{L(auto.width)}</b> from the walls <span className={`pf-chip ${CONF_TONE[auto.conf]}`}>{auto.conf} confidence</span></p>
+              <p className="pf-small pf-muted">{auto.note}. {perMin(kind, auto.width)} people/min.</p>
+              {Math.abs(auto.width - e.width) >= 0.01
+                ? <button className="pf-btn" onClick={() => onAccept(sel.i, auto.width!)}>Use {L(auto.width)}</button>
+                : <p className="pf-small pl-status ok">Matches the width set.</p>}
+            </>
+          ) : <p className="pf-small">{auto?.note ?? 'Not measured'}. Measure by hand: two clicks across the opening.</p>}
+        </div>
       )}
-      {kind !== 'stair' && e.length !== undefined && <button className="pl-textbtn pf-small" onClick={() => edit.commit(b => patchEdge(b, sel.i, { length: undefined }))}>Use straight-line length ({straight} m)</button>}
+      <div className="pl-cap">
+        <div><span>Effective width</span><b>{eff > 0 ? L(eff) : 'none'}</b></div>
+        <div><span>Capacity</span><b>{perMin(kind, e.width)} people/min</b></div>
+        {people > 0 && <div><span>{people} people in {room?.label ?? room?.id} pass in</span><b>{Number.isFinite(t) ? fmtDuration(t) : 'never'}</b></div>}
+      </div>
+      <p className="pf-small pf-muted">Effective width is the clear width less {L(BOUNDARY[kind])} at each side; {FLOW[kind]} people per second pass per metre of it. Typical clear width: door {L(WIDTH.door)}, corridor {L(WIDTH.corridor)}.</p>
+      {kind === 'stair' || e.length !== undefined ? (
+        <LenField units={u} label={kind === 'stair' ? 'Walking length on the stairs' : 'Length'} value={e.length ?? straight} step={0.1} edit={edit}
+          onChange={v => set({ length: Math.max(0.1, round2(v)) })} />
+      ) : (
+        <p className="pf-small pf-muted">Length: {L(straight)} (straight line). <button className="pl-textbtn" onClick={() => edit.commit(b => patchEdge(b, sel.i, { length: straight }))}>Set a length</button></p>
+      )}
+      {kind !== 'stair' && e.length !== undefined && <button className="pl-textbtn pf-small" onClick={() => edit.commit(b => patchEdge(b, sel.i, { length: undefined }))}>Use straight-line length ({L(straight)})</button>}
       {kind === 'stair' && <TextField label="Stair shaft (capacity group)" value={e.capacity_group ?? ''} edit={edit} onChange={v => set({ capacity_group: v.trim() || undefined })} placeholder="e.g. stair_north" />}
       {cross && kind !== 'stair' && <p className="pf-small pl-status bad">Links between floors must be stairs.</p>}
       <button className="pf-btn danger" onClick={onDelete}>Delete link</button>
@@ -130,4 +159,9 @@ export function NumField({ label, value, onChange, edit, step, min }: { label: s
         onChange={e => { setText(e.target.value); const v = parseFloat(e.target.value); if (Number.isFinite(v)) onChange(v) }} />
     </label>
   )
+}
+
+/** A length box: shows and takes the chosen unit, stores metres. */
+export function LenField({ label, value, onChange, edit, step, units }: { label: string; value: number; onChange: (m: number) => void; edit: Edit; step?: number; units: Units }) {
+  return <NumField label={`${label} (${units})`} value={numU(value, units)} step={units === 'ft' ? Math.max(0.1, (step ?? 0.1) * 2) : step} edit={edit} onChange={v => onChange(fromU(v, units))} />
 }

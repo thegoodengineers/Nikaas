@@ -252,7 +252,8 @@ def occupancy(req: Occupancy):
 
 
 # ---------- platform: sites, check-in, alerts, control room (docs/PLATFORM.md) ----------
-from fastapi import Header  # noqa: E402
+from fastapi import Header, Request  # noqa: E402
+from fastapi.responses import RedirectResponse  # noqa: E402
 
 from . import live, sites  # noqa: E402
 from .push import vapid_keys  # noqa: E402
@@ -302,7 +303,20 @@ def site_get(sid: str):
     s = sites.get_site(sid)
     if s is None:
         raise HTTPException(404, f"unknown site {sid}")
-    return {**s, "assembly": sites.assembly_points(s)}
+    return {**s, "assembly": sites.assembly_points(s), "media": sites.media_public(s)}
+
+
+class MediaRequest(BaseModel):
+    image: str | None = None  # JPEG or PNG, base64 or a data URL
+    plan: dict | None = None  # {x, z, w, h}: where the picture sits, in building metres
+    walls: dict | None = None  # traced wall grid (web/src/platform/walls.ts)
+
+
+@app.post("/sites/{sid}/media/{floor}")
+def site_media(sid: str, floor: str, req: MediaRequest, x_control_key: str | None = Header(default=None)):
+    _key(x_control_key)
+    s = _call(sites.save_media, sid, floor, req.image, req.plan, req.walls)
+    return {**s, "assembly": sites.assembly_points(s), "media": sites.media_public(s)}
 
 
 @app.post("/sites")
@@ -398,11 +412,60 @@ class AlarmRequest(BaseModel):
     wave_gap_s: float = 60
 
 
+def _base(request: Request) -> str:
+    """This API's public address, for the short links in text messages."""
+    host = request.headers.get("host", "")
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    return f"{proto}://{host}" if host else str(request.base_url).rstrip("/")
+
+
 @app.post("/sites/{sid}/alarm")
-def site_alarm(sid: str, req: AlarmRequest, x_control_key: str | None = Header(default=None)):
+def site_alarm(sid: str, req: AlarmRequest, request: Request, x_control_key: str | None = Header(default=None)):
     _key(x_control_key)
-    _call(live.start_alarm, sid, req.type, req.message, req.origin, req.phased, req.wave_gap_s)
+    _call(live.start_alarm, sid, req.type, req.message, req.origin, req.phased, req.wave_gap_s, _base(request))
     return live.control(sid)
+
+
+class RegisterRequest(BaseModel):
+    token: str
+    phone: str
+
+
+@app.post("/sites/{sid}/register")
+def site_register(sid: str, req: RegisterRequest):
+    """Phone number for emergency texts. Sends a one-time code (or none if the number is already verified)."""
+    return _call(live.register, sid, req.token, req.phone)
+
+
+class VerifyRequest(BaseModel):
+    token: str
+    code: str
+
+
+@app.post("/sites/{sid}/verify")
+def site_verify(sid: str, req: VerifyRequest):
+    return _call(live.verify_phone, sid, req.token, req.code)
+
+
+SITE_URL = os.environ.get("NIKAAS_SITE_URL", "http://localhost:5173/")
+
+
+@app.get("/r/{code}")
+def short_link(code: str):
+    """The link in an emergency text: opens the phone app as that person, on their building."""
+    hit = live.resolve_link(code)
+    target = f"{SITE_URL}#/go?site={hit['site']}&p={hit['token']}" if hit else f"{SITE_URL}#/go"
+    return RedirectResponse(target, status_code=302, headers={"cache-control": "no-store", "referrer-policy": "no-referrer"})
+
+
+class TestSmsRequest(BaseModel):
+    person: str  # short id from the control room's people list
+
+
+@app.post("/sites/{sid}/sms/test")
+def site_sms_test(sid: str, req: TestSmsRequest, x_control_key: str | None = Header(default=None)):
+    _key(x_control_key)
+    return _call(live.test_sms, sid, req.person)
 
 
 @app.delete("/sites/{sid}/alarm")

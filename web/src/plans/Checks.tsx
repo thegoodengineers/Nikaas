@@ -3,12 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, ApiError, type Building } from '../platform/api.ts'
 import { cleanBuilding, idsIn } from './model.ts'
+import type { WidthIssue } from './widths.ts'
 
 type QaWarning = { code: string; severity: string; message: string; elements?: string[]; suggestion?: string }
 type Qa = { status: string; score: number; warnings: QaWarning[] }
 type Result = { problems: string[]; qa: Qa | null; qaErr: string; of: Building }
 
-export default function Checks({ building, onPick, label }: { building: Building; onPick: (id: string) => void; label: (id: string) => string }) {
+type Props = { building: Building; onPick: (id: string) => void; label: (id: string) => string; widths?: WidthIssue[]; onPickEdge?: (i: number) => void }
+
+export default function Checks({ building, onPick, label, widths = [], onPickEdge }: Props) {
   const [res, setRes] = useState<Result | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -56,6 +59,19 @@ export default function Checks({ building, onPick, label }: { building: Building
       )}
       {res && res.problems.length === 0 && <p className="pf-small pf-muted">The building is valid and can be saved and simulated.</p>}
       {res?.qaErr && <p className="pf-small pf-muted">Quality check unavailable: {res.qaErr}</p>}
+      {widths.length > 0 && (
+        <>
+          <p className="pf-eyebrow">Widths to look at ({widths.length})</p>
+          <ul className="pl-issues">
+            {widths.map((w, k) => (
+              <li key={k} className={w.level}>
+                <p>{w.text}</p>
+                {onPickEdge && <div className="pl-chips"><button className="pl-idchip" onClick={() => onPickEdge(w.edge)}>Show link</button></div>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       {qa && qa.warnings.length > 0 && (
         <ul className="pl-issues">
           {qa.warnings.map((w, k) => (

@@ -328,6 +328,24 @@ export class Sim {
     a.pre = !this.inners[a.room] || n.kind !== 'inner' ? []
       : n.axis === 'x' ? (Math.abs(a.x - n.x) > 0.3 ? [[n.x, a.z]] : []) : (Math.abs(a.z - n.z) > 0.3 ? [[a.x, n.z]] : [])
     a.node = s; a.prev = s; a.mode = 'walk'; a.stuckT = 0; a.lastD = 1e9; a.legT = 0
+    // a drawn wall between the seat and the door: walk round it
+    const W = this.nav.walk[a.level], t = a.pre[0] ?? [n.x, n.z]
+    if (W.wall && !this.visible(a.level, a.x, a.z, t[0], t[1])) {
+      const p = W.path(a.x, a.z, n.x, n.z)
+      if (p) a.pre = p.slice(0, -1)
+    }
+  }
+
+  /** Stuck behind a drawn wall: a way round it to the current target, if there is one nearby. */
+  private detour(a: Agent) {
+    const W = this.nav.walk[a.level]
+    if (!W.wall || a.node < 0) return false
+    const n = this.nav.nodes[a.node]
+    if (Math.abs(n.level - a.level) > 0.01) return false
+    const p = W.path(a.x, a.z, n.x, n.z, 12)
+    if (!p) return false
+    a.pre = p.slice(0, -1)
+    return true
   }
 
   roomLabel(id: string) { return this.plan.rooms.find(r => r.id === id)?.label ?? 'the lobby' }
@@ -364,6 +382,20 @@ export class Sim {
       a.mode = 'walk'; a.rail = null; a.level = Math.round(node.level); a.lf = a.level
       ;[a.x, a.z] = this.nav.walk[a.level].clamp(a.x, a.z)
     }
+    if (a.mode === 'walk') this.routeLeg(a, n, best)
+  }
+
+  /** On a storey with traced walls, a leg whose end is out of sight bends round the walls: the link's precomputed
+   * corners (or a fresh way round), skipping corners already passed. */
+  private routeLeg(a: Agent, from: number, to: number) {
+    a.pre = []
+    const W = this.nav.walk[a.level], M = this.nav.nodes[to]
+    if (!W.wall || Math.abs(M.level - a.level) > 0.01 || this.visible(a.level, a.x, a.z, M.x, M.z)) return
+    const via = this.nav.via?.get(from * this.nav.nodes.length + to) ?? W.path(a.x, a.z, M.x, M.z)
+    if (!via) return
+    const pre = via.slice(0, -1)
+    while (pre.length > 1 && this.visible(a.level, a.x, a.z, pre[1][0], pre[1][1])) pre.shift()
+    a.pre = pre
   }
 
   hazardsUpdate(dt: number) {
@@ -448,12 +480,19 @@ export class Sim {
         if (a.pre.length) { [tx, tz] = a.pre[0]; arrive = 0.32 }
         else { const n = this.nav.nodes[a.node]; tx = n.x; tz = n.z; arrive = ARRIVE[n.kind] ?? 0.5 }
         const d = Math.hypot(tx - a.x, tz - a.z)
-        if (d < arrive) { if (a.pre.length) a.pre.shift(); else this.decide(a, a.node); return }
+        if (d < arrive) {
+          if (!a.pre.length) { this.decide(a, a.node); return }
+          // round a drawn wall: drop the corner only once the next leg is in sight
+          const nx = a.pre[1] ?? [this.nav.nodes[a.node].x, this.nav.nodes[a.node].z]
+          if (d < 0.08 || !this.nav.walk[a.level].wall || this.visible(a.level, a.x, a.z, nx[0], nx[1])) { a.pre.shift(); return }
+        }
         if (d > a.lastD - 0.004) a.stuckT += dt; else a.stuckT = Math.max(0, a.stuckT - dt * 2)
         a.lastD = d
         if (a.stuckT > 2.5) {
           a.vx += (r() - 0.5) * 2; a.vz += (r() - 0.5) * 2; a.stuckT = 1.2
-          if (a.pre.length) a.pre.shift()
+          const walled = !!this.nav.walk[a.level].wall && !this.visible(a.level, a.x, a.z, tx, tz)
+          if (walled && this.detour(a)) a.lastD = 1e9
+          else if (a.pre.length) a.pre.shift()
           else if (!this.visible(a.level, a.x, a.z, tx, tz)) this.recover(a)
         }
         this.steer(a, tx, tz, a.speed * (a.danger ? 1.35 : 1), dt, false)
@@ -520,8 +559,10 @@ export class Sim {
 
   /** Straight walk from one point to another stays inside the walkable area of the storey. */
   private visible(level: number, ax: number, az: number, bx: number, bz: number) {
-    const W = this.nav.walk[level], k = Math.max(2, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.3))
-    for (let i = 1; i <= k; i++) if (!W.contains(ax + ((bx - ax) * i) / k, az + ((bz - az) * i) / k, 0)) return false
+    const W = this.nav.walk[level]
+    if (W.wall) return W.clear(ax, az, bx, bz) // traced walls can be thin: check every cell on the way
+    const k = Math.max(2, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.3))
+    for (let i = 1; i <= k; i++) if (!W.free(ax + ((bx - ax) * i) / k, az + ((bz - az) * i) / k)) return false
     return true
   }
 
@@ -564,7 +605,7 @@ export class Sim {
     const k = Math.min(1, dt * 7)
     a.vx += (wx - a.vx) * k; a.vz += (wz - a.vz) * k
     let nx = a.x + a.vx * dt, nz = a.z + a.vz * dt
-    if (!outside) [nx, nz] = this.nav.walk[a.level].clamp(nx, nz)
+    if (!outside) [nx, nz] = this.nav.walk[a.level].move(a.x, a.z, nx, nz)
     const moved = Math.hypot(nx - a.x, nz - a.z)
     a.x = nx; a.z = nz
     const sp = moved / Math.max(dt, 1e-4)

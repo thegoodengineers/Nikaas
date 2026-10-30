@@ -93,7 +93,11 @@ export type NavNode = {
   axis?: 'x' | 'z'   // inner nodes: axis of the door wall's normal (people line up on it before the door)
 }
 export type NavEdge = { a: number; b: number; len: number; rail: boolean }
-export type Nav = { nodes: NavNode[]; edges: NavEdge[]; adj: { to: number; len: number; rail: boolean }[][]; walk: Walk[] }
+export type Nav = {
+  nodes: NavNode[]; edges: NavEdge[]; adj: { to: number; len: number; rail: boolean }[][]; walk: Walk[]
+  /** links that bend round traced walls: corner points from node a to node b, keyed a * nodes.length + b */
+  via?: Map<number, [number, number][]>
+}
 
 export function buildNav(): Nav {
   const nodes: NavNode[] = [], edges: NavEdge[] = []

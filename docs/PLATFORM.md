@@ -135,3 +135,18 @@ The control room prints both (A4 poster per entrance, a sheet of room stickers).
 `nikaas/store.py`: one DynamoDB table (`NIKAAS_TABLE`) keyed `pk` = `SITE#<id>`, `sk` = `META` | `P#<token>` |
 `ALARM` | `HAZ#<id>` | `SENSOR#<id>` | `CAM#<id>` | `EVENT#<time>`; local runs keep the same items in memory.
 Push needs HTTPS: share the bucket's https address (`WebHttpsUrl` stack output), not the http website address.
+
+## Media: plan pictures and traced walls
+
+Each floor can keep its plan picture and the walls traced from it (`web/src/platform/walls.ts`). The 3D views extrude
+the traced walls and lay the picture on the floor; the editor measures corridor and door widths from them.
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| POST | `/sites/{id}/media/{floor}` (key) | `{image?: base64 JPEG/PNG, plan?: {x, z, w, h}, walls?: WallGrid}` | the site |
+
+- `floor` is a floor id, or `_` for a single-floor building. `plan` is the picture's top-left corner and size in metres.
+- `GET /sites/{id}` returns `media: {floor: {plan: {url, x, z, w, h}, walls}}`; `url` is a 12-hour link to the private
+  bucket (or inline data locally).
+- `WallGrid = {res, x0, z0, cols, rows, rle}`: cells of `res` metres from (`x0`, `z0`), row-major run lengths
+  alternating free and wall, starting with free.

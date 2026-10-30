@@ -1,5 +1,6 @@
-// The phone app (#/go): scan a QR code when you enter a building, get an alert in an emergency, follow your own
-// way out step by step, get walking directions to the assembly point, and tell the control room you are safe.
+// The phone app (#/go). One QR code per building: scan it, register your mobile number (verified with a code by SMS).
+// When the control room raises the alarm, every registered phone gets a text with its own link; opening it asks which
+// room you are in and then guides you out step by step on a small map, to the exit planned for your room.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ExitIcon from '../ExitIcon.tsx'
 import PlanView, { FloorTabs } from '../platform/PlanView.tsx'
@@ -18,9 +19,19 @@ const TODO: Record<string, string> = {
   drill: 'This is a drill. Leave by your route below as you would in a real emergency.',
   other: 'Leave the building now by the route below and follow staff instructions.',
 }
+const TOKEN_RE = /^[A-Za-z0-9-]{8,64}$/
+type MeV = Me & { verify?: 'sandbox' | 'code' | 'none' }
 
 export default function Go() {
-  const [siteId, setSiteId] = useState(() => hashQuery().get('site') ?? saved.get('nikaas-site') ?? '')
+  // A link from an emergency text carries this person's id (p): adopt it, then drop it from the address bar.
+  const [siteId, setSiteId] = useState(() => {
+    const q = hashQuery(), s = q.get('site'), p = q.get('p')
+    if (s && p && TOKEN_RE.test(p)) {
+      saved.set('nikaas-token', p); saved.set(`nikaas-in-${s}`, '1'); saved.set('nikaas-site', s)
+      history.replaceState(null, '', `${location.pathname}${location.search}#/go?site=${encodeURIComponent(s)}`)
+    }
+    return s ?? saved.get('nikaas-site') ?? ''
+  })
   useEffect(() => {
     document.body.classList.add('go-mode')
     const on = () => { const s = hashQuery().get('site'); if (s) setSiteId(s) }
@@ -42,7 +53,7 @@ function Brand({ name, onSite }: { name?: string; onSite?: () => void }) {
   )
 }
 
-// ---------- pick a building (no QR code) ----------
+// ---------- pick a building (opened without the QR code) ----------
 function PickBuilding({ onPick }: { onPick: (id: string) => void }) {
   const [sites, setSites] = useState<SiteSummary[]>()
   const [err, setErr] = useState('')
@@ -86,59 +97,49 @@ function PickBuilding({ onPick }: { onPick: (id: string) => void }) {
 // ---------- one building ----------
 function SiteApp({ siteId, onChangeSite }: { siteId: string; onChangeSite: () => void }) {
   const tok = useMemo(token, [])
-  const q = hashQuery()
-  const roomParam = q.get('room'), gateParam = q.get('gate')
+  const roomParam = hashQuery().get('room')
   const checkKey = `nikaas-in-${siteId}`, cacheKey = `nikaas-me-${siteId}`
-  const [checkedIn, setCheckedIn] = useState(() => saved.get(checkKey) === '1')
+  const [registered, setRegistered] = useState(() => saved.get(checkKey) === '1')
   const [site, setSite] = useState<Site>()
   const [me, setMe] = useState<Me | null>(() => { try { return JSON.parse(saved.get(cacheKey) ?? 'null') } catch { return null } })
   const [err, setErr] = useState('')
   const [offline, setOffline] = useState(false)
   const [pushState, setPushState] = useState<PushState | null>(() => pushSupport())
-  const [leaving, setLeaving] = useState(false)
   const [busy, setBusy] = useState(false)
   const [allClear, setAllClear] = useState(false)
   const [silenced, setSilenced] = useState('')
+  const [editing, setEditing] = useState(false)
   const lastAlarm = useRef<string | null>(null)
 
   useEffect(() => { void registerWorker() }, [])
   useEffect(() => { api.get<Site>(`/sites/${siteId}`).then(setSite).catch(e => setErr(e instanceof ApiError && e.status === 404 ? 'This building is not on Nikaas any more.' : String(e.message ?? e))) }, [siteId])
 
+  const keep = useCallback((m: Me) => { setMe(m); saved.set(cacheKey, JSON.stringify(m)) }, [cacheKey])
   const refresh = useCallback(async () => {
     try {
       const m = await api.get<Me>(`/sites/${siteId}/me?token=${encodeURIComponent(tok)}`)
-      setMe(m); setOffline(false); setErr('')
-      saved.set(cacheKey, JSON.stringify(m))
+      keep(m); setOffline(false); setErr('')
       return m
     } catch (e) {
-      if (e instanceof ApiError && e.status === 404) { saved.set(checkKey, null); saved.set(cacheKey, null); setCheckedIn(false); setMe(null); return null }
+      if (e instanceof ApiError && e.status === 404) { saved.set(checkKey, null); saved.set(cacheKey, null); setRegistered(false); setMe(null); return null }
       setOffline(true)
       return null
     }
-  }, [siteId, tok, checkKey, cacheKey])
-
-  // a room sticker scanned while already checked in moves you to that room; an entrance scan asks if you are leaving
-  const handledScan = useRef(false)
-  useEffect(() => {
-    if (!checkedIn || handledScan.current) return
-    handledScan.current = true
-    if (roomParam && roomParam !== me?.person.room) void api.post<Me>(`/sites/${siteId}/checkin`, { token: tok, room: roomParam }).then(setMe).catch(() => {})
-    else if (gateParam && !me?.alarm) setLeaving(true)
-  }, [checkedIn, roomParam, gateParam, me, siteId, tok])
+  }, [siteId, tok, checkKey, cacheKey, keep])
 
   const alarmOn = !!me?.alarm
   useEffect(() => {
-    if (!checkedIn) return
+    if (!registered) return
     void refresh()
-    const id = setInterval(refresh, alarmOn ? 3000 : 8000)
+    const id = setInterval(refresh, alarmOn ? 3000 : 10000)
     const onMsg = (e: MessageEvent) => { if (e.data?.type === 'nikaas-push') void refresh() }
     navigator.serviceWorker?.addEventListener('message', onMsg)
     const onVis = () => { if (document.visibilityState === 'visible') void refresh() }
     document.addEventListener('visibilitychange', onVis)
     return () => { clearInterval(id); navigator.serviceWorker?.removeEventListener('message', onMsg); document.removeEventListener('visibilitychange', onVis) }
-  }, [checkedIn, alarmOn, refresh])
+  }, [registered, alarmOn, refresh])
 
-  // siren when an alarm starts while the page is open; all-clear notice when it ends
+  // siren while the page is open and an alarm starts; all-clear notice when it ends
   useEffect(() => {
     const id = me?.alarm?.id ?? null
     if (id && id !== lastAlarm.current && silenced !== id && me?.person.status !== 'safe') siren(true)
@@ -148,33 +149,25 @@ function SiteApp({ siteId, onChangeSite }: { siteId: string; onChangeSite: () =>
   }, [me?.alarm?.id, me?.person.status, silenced])
   useEffect(() => () => siren(false), [])
 
-  const checkIn = async (room: string | null) => {
-    unlockAudio()
-    setBusy(true); setErr('')
-    try {
-      const m = await api.post<Me>(`/sites/${siteId}/checkin`, { token: tok, room, gate: gateParam })
-      setMe(m); saved.set(checkKey, '1'); saved.set('nikaas-site', siteId); setCheckedIn(true)
-      handledScan.current = true
-      try { setPushState(await enablePush(siteId, tok)) } catch { setPushState('off') }
-    } catch (e) { setErr(String((e as Error).message ?? e)) } finally { setBusy(false) }
-  }
-  const checkOut = async () => {
+  const done = (m: Me) => { unlockAudio(); keep(m); saved.set(checkKey, '1'); saved.set('nikaas-site', siteId); setRegistered(true); setEditing(false) }
+  const unregister = async () => {
     setBusy(true)
-    try { await api.post(`/sites/${siteId}/checkout`, { token: tok }) } catch { /* expired already */ }
-    saved.set(checkKey, null); saved.set(cacheKey, null); setCheckedIn(false); setMe(null); setLeaving(false); setBusy(false); siren(false)
+    try { await api.post(`/sites/${siteId}/checkout`, { token: tok }) } catch { /* already gone */ }
+    saved.set(checkKey, null); saved.set(cacheKey, null); setRegistered(false); setMe(null); setBusy(false); siren(false)
   }
   const setRoom = async (room: string) => {
     const m = await api.post<Me>(`/sites/${siteId}/checkin`, { token: tok, room }).catch(() => null)
-    if (m) setMe(m)
+    if (m) keep(m)
   }
 
   const name = site?.name ?? me?.site.name
-  if (!checkedIn) {
+  if (!registered || editing) {
     return (
       <div className="go-app">
-        <Brand name={name} onSite={onChangeSite} />
+        <Brand name={name} onSite={registered ? undefined : onChangeSite} />
         {err && <div className="pf-alert bad">{err}</div>}
-        {site ? <CheckIn site={site} roomParam={roomParam} gateParam={gateParam} busy={busy} onCheckIn={checkIn} /> : !err && <p className="pf-muted">Loading the building…</p>}
+        {site ? <Register site={site} tok={tok} roomParam={roomParam} onDone={done} onCancel={editing ? () => setEditing(false) : undefined} />
+          : !err && <p className="pf-muted">Loading the building…</p>}
       </div>
     )
   }
@@ -185,110 +178,135 @@ function SiteApp({ siteId, onChangeSite }: { siteId: string; onChangeSite: () =>
       <Brand name={me.site.name} />
       {offline && <div className="pf-alert warn" role="status">Offline. Showing your last known route. It updates when the connection is back.</div>}
       {allClear && !me.alarm && <div className="pf-alert ok" role="status"><b>All clear.</b> The emergency is over. Follow staff instructions before going back in. <button className="pf-btn ghost" onClick={() => setAllClear(false)}>Dismiss</button></div>}
-      {leaving && !me.alarm ? (
-        <section className="pf-card go-center">
-          <h1 className="go-title">Leaving {me.site.name}?</h1>
-          <p className="pf-muted">You scanned an entrance code while checked in.</p>
-          <button className="pf-btn primary big" onClick={checkOut} disabled={busy}>Check out</button>
-          <button className="pf-btn big" onClick={() => setLeaving(false)}>I'm still inside</button>
-        </section>
-      ) : me.alarm ? (
-        <Emergency me={me} siteId={siteId} tok={tok} onUpdate={setMe} onSilence={() => { siren(false); setSilenced(me.alarm!.id) }} silenced={silenced === me.alarm.id} onRoom={setRoom} />
+      {me.alarm ? (
+        <Emergency me={me} siteId={siteId} tok={tok} onUpdate={keep} onSilence={() => { siren(false); setSilenced(me.alarm!.id) }} silenced={silenced === me.alarm.id} onRoom={setRoom} />
       ) : (
-        <Everyday me={me} pushState={pushState} onPush={async () => { unlockAudio(); try { setPushState(await enablePush(siteId, tok)) } catch { setPushState('off') } }} onRoom={setRoom} onCheckOut={checkOut} busy={busy} />
+        <Registered me={me} pushState={pushState} onPush={async () => { unlockAudio(); try { setPushState(await enablePush(siteId, tok)) } catch { setPushState('off') } }}
+          onRoom={setRoom} onChangeNumber={() => setEditing(true)} onUnregister={unregister} busy={busy} />
       )}
     </div>
   )
 }
 
-// ---------- check in ----------
-function CheckIn({ site, roomParam, gateParam, busy, onCheckIn }: { site: Site; roomParam: string | null; gateParam: string | null; busy: boolean; onCheckIn: (room: string | null) => void }) {
-  const nodes = site.building.nodes
-  const room = roomParam ? nodes.find(n => n.id === roomParam && n.type === 'room') : undefined
-  const gate = gateParam ? nodes.find(n => n.id === gateParam) : undefined
-  const [pick, setPick] = useState<string | null>(room?.id ?? null)
-  const floors = site.building.floors ?? []
-  const fname = (f?: string) => floors.find(x => x.id === f)?.name
-  return (
-    <section className="go-stack">
+// ---------- register: phone number, then the code from the text message ----------
+function Register({ site, tok, roomParam, onDone, onCancel }: { site: Site; tok: string; roomParam: string | null; onDone: (m: Me) => void; onCancel?: () => void }) {
+  const [stage, setStage] = useState<'phone' | 'code'>('phone')
+  const [phone, setPhone] = useState('')
+  const [agree, setAgree] = useState(false)
+  const [code, setCode] = useState('')
+  const [sentTo, setSentTo] = useState('')
+  const [sentAt, setSentAt] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id) }, [])
+  const room = roomParam ? site.building.nodes.find(n => n.id === roomParam && n.type === 'room') : undefined
+
+  const send = async () => {
+    setBusy(true); setErr('')
+    try {
+      const m = await api.post<MeV>(`/sites/${site.id}/register`, { token: tok, phone })
+      if (room) await api.post(`/sites/${site.id}/checkin`, { token: tok, room: room.id }).catch(() => {})
+      if (m.verify === 'none') { onDone(m); return }
+      setSentTo(m.person.phone ?? phone); setSentAt(Date.now()); setStage('code'); setCode('')
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+  }
+  const verify = async () => {
+    setBusy(true); setErr('')
+    try { onDone(await api.post<Me>(`/sites/${site.id}/verify`, { token: tok, code })) } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+  }
+  const withoutPhone = async () => {
+    setBusy(true); setErr('')
+    try { onDone(await api.post<Me>(`/sites/${site.id}/checkin`, { token: tok, room: room?.id ?? null })) } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
+  }
+  const wait = Math.max(0, 30 - Math.floor((now - sentAt) / 1000))
+
+  if (stage === 'code') return (
+    <form className="go-stack" onSubmit={e => { e.preventDefault(); void verify() }}>
       <div>
-        <p className="pf-eyebrow">{gate ? `Entrance: ${gate.label ?? gate.id}` : room ? 'Room code' : 'Check in'}</p>
-        <h1 className="go-title">Welcome to {site.name}</h1>
-        <p className="pf-muted">Check in to get an alert and your own way out if there is an emergency while you are here.</p>
+        <p className="pf-eyebrow">Step 2 of 2</p>
+        <h1 className="go-title">Enter the code</h1>
+        <p className="pf-muted">We sent a text message with a 6-digit code to <b>{sentTo}</b>. It can take up to a minute.</p>
       </div>
-      {room ? (
-        <div className="pf-card"><span className="pf-muted pf-small">Your location</span><b className="go-room">{room.label ?? room.id}</b>{fname(room.floor_id) && <span className="pf-muted">{fname(room.floor_id)}</span>}</div>
-      ) : (
-        <RoomPicker site={site} value={pick} onChange={setPick} />
-      )}
-      <button className="pf-btn go big" onClick={() => onCheckIn(pick)} disabled={busy}>{busy ? 'Checking in…' : 'Check in and turn on alerts'}</button>
-      <p className="pf-muted pf-small">Anonymous: no name or phone number. Your check-in is deleted 24 hours after your last update. Your location is only used when you tap "I'm safe".</p>
-    </section>
-  )
-}
-
-function RoomPicker({ site, value, onChange }: { site: Site; value: string | null; onChange: (id: string) => void }) {
-  const [q, setQ] = useState('')
-  const floors = [...(site.building.floors ?? [{ id: '', name: '', elevation_m: 0 }])].sort((a, b) => b.elevation_m - a.elevation_m)
-  const rooms = site.building.nodes.filter(n => n.type === 'room' && (n.label ?? n.id).toLowerCase().includes(q.toLowerCase()))
-  return (
-    <div className="go-stack">
-      <label className="pf-field">Where are you now?
-        {site.building.nodes.filter(n => n.type === 'room').length > 8 && <input type="search" placeholder="Search rooms" value={q} onChange={e => setQ(e.target.value)} />}
+      <label className="pf-field">Code from the text message
+        <input className="go-code" aria-label="Code from the text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={8} value={code} onChange={e => setCode(e.target.value.replace(/\D/g, ''))} autoFocus aria-describedby="code-help" />
       </label>
-      {floors.map(f => {
-        const list = rooms.filter(r => (r.floor_id ?? '') === f.id || !site.building.floors)
-        if (!list.length) return null
-        return (
-          <div key={f.id || 'all'} className="go-rooms">
-            {f.name && <p className="pf-eyebrow">{f.name}</p>}
-            {list.map(r => <button key={r.id} className={`go-room-btn ${value === r.id ? 'on' : ''}`} aria-pressed={value === r.id} onClick={() => onChange(r.id)}>{r.label ?? r.id}</button>)}
-          </div>
-        )
-      })}
-    </div>
+      {err && <div className="pf-alert bad" role="alert">{err}</div>}
+      <button className="pf-btn go big" disabled={busy || code.length < 4}>{busy ? 'Checking…' : 'Verify and register'}</button>
+      <div className="pf-row" id="code-help">
+        <button type="button" className="pf-btn ghost" onClick={() => void send()} disabled={busy || wait > 0}>{wait > 0 ? `Send again in ${wait} s` : 'Send the code again'}</button>
+        <button type="button" className="pf-btn ghost" onClick={() => { setStage('phone'); setErr('') }}>Change number</button>
+      </div>
+    </form>
+  )
+  return (
+    <form className="go-stack" onSubmit={e => { e.preventDefault(); void send() }}>
+      <div>
+        <p className="pf-eyebrow">{onCancel ? 'Change number' : 'Emergency alerts · step 1 of 2'}</p>
+        <h1 className="go-title">Welcome to {site.name}</h1>
+        <p className="pf-muted">Register your mobile number. If there is a fire or another emergency while you are here, you get a text message with your own way out.</p>
+      </div>
+      <label className="pf-field">Mobile number
+        <span className="go-phone"><span aria-hidden="true">+91</span>
+          <input type="tel" aria-label="Mobile number" inputMode="tel" autoComplete="tel" placeholder="98765 43210" value={phone} onChange={e => setPhone(e.target.value)} required aria-describedby="phone-help" /></span>
+      </label>
+      <span id="phone-help" className="pf-small pf-muted">Not an Indian number? Start with + and your country code.</span>
+      <label className="go-consent"><input type="checkbox" checked={agree} onChange={e => setAgree(e.target.checked)} />
+        <span>Text me emergency alerts for {site.name}. My number is used only for this and deleted 24 hours after my last update.</span></label>
+      {err && <div className="pf-alert bad" role="alert">{err}</div>}
+      <button className="pf-btn go big" disabled={busy || !agree || phone.replace(/\D/g, '').length < 8}>{busy ? 'Sending the code…' : 'Send me a code'}</button>
+      {onCancel ? <button type="button" className="pf-btn ghost" onClick={onCancel}>Keep my current number</button>
+        : <button type="button" className="pf-btn ghost" onClick={() => void withoutPhone()} disabled={busy}>Continue without a phone number</button>}
+      {!onCancel && <p className="pf-small pf-muted">Without a number, alerts only reach you while this page is open.</p>}
+    </form>
   )
 }
 
-// ---------- normal day ----------
-function Everyday({ me, pushState, onPush, onRoom, onCheckOut, busy }: { me: Me; pushState: PushState | null; onPush: () => void; onRoom: (r: string) => void; onCheckOut: () => void; busy: boolean }) {
-  const [changing, setChanging] = useState(!me.person.room)
+// ---------- registered, no emergency ----------
+function Registered({ me, pushState, onPush, onRoom, onChangeNumber, onUnregister, busy }: { me: Me; pushState: PushState | null; onPush: () => void; onRoom: (r: string) => void; onChangeNumber: () => void; onUnregister: () => void; busy: boolean }) {
+  const [rooms, setRooms] = useState(false)
   const p = me.person
-  const fname = me.site.floors.find(f => f.id === p.floor)?.name
   return (
     <section className="go-stack">
       <div className="pf-card go-status">
-        <span className="pf-chip ok"><span className="pf-dot" />Checked in</span>
-        <b className="go-room">{p.room_label ?? 'Room not set'}</b>
-        <span className="pf-muted">{fname ? `${fname} · ` : ''}{me.site.name}</span>
-        <div className="pf-row"><button className="pf-btn" onClick={() => setChanging(v => !v)}>{changing ? 'Done' : 'Change room'}</button></div>
-      </div>
-      {changing && <div className="pf-card"><RoomPickerFromMe me={me} onPick={r => { onRoom(r); setChanging(false) }} /></div>}
-      <PushNote state={pushState} onEnable={onPush} />
-      {me.route && (
-        <div className="pf-card">
-          <p className="pf-eyebrow">Your way out</p>
-          <ExitLine route={me.route} />
-          <details className="go-details"><summary>Show the route</summary><Steps route={me.route} /><RouteMap me={me} route={me.route} /></details>
+        {p.phone_verified ? <span className="pf-chip ok"><span className="pf-dot" />Registered for SMS alerts</span>
+          : p.verify_pending ? <span className="pf-chip warn"><span className="pf-dot" />Number not verified yet</span>
+            : <span className="pf-chip"><span className="pf-dot" />Registered without a phone number</span>}
+        <b className="go-room">{p.phone ?? me.site.name}</b>
+        <span className="pf-muted">{p.phone_verified ? 'If there is an emergency, you will get a text message with a link to your own exit route. You do not need to keep this page open.'
+          : p.verify_pending ? 'Finish verifying your number to get text messages.' : 'Keep this page open while you are in the building, or add a number for text alerts.'}</span>
+        <div className="pf-row">
+          <button className="pf-btn" onClick={onChangeNumber}>{p.phone ? 'Change number' : 'Add a phone number'}</button>
+          <button className="pf-btn ghost" onClick={onUnregister} disabled={busy}>Unregister</button>
         </div>
-      )}
-      {me.hazards.length > 0 && <div className="pf-alert warn">Reported hazards: {me.hazards.map(h => h.label).join(', ')}. Your route avoids them.</div>}
-      <button className="pf-btn big" onClick={onCheckOut} disabled={busy}>Check out</button>
+      </div>
+      {!p.phone_verified && <PushNote state={pushState} onEnable={onPush} />}
+      <div className="pf-card">
+        <p className="pf-eyebrow">Optional</p>
+        <b>{p.room_label ? `You said you are in ${p.room_label}` : 'Know which room you will be in?'}</b>
+        <p className="pf-muted pf-small">In an emergency the app asks for your room anyway. Setting it now saves a few seconds.</p>
+        <button className="pf-btn" onClick={() => setRooms(v => !v)}>{rooms ? 'Done' : p.room ? 'Change room' : 'Choose room'}</button>
+        {rooms && <RoomList me={me} onPick={r => { onRoom(r); setRooms(false) }} />}
+        {me.route && !rooms && <ExitLine route={me.route} />}
+      </div>
+      {me.hazards.length > 0 && <div className="pf-alert warn">Reported hazards: {me.hazards.map(h => h.label).join(', ')}.</div>}
     </section>
   )
 }
 
-function RoomPickerFromMe({ me, onPick }: { me: Me; onPick: (id: string) => void }) {
+function RoomList({ me, onPick, big }: { me: Me; onPick: (id: string) => void; big?: boolean }) {
+  const [q, setQ] = useState('')
   const floors = me.site.floors.length ? [...me.site.floors].reverse() : [{ id: null as string | null, name: '' }]
+  const match = (label: string) => label.toLowerCase().includes(q.trim().toLowerCase())
   return (
-    <div className="go-stack">
-      <p className="pf-eyebrow">Where are you now?</p>
+    <div className={`go-stack ${big ? 'go-rooms-big' : ''}`}>
+      {me.site.rooms.length > 8 && <label className="pf-field"><span className="pf-sr">Search rooms</span><input type="search" placeholder="Search rooms" value={q} onChange={e => setQ(e.target.value)} /></label>}
       {floors.map(f => {
-        const list = me.site.rooms.filter(r => !me.site.floors.length || r[2] === f.id)
+        const list = me.site.rooms.filter(r => (!me.site.floors.length || r[2] === f.id) && match(r[1]))
         return list.length ? (
           <div key={f.id ?? 'all'} className="go-rooms">
-            {f.name && <span className="pf-muted pf-small">{f.name}</span>}
-            {list.map(r => <button key={r[0]} className={`go-room-btn ${me.person.room === r[0] ? 'on' : ''}`} onClick={() => onPick(r[0])}>{r[1]}</button>)}
+            {f.name && <p className="pf-eyebrow">{f.name}</p>}
+            {list.map(r => <button key={r[0]} className={`go-room-btn ${me.person.room === r[0] ? 'on' : ''}`} aria-pressed={me.person.room === r[0]} onClick={() => onPick(r[0])}>{r[1]}</button>)}
           </div>
         ) : null
       })}
@@ -297,11 +315,9 @@ function RoomPickerFromMe({ me, onPick }: { me: Me; onPick: (id: string) => void
 }
 
 function PushNote({ state, onEnable }: { state: PushState | null; onEnable: () => void }) {
-  if (state === 'on') return <div className="pf-alert ok">Alerts are on. Your phone will alert you even if this page is closed.</div>
-  if (state === 'needs-install') return <div className="pf-alert info">On iPhone, tap Share, then <b>Add to Home Screen</b>, and open Nikaas from there to get alerts when the page is closed. Until then, keep this page open.</div>
-  if (state === 'denied') return <div className="pf-alert warn">Notifications are blocked for this site. Keep this page open, or allow notifications in your browser settings.</div>
-  if (state === 'unsupported') return <div className="pf-alert info">This browser cannot receive alerts in the background. Keep this page open while you are in the building.</div>
-  return <div className="pf-alert info pf-row"><span className="pf-grow">Turn on alerts so your phone can warn you even when this page is closed.</span><button className="pf-btn primary" onClick={onEnable}>Turn on</button></div>
+  if (state === 'on') return <div className="pf-alert ok">Browser alerts are on for this phone.</div>
+  if (state === 'needs-install' || state === 'unsupported' || state === 'denied') return null
+  return <div className="pf-alert info pf-row"><span className="pf-grow">Also alert this browser, even with the page closed?</span><button className="pf-btn primary" onClick={onEnable}>Turn on</button></div>
 }
 
 // ---------- emergency ----------
@@ -312,8 +328,11 @@ function Emergency({ me, siteId, tok, onUpdate, onSilence, silenced, onRoom }: {
   const [help, setHelp] = useState(false)
   const [outside, setOutside] = useState(false)
   const [working, setWorking] = useState('')
+  const [at, setAt] = useState(0)
+  const [picking, setPicking] = useState(false)
   useEffect(() => { const id = setInterval(() => setNow(Date.now() / 1000), 1000); return () => clearInterval(id) }, [])
   useEffect(() => { if (route?.changed) { setChangedAt(Date.now()); navigator.vibrate?.([300, 100, 300]) } }, [route?.changed, route?.exit])
+  useEffect(() => setAt(0), [route?.exit, route?.mode, p.room])
   const status = async (status: 'safe' | 'help' | 'inside', need?: string) => {
     setWorking(status)
     const send = (extra: object = {}) => api.post<Me>(`/sites/${siteId}/status`, { token: tok, status, need, ...extra }).then(onUpdate).finally(() => setWorking(''))
@@ -323,6 +342,7 @@ function Emergency({ me, siteId, tok, onUpdate, onSilence, silenced, onRoom }: {
   }
   const wait = route ? a.started_at + route.release_at - now : 0
   const type = ALARM_LABEL[a.type] ?? 'Emergency'
+  const needRoom = (!p.room || picking) && p.status !== 'safe'
   return (
     <section className="go-stack">
       <div className="go-alarm-head" role="alert">
@@ -331,8 +351,14 @@ function Emergency({ me, siteId, tok, onUpdate, onSilence, silenced, onRoom }: {
         {a.message && <p className="go-msg">{a.message}</p>}
         {!silenced && <button className="pf-btn go-silence" onClick={onSilence}>Silence alarm sound</button>}
       </div>
-      {p.status === 'safe' ? <SafeCard me={me} onBack={() => status('inside')} /> : !route ? (
-        p.room ? <div className="pf-alert warn">Working out your route…</div> : <div className="pf-card"><RoomPickerFromMe me={me} onPick={onRoom} /></div>
+      {p.status === 'safe' ? <SafeCard me={me} onBack={() => status('inside')} /> : needRoom ? (
+        <div className="pf-card go-pick">
+          <h1 className="go-title">Which room are you in?</h1>
+          <p className="pf-muted">Your exit depends on your room: each room is sent to the exit that keeps the stairs and doors from crowding.</p>
+          <RoomList me={me} big onPick={r => { setPicking(false); onRoom(r) }} />
+        </div>
+      ) : !route ? (
+        <div className="pf-alert warn">Working out your route…</div>
       ) : (
         <>
           {Date.now() - changedAt < 30000 && changedAt > 0 && <div className="pf-alert warn" role="alert"><b>Your route has changed.</b> Go to {route.exit_label ?? 'the refuge point'} instead.</div>}
@@ -340,7 +366,7 @@ function Emergency({ me, siteId, tok, onUpdate, onSilence, silenced, onRoom }: {
             <div className="go-exit" style={{ ['--g' as string]: route.group_color ?? 'var(--exit)' }}>
               <ExitIcon color="#fff" />
               <div>
-                <span>{route.group ? `Group ${route.group} · go to` : 'Go to'}</span>
+                <span>{p.room_label} · {route.group ? `group ${route.group} · go to` : 'go to'}</span>
                 <b>{route.exit_label}</b>
                 <span>{Math.round(route.distance_m)} m · about {fmtTime(route.walk_s)} walking</span>
               </div>
@@ -348,20 +374,20 @@ function Emergency({ me, siteId, tok, onUpdate, onSilence, silenced, onRoom }: {
           ) : (
             <div className="go-refuge"><b>Go to the stair landing and wait</b><span>The control room can see you. Rescue teams are told where you are.</span></div>
           )}
+          <button className="pf-btn ghost go-wrong-room" onClick={() => setPicking(true)}>Not in {p.room_label}? Change room</button>
           {wait > 0 && route.mode === 'exit' && (
             <div className="go-wait" role="timer">
               <b>Wait here: your floor leaves in {fmtTime(wait)}</b>
               <span>Floors leave in turn so the stairs do not jam. Leave earlier if you see smoke or fire.</span>
             </div>
           )}
-          <Steps route={route} live />
-          <RouteMap me={me} route={route} />
+          <Guide me={me} route={route} at={at} setAt={setAt} />
           {route.assembly && <Outside route={route} open={outside} onOpen={() => setOutside(true)} />}
         </>
       )}
-      {p.status !== 'safe' && (
+      {p.status !== 'safe' && !needRoom && (
         <div className="go-actions">
-          <button className="pf-btn go big" onClick={() => status('safe')} disabled={!!working}>{working === 'safe' ? 'Checking your location…' : "I'm safe"}</button>
+          <button className="pf-btn go big" onClick={() => status('safe')} disabled={!!working}>{working === 'safe' ? 'Checking your location…' : "I'm out and safe"}</button>
           <button className="pf-btn big go-help-btn" onClick={() => setHelp(true)} disabled={!!working}>{p.status === 'help' ? 'Help requested · update' : 'I need help'}</button>
         </div>
       )}
@@ -383,44 +409,51 @@ function Emergency({ me, siteId, tok, onUpdate, onSilence, silenced, onRoom }: {
 }
 
 function ExitLine({ route }: { route: Route }) {
-  return <p className="go-exit-line"><ExitIcon color="var(--exit)" /><span><b>{route.exit_label}</b><span className="pf-muted">{Math.round(route.distance_m)} m · about {fmtTime(route.walk_s)}</span></span></p>
+  return <p className="go-exit-line"><ExitIcon color="var(--exit)" /><span><b>{route.exit_label ?? 'Refuge'}</b><span className="pf-muted">{Math.round(route.distance_m)} m · about {fmtTime(route.walk_s)}</span></span></p>
 }
 
-function Steps({ route, live }: { route: Route; live?: boolean }) {
-  const [at, setAt] = useState(0)
-  useEffect(() => setAt(0), [route.exit, route.mode])
+const ICON: Record<string, string> = { start: '●', walk: '↑', turn: '↱', stairs: '⇣', exit: '⇥', outside: '⚑', refuge: '■' }
+
+/** Step-by-step guide: the current step in big type, the map zoomed to it, and the full list below. */
+function Guide({ me, route, at, setAt }: { me: Me; route: Route; at: number; setAt: (f: (i: number) => number) => void }) {
   const steps = route.steps
-  return (
-    <div className="pf-card go-steps">
-      {live && <div className="pf-row go-steps-head"><b className="pf-grow">Step {Math.min(at + 1, steps.length)} of {steps.length}</b>
-        <button className="pf-btn" onClick={() => setAt(i => Math.max(0, i - 1))} disabled={at === 0} aria-label="Previous step">Back</button>
-        <button className="pf-btn primary" onClick={() => setAt(i => Math.min(steps.length - 1, i + 1))} disabled={at >= steps.length - 1}>Next step</button></div>}
-      <ol>
-        {steps.map((s, k) => (
-          <li key={k} className={`go-step ${s.kind} ${live && k === at ? 'now' : ''} ${live && k < at ? 'done' : ''}`} onClick={live ? () => setAt(k) : undefined}>
-            <span className="go-step-ico" aria-hidden="true">{{ start: '●', walk: '↑', turn: '↱', stairs: '⇣', exit: '⇥', outside: '⚑', refuge: '■' }[s.kind]}</span>
-            <span>{s.text}</span>
-          </li>
-        ))}
-      </ol>
-    </div>
-  )
-}
-
-function RouteMap({ me, route }: { me: Me; route: Route }) {
-  const floorOf = (id: string | null) => me.map.nodes.find(n => n[0] === id)?.[6] ?? null
-  const start = floorOf(me.person.room)
-  const [floor, setFloor] = useState<string | null>(start ?? me.site.floors[0]?.id ?? null)
+  const floorOf = (id: string | null) => (id ? me.map.nodes.find(n => n[0] === id)?.[6] ?? null : null)
+  // the floor to show: the current step's floor, or the last floor seen before it (outside steps have none)
+  const stepFloor = (() => { for (let k = at; k >= 0; k--) { const f = steps[k].floor ?? floorOf(steps[k].node); if (f) return f } return floorOf(me.person.room) })()
+  const [floor, setFloor] = useState<string | null>(stepFloor)
+  useEffect(() => setFloor(stepFloor), [stepFloor])
+  const shown = me.site.floors.length ? floor : null
+  const onFloor = route.path.filter(id => !me.site.floors.length || floorOf(id) === shown)
   const target = route.mode === 'exit' ? route.exit : route.path[route.path.length - 1]
   const marks: Record<string, string> = {}
   for (const h of me.hazards) if (h.floor) marks[h.floor] = String((Number(marks[h.floor]) || 0) + 1)
   const onRoute = new Set(route.path.map(floorOf))
+  const cur = steps[Math.min(at, steps.length - 1)]
   return (
-    <div className="pf-card go-map">
-      <div className="pf-row"><b className="pf-grow">Map</b><FloorTabs floors={me.site.floors.filter(f => onRoute.has(f.id) || f.id === floor)} value={floor} onChange={setFloor} marks={marks} /></div>
-      <PlanView nodes={me.map.nodes} edges={me.map.edges} floor={me.site.floors.length ? floor : null} route={route.path} routeColor={route.group_color ?? 'var(--exit)'}
-        hazards={me.hazards.map(h => h.node)} here={me.person.room} target={target} label={`Your route on ${me.site.floors.find(f => f.id === floor)?.name ?? 'the plan'}`} />
-      <p className="pf-muted pf-small go-legend"><span className="lg-you" /> You <span className="lg-exit" /> Exit <span className="lg-fire" /> Hazard</p>
+    <div className="pf-card go-guide">
+      <div className="go-now" aria-live="polite">
+        <span className="go-now-n">Step {Math.min(at + 1, steps.length)} of {steps.length}</span>
+        <b><span className="go-step-ico big" aria-hidden="true">{ICON[cur.kind]}</span>{cur.text}</b>
+      </div>
+      <div className="go-map">
+        {me.site.floors.length > 1 && <FloorTabs floors={me.site.floors.filter(f => onRoute.has(f.id) || f.id === floor)} value={floor} onChange={setFloor} marks={marks} />}
+        <PlanView nodes={me.map.nodes} edges={me.map.edges} floor={shown} route={route.path} routeColor={route.group_color ?? 'var(--exit)'} animate
+          hazards={me.hazards.map(h => h.node)} here={me.person.room} target={target} targetLabel={route.mode === 'exit' ? 'EXIT' : 'WAIT'}
+          focus={onFloor} stepNode={cur.node} label={`Your route on ${me.site.floors.find(f => f.id === floor)?.name ?? 'the plan'}`} />
+        <p className="pf-muted pf-small go-legend"><span className="lg-you" /> You <span className="lg-exit" /> Exit <span className="lg-fire" /> Hazard</p>
+      </div>
+      <div className="pf-row go-steps-head">
+        <button className="pf-btn big-ish" onClick={() => setAt(i => Math.max(0, i - 1))} disabled={at === 0}>Back</button>
+        <button className="pf-btn primary go-next" onClick={() => setAt(i => Math.min(steps.length - 1, i + 1))} disabled={at >= steps.length - 1}>Next step</button>
+      </div>
+      <ol className="go-steps">
+        {steps.map((s, k) => (
+          <li key={k} className={`go-step ${s.kind} ${k === at ? 'now' : ''} ${k < at ? 'done' : ''}`} onClick={() => setAt(() => k)}>
+            <span className="go-step-ico" aria-hidden="true">{ICON[s.kind]}</span>
+            <span>{s.text}</span>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }

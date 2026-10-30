@@ -17,7 +17,8 @@ type Review = { doc: Doc; links: Link[]; linkErr: string; problems: string[] }
 const DEFAULT_WIDTH = 40
 const STOREY = 3.5
 
-export default function ImportPlans({ onCancel, onDone }: { onCancel: () => void; onDone: (doc: Doc, origin: Origin, note?: ReactNode) => void }) {
+/** `fresh`: the doc has plan pictures just imported, so the editor traces their walls and measures widths. */
+export default function ImportPlans({ onCancel, onDone }: { onCancel: () => void; onDone: (doc: Doc, origin: Origin, note?: ReactNode, fresh?: boolean) => void }) {
   const [items, setItems] = useState<Item[]>([])
   const [name, setName] = useState('')
   const [busy, setBusy] = useState('')
@@ -101,7 +102,7 @@ export default function ImportPlans({ onCancel, onDone }: { onCancel: () => void
     const floors = floorsOf(items)
     const underlays = Object.fromEntries(items.map((it, i) => [floors[i].id, underlayOf(it)]))
     onDone({ building: { name: buildingName(), units: 'm', floors, nodes: [], edges: [] }, underlays }, { name: buildingName(), address: '', geo: null, assembly: [] },
-      <>The plan pictures are under each floor at {items[0]?.width ?? DEFAULT_WIDTH} m wide. Use <b>Set scale</b> if a known length does not match, then draw rooms, walkways, stairs and exits.</>)
+      <>The plan pictures are under each floor at {items[0]?.width ?? DEFAULT_WIDTH} m wide. Use <b>Set scale</b> if a known length does not match, then draw rooms, walkways, stairs and exits.</>, true)
   }
 
   async function readPlans() {
@@ -145,7 +146,7 @@ export default function ImportPlans({ onCancel, onDone }: { onCancel: () => void
     const note = anyRead
       ? <>Plans read. <b>Exits are guessed from the picture: check every exit</b> (green) before you save. {items.length < 2 ? '' : review.links.length ? `${review.links.length} stair links were added between floors.` : stairs ? 'No stairs lined up between floors: connect landings with the Connect tool or Link stairs.' : 'No stair landings were found: add them with the Stair tool.'}</>
       : <>The plan reader is not available right now, so the floors are empty. Draw over the plan pictures by hand.</>
-    onDone(review.doc, { name: buildingName(), address: '', geo: null, assembly: [] }, note)
+    onDone(review.doc, { name: buildingName(), address: '', geo: null, assembly: [] }, note, true)
   }
 
   return (

@@ -15,6 +15,7 @@ export type Hazard = { id: string; kind: string; node: string; floor: string | n
 export type Person = {
   token: string; room: string | null; room_label: string | null; floor: string | null; gate: string | null; status: 'inside' | 'safe' | 'help'
   need: string | null; checked_in_at: number; updated_at: number; safe_verified: boolean | null; safe_distance_m?: number | null; push: boolean; seen: number
+  phone: string | null; phone_verified: boolean; verify_pending: boolean
 }
 export type Me = {
   site: { id: string; name: string; floors: Floor[]; rooms: [string, string, string | null][]; exits: [string, string][] }
@@ -25,11 +26,12 @@ export type Geo = { lat: number; lng: number; rotation_deg: number }
 export type BuildingNode = { id: string; type: 'room' | 'corridor' | 'exit'; x: number; z: number; w?: number; d?: number; people?: number; label?: string; floor_id?: string; stair?: boolean; [k: string]: unknown }
 export type BuildingEdge = { from: string; to: string; width: number; length?: number; kind?: 'door' | 'corridor' | 'stair'; capacity_group?: string }
 export type Building = { name: string; floors?: { id: string; name: string; elevation_m: number }[]; nodes: BuildingNode[]; edges: BuildingEdge[]; [k: string]: unknown }
-export type Site = { id: string; name: string; address?: string; demo?: boolean; building: Building; geo: Geo | null; assembly: Assembly[]; updated_at?: number }
+export type Site = { id: string; name: string; address?: string; demo?: boolean; building: Building; geo: Geo | null; assembly: Assembly[]; updated_at?: number; media?: import('./walls.ts').Media }
 export type Level = 'ok' | 'concern' | 'crush'
 export type ControlPerson = {
   token: string; room: string | null; room_label: string | null; floor: string | null; status: 'inside' | 'safe' | 'help'; need: string | null
   updated_at: number; exit: string | null; group: string | null; safe_verified: boolean | null; safe_distance_m: number | null; push: boolean
+  phone: string | null; phone_verified: boolean; sms_last: { kind: string; ok: boolean; error: string | null; at: number } | null
 }
 export type Control = {
   site: SiteSummary & { building: Building; assembly: Assembly[] }
@@ -48,6 +50,7 @@ export type Control = {
   version: number
   thresholds: { concern: number; crush: number; heat_c: number }
   server_time?: number
+  sms?: { provider: string; sandbox: boolean | null; registered: number; verified: number; sandbox_limit: number | null; last: { kind: string; sent: number; failed: number; at: number } | null }
 }
 
 export class ApiError extends Error {
