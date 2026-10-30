@@ -64,7 +64,8 @@ async function fetchRun(building: Building, blocked: string[], src: typeof SOURC
   if (!API) throw new Error('This scenario needs the live API (set VITE_API_URL).')
   if (plan !== 'nikaas') return post('/simulate', { building, blocked, frame_every, compliance, wheelchair_fraction: wheelchairFraction })
   const [opt, nearest] = await Promise.all([
-    post('/optimise', { building, blocked, simulate: true, frame_every }),
+    // /optimise simulates everyone following the plan; with partial compliance the plan is simulated below
+    post('/optimise', { building, blocked, simulate: compliance >= 1, frame_every }),
     post('/simulate', { building, blocked, frame_every: 1e6 }),
   ])
   const run = opt.run ?? await post('/simulate', { building, blocked, plan: opt.plan, frame_every, compliance, wheelchair_fraction: wheelchairFraction })
@@ -87,11 +88,20 @@ export default function App() {
   const [wheelchairPct, setWheelchairPct] = useState(0)
   const [qa, setQa] = useState<{ score: number; status: string; warnings: { severity: string; message: string }[] }>()
   const [comparing, setComparing] = useState(false)
-  const [compareResults, setCompareResults] = useState<CompareResult[]>([])
+  // a comparison belongs to one building and one set of blocked exits: it is shown only while both are unchanged
+  const [compare, setCompare] = useState<{ building: Building; blocked: string[]; results: CompareResult[] } | null>(null)
+  const compareResults = compare && compare.building === building && compare.blocked === blocked ? compare.results : []
+  const compareRef = useRef<HTMLDivElement>(null)
+  useEffect(() => { if (compare) compareRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) }, [compare])
   useEffect(() => { fetch('data/vision_nova_pro_qa.json').then(r => r.json()).then(setQa).catch(() => {}) }, [])
   const canvas = useRef<HTMLCanvasElement>(null)
 
-  useEffect(() => { setBuilding(undefined); setRun(undefined); setBlocked([]); setBaseline({}); fetch(source.file).then(r => r.json()).then(setBuilding) }, [source])
+  useEffect(() => {
+    let live = true // a slow building file must not replace one picked after it
+    setBuilding(undefined); setRun(undefined); setBlocked([]); setBaseline({})
+    fetch(source.file).then(r => r.json()).then(b => { if (live) setBuilding(b) }).catch(e => live && setError(String(e.message ?? e)))
+    return () => { live = false }
+  }, [source])
   useEffect(() => {
     if (!building) return
     let live = true
@@ -252,17 +262,20 @@ export default function App() {
             style={{ marginTop: 10, padding: '7px 16px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, cursor: 'pointer', fontWeight: 600, fontSize: 13, opacity: comparing || !API ? 0.6 : 1 }}
             onClick={async () => {
               if (!building) return
-              setComparing(true); setCompareResults([])
+              const b = building, bl = blocked
+              setComparing(true); setCompare(null)
               try {
                 const scenarios = [
                   { label: 'Panic (30%)', compliance: 0.3 },
                   { label: 'Guided (90%)', compliance: 0.9 },
                   { label: 'Full plan (100%)', compliance: 1.0 },
                 ]
+                // compliance only changes the Nikaas plan: people who ignore it take the nearest exit, so the
+                // nearest-exit plan gives the same run at every level
                 const results = await Promise.all(
-                  scenarios.map(s => fetchRun(building, blocked, source, plan, s.compliance, wheelchairPct / 100).then(run => ({ ...s, run })))
+                  scenarios.map(s => fetchRun(b, bl, source, 'nikaas', s.compliance, wheelchairPct / 100).then(run => ({ ...s, run })))
                 )
-                setCompareResults(results)
+                setCompare({ building: b, blocked: bl, results })
               } catch (e) { setError(String((e as Error).message ?? e)) }
               finally { setComparing(false) }
             }}
@@ -364,17 +377,17 @@ export default function App() {
         </aside>
       </div>
       {compareResults.length > 0 && (
-        <div style={{ marginTop: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <div ref={compareRef} style={{ marginTop: 24, scrollMarginTop: 96 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
             <h2 style={{ fontFamily: 'var(--serif)', fontSize: 22, margin: 0 }}>Side-by-side comparison</h2>
-            <span style={{ fontSize: 13, color: 'var(--muted)' }}>Same building · Same plan · Same blocked exits</span>
-            <button className="quiet" style={{ marginLeft: 'auto' }} onClick={() => setCompareResults([])}>✕ Close</button>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>Same building · Nikaas plan · Same blocked exits</span>
+            <button className="quiet" style={{ marginLeft: 'auto' }} onClick={() => setCompare(null)}>✕ Close</button>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${compareResults.length}, 1fr)`, gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
             {compareResults.map((cr, idx) => {
               const best = compareResults.reduce((a, b) => a.run.total_time_s < b.run.total_time_s ? a : b)
-              const isBest = cr === best
               const worstTime = Math.max(...compareResults.map(r => r.run.total_time_s))
+              const isBest = cr === best && best.run.total_time_s < worstTime // a tie has no winner
               const pct = worstTime > 0 ? (cr.run.total_time_s / worstTime) * 100 : 100
               return (
                 <div key={idx} style={{ background: isBest ? '#ecfdf3' : 'var(--card)', border: `2px solid ${isBest ? 'var(--accent)' : 'var(--line)'}`, borderRadius: 10, padding: 16 }}>

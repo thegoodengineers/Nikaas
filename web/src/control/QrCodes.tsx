@@ -1,4 +1,4 @@
-// One printable QR code per building. Scanning it opens the phone app (#/go) to register for emergency texts;
+// One printable QR code per building. Scanning it opens the phone app (#/go) to turn on emergency alerts;
 // people choose their room when an alarm comes, so rooms need no codes of their own.
 import { siteUrl, type Control } from '../platform/api.ts'
 import ExitIcon from '../ExitIcon.tsx'
@@ -22,7 +22,7 @@ export default function QrCodes({ data, siteId }: { data: Control; siteId: strin
           <button type="button" className="pf-btn primary" onClick={() => print(poster, 'posters')}>Print poster</button>
         </div>
         <p className="pf-muted pf-small">One code for the whole building: put copies at the entrances and the registration desk. People scan it once and
-          register their mobile number. When you raise the alarm, every registered phone gets a text with its own link; they choose their room and get their route.</p>
+          tap Turn on alerts. When you raise the alarm, every phone gets a notification; they choose their room and get their own route out.</p>
         <div className="cr-poster-grid"><div className="cr-poster-preview">{poster}</div></div>
         <p className="pf-small pf-muted">Link: <code>{url}</code></p>
       </section>
@@ -38,8 +38,8 @@ function Poster({ site, url }: { site: string; url: string }) {
       <p className="cr-poster-site">{site}</p>
       <Qr url={url} label={`QR code for ${site}`} className="cr-poster-qr" />
       <h3 className="cr-poster-call">Scan to get emergency alerts.</h3>
-      <p className="cr-poster-sub">Register your mobile number. In an emergency you get a text with your own way out.</p>
-      <p className="cr-poster-note">No app to install. Your number is used only for alerts and deleted after 24 hours.</p>
+      <p className="cr-poster-sub">Tap Turn on alerts. In an emergency your phone shows your own way out.</p>
+      <p className="cr-poster-note">No app to install. No name or number needed. Your sign-up is deleted after 24 hours.</p>
     </article>
   )
 }

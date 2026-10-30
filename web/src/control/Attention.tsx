@@ -1,10 +1,11 @@
 // Beside the floor plan: what needs someone now (help requests, rooms cut off, hazards), then the exits.
 import { ago, api, fmtTime } from '../platform/api.ts'
-import { HAZARD_LABEL, NEED_LABEL, SOURCE_LABEL, nodeLabel, type PanelProps } from './util.ts'
+import { HAZARD_LABEL, NEED_LABEL, SOURCE_LABEL, nodeLabel, useBusy, type PanelProps } from './util.ts'
 
 type Item = { key: string; tone: 'help' | 'cut' | 'fire'; title: string; sub: string; node: string | null; hazard?: string }
 
 export function Attention({ data, siteId, act, onShow }: PanelProps & { onShow: (node: string) => void }) {
+  const [busy, run] = useBusy()
   const b = data.site.building
   const items: Item[] = []
   // help requests, one line per room
@@ -37,7 +38,7 @@ export function Attention({ data, siteId, act, onShow }: PanelProps & { onShow: 
               <div className="cr-attn-text"><strong>{it.title}</strong><small>{it.sub}</small></div>
               <div className="cr-attn-act">
                 {it.node && <button type="button" className="cr-link" onClick={() => onShow(it.node!)}>Show</button>}
-                {it.hazard && <button type="button" className="cr-link" onClick={() => act(() => api.del(`/sites/${encodeURIComponent(siteId)}/hazards/${encodeURIComponent(it.hazard!)}`, true), 'Hazard cleared. Routes are being re-planned.')}>Clear</button>}
+                {it.hazard && <button type="button" className="cr-link" disabled={!!busy} onClick={() => run(it.hazard!, () => act(() => api.del(`/sites/${encodeURIComponent(siteId)}/hazards/${encodeURIComponent(it.hazard!)}`, true), 'Hazard cleared. Routes are being re-planned.'))}>{busy === it.hazard ? 'Clearing…' : 'Clear'}</button>}
               </div>
             </li>
           ))}

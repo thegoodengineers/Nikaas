@@ -18,7 +18,8 @@ export default function Sign() {
       try {
         const r = await fetch(`${API}/drill`)
         if (!r.ok) throw new Error(String(r.status))
-        const st: State = await r.json()
+        const st: State | null = await r.json()
+        if (!st) throw new Error('no drill yet') // the API answers null until the presenter starts one
         if (!alive) return
         const now = !!exit && st.blocked.includes(exit)
         if (now && !was) navigator.vibrate?.([500, 150, 500])

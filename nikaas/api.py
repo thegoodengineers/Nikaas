@@ -208,6 +208,10 @@ def drill_get(room: str | None = None, since: int = 0, accessible: bool = False)
     tell whether anything changed. ?accessible=true filters to stair-free routes (for mobility-impaired users)."""
     s = drill_state.read()
     if not s:
+        if room is None:
+            # no drill yet: the presenter screen, exit signs and phones poll until one starts. null rather than
+            # a 404 every 2 s, which browsers log as an error.
+            return None
         raise HTTPException(404, "no drill running")
     s = drill_state.public(s)
     if room is None:

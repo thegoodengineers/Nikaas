@@ -181,7 +181,7 @@ table.data td.num { font: 600 20px/1 var(--num); font-variant-numeric: tabular-n
 .drill-steps li span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--exit); color: #fff; font: 700 13px/1 var(--text); }
 .drill-url { display: flex; gap: 8px; align-items: center; }
 .drill-url code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; padding: 9px 10px; background: #f3f5f7; border-radius: 8px; }
-.drill-main { display: grid; gap: 16px; min-width: 0; }
+.drill-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; min-width: 0; }
 .drill-start { display: grid; gap: 10px; justify-items: start; padding: 28px; }
 .drill-start h2 { font-size: 22px; }
 .drill-big { padding: 14px 26px; font-size: 17px; border-radius: 999px; }
@@ -212,8 +212,8 @@ table.data td.num { font: 600 20px/1 var(--num); font-variant-numeric: tabular-n
 .drill-more a { display: grid; gap: 4px; text-decoration: none; color: var(--text-1); }
 .drill-more a:hover { border-color: #b8c0c8; }
 .drill-more span { font-size: 14px; color: var(--text-2); overflow-wrap: anywhere; }
-@media (max-width: 860px) { .drill-grid { grid-template-columns: 1fr; } .drill-join { position: static; } .drill-head { flex-direction: column; gap: 8px; } }
-@media (max-width: 520px) { .drill-stats { grid-template-columns: 1fr 1fr; } .drill-stats .pf-card:last-child { grid-column: span 2; } .drill-stats b { font-size: 38px; } }
+@media (max-width: 860px) { .drill-grid { grid-template-columns: minmax(0, 1fr); } .drill-join { position: static; } .drill-head { flex-direction: column; gap: 8px; } }
+@media (max-width: 520px) { .drill-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .drill-stats .pf-card { padding: 12px 14px; } .drill-stats .pf-card:last-child { grid-column: span 2; } .drill-stats b { font-size: 38px; } }
 
 /* live drill: the judge's phone */
 body.phone-mode { background: #fff; }

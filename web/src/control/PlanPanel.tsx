@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import PlanView from '../platform/PlanView.tsx'
 import { ago, api } from '../platform/api.ts'
-import { HAZARD_KINDS, HAZARD_LABEL, SOURCE_LABEL, floorName, floorsOf, mapOf, nodeKind, nodeLabel, type PanelProps } from './util.ts'
+import { HAZARD_KINDS, HAZARD_LABEL, SOURCE_LABEL, floorName, floorsOf, mapOf, nodeKind, nodeLabel, useBusy, type PanelProps } from './util.ts'
 
 const FILL = { empty: '#ffffff', ok: '#e9f6ee', concern: '#fde68a', crush: '#fca5a5' }
 
@@ -122,6 +122,7 @@ type NodeProps = PanelProps & { id: string; onClose: () => void; onOrigin: (id: 
 
 function NodePanel({ id, data, siteId, act, onClose, onOrigin, origin }: NodeProps) {
   const b = data.site.building
+  const [busy, run] = useBusy()
   const n = b.nodes.find(x => x.id === id)
   if (!n) return null
   const label = nodeLabel(b, id)
@@ -131,8 +132,8 @@ function NodePanel({ id, data, siteId, act, onClose, onOrigin, origin }: NodePro
   const exit = data.exits.find(x => x.id === id)
   const roomExit = room?.exit ? data.exits.find(x => x.id === room.exit) : undefined
   const here = data.hazards.filter(h => h.node === id)
-  const report = (k: string) => act(() => api.post(`/sites/${encodeURIComponent(siteId)}/hazards`, { kind: k, node: id, source: 'manual' }, true),
-    `${HAZARD_LABEL[k]} reported at ${label}. Routes are being re-planned.`)
+  const report = (k: string) => run(k, () => act(() => api.post(`/sites/${encodeURIComponent(siteId)}/hazards`, { kind: k, node: id, source: 'manual' }, true),
+    `${HAZARD_LABEL[k]} reported at ${label}. Routes are being re-planned.`))
   const level = room?.level ?? spot?.level
   return (
     <div className="cr-node" role="region" aria-label={`${label} details`}>
@@ -170,14 +171,14 @@ function NodePanel({ id, data, siteId, act, onClose, onOrigin, origin }: NodePro
         <ul className="cr-node-hz">
           {here.map(h => (
             <li key={h.id}><span className="pf-chip bad">{HAZARD_LABEL[h.kind] ?? h.kind}</span><span className="pf-muted pf-small">{SOURCE_LABEL[h.source ?? 'manual'] ?? h.source}{h.at ? `, ${ago(h.at)}` : ''}</span>
-              <button type="button" className="pf-btn cr-btn-s" onClick={() => act(() => api.del(`/sites/${encodeURIComponent(siteId)}/hazards/${encodeURIComponent(h.id)}`, true), `${HAZARD_LABEL[h.kind] ?? 'Hazard'} at ${label} cleared.`)}>Clear</button></li>
+              <button type="button" className="pf-btn cr-btn-s" disabled={!!busy} onClick={() => run(h.id, () => act(() => api.del(`/sites/${encodeURIComponent(siteId)}/hazards/${encodeURIComponent(h.id)}`, true), `${HAZARD_LABEL[h.kind] ?? 'Hazard'} at ${label} cleared.`))}>{busy === h.id ? 'Clearing…' : 'Clear'}</button></li>
           ))}
         </ul>
       )}
       <p className="cr-node-sub">Report here</p>
       <div className="cr-node-actions">
         {HAZARD_KINDS.map(k => (
-          <button key={k} type="button" className="pf-btn cr-btn-s cr-btn-hz" onClick={() => report(k)}>{HAZARD_LABEL[k]}</button>
+          <button key={k} type="button" className="pf-btn cr-btn-s cr-btn-hz" disabled={!!busy} aria-busy={busy === k} onClick={() => report(k)}>{HAZARD_LABEL[k]}</button>
         ))}
       </div>
       {!data.alarm && n.type !== 'exit' && (

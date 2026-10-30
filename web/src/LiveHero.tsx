@@ -44,8 +44,14 @@ export default function LiveHero() {
       let r: Run
       if (exit === 'MAIN') r = await (await fetch('data/frames_iit_kgp_nikaas_blockedMAIN.json')).json()
       else {
-        const o = await (await fetch(`${API}/optimise`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ building, blocked: [exit], simulate: true }) })).json()
-        r = o.run ?? await (await fetch(`${API}/simulate`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ building, blocked: [exit], plan: o.plan }) })).json()
+        // an error answer has no frames: keep the current run instead of breaking the hero
+        const post = async (path: string, body: unknown) => {
+          const res = await fetch(`${API}${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+          if (!res.ok) throw new Error(`Server error ${res.status}`)
+          return res.json()
+        }
+        const o = await post('/optimise', { building, blocked: [exit], simulate: true })
+        r = o.run ?? await post('/simulate', { building, blocked: [exit], plan: o.plan })
       }
       setI(0); setRun(r)
     } catch { setFire(undefined) } finally { setBusy(false) }
