@@ -1,5 +1,6 @@
 // The drill building: a three-storey teaching block with three stairs and four exits.
 // Plain data plus the walking graph. Units are metres; x runs west to east, z north to south.
+import { Walk, rectBox } from './walk.ts'
 
 export const FH = 3.6            // floor-to-floor height
 export const SLAB = 0.3
@@ -88,10 +89,11 @@ export const EXITS: Exit[] = [
 export type NavNode = {
   i: number; level: number; x: number; z: number
   kind: 'corr' | 'door' | 'inner' | 'landing' | 'stair' | 'lobby' | 'exit' | 'room'
-  room?: string; stair?: Stair['id']; exit?: string; rail?: boolean
+  room?: string; stair?: string; exit?: string; rail?: boolean
+  axis?: 'x' | 'z'   // inner nodes: axis of the door wall's normal (people line up on it before the door)
 }
 export type NavEdge = { a: number; b: number; len: number; rail: boolean }
-export type Nav = { nodes: NavNode[]; edges: NavEdge[]; adj: { to: number; len: number; rail: boolean }[][]; walk: Rect[][] }
+export type Nav = { nodes: NavNode[]; edges: NavEdge[]; adj: { to: number; len: number; rail: boolean }[][]; walk: Walk[] }
 
 export function buildNav(): Nav {
   const nodes: NavNode[] = [], edges: NavEdge[] = []
@@ -124,7 +126,7 @@ export function buildNav(): Nav {
       const inners: number[] = []
       for (const d of r.doors) {
         const door = add({ level: L, x: d, z: wz, kind: 'door', room: r.id })
-        const inner = add({ level: L, x: d, z: wz + sgn * 1.0, kind: 'inner', room: r.id })
+        const inner = add({ level: L, x: d, z: wz + sgn * 1.0, kind: 'inner', room: r.id, axis: 'z' })
         link(corr[d], door); link(door, inner); inners.push(inner)
         W.push(rect(d - DOOR_W / 2 + R, wz - 0.6, d + DOOR_W / 2 - R, wz + 0.6))
       }
@@ -181,17 +183,5 @@ export function buildNav(): Nav {
   }
   const adj: Nav['adj'] = nodes.map(() => [])
   for (const e of edges) { adj[e.a].push({ to: e.b, len: e.len, rail: e.rail }); adj[e.b].push({ to: e.a, len: e.len, rail: e.rail }) }
-  return { nodes, edges, adj, walk }
-}
-
-/** Nearest point inside the walkable area of a storey (rects are already shrunk by the body radius). */
-export function clampWalk(walk: Rect[], x: number, z: number): [number, number] {
-  let bx = x, bz = z, bd = Infinity
-  for (const r of walk) {
-    const cx = Math.min(r.x1, Math.max(r.x0, x)), cz = Math.min(r.z1, Math.max(r.z0, z))
-    const d = (cx - x) ** 2 + (cz - z) ** 2
-    if (d === 0) return [x, z]
-    if (d < bd) { bd = d; bx = cx; bz = cz }
-  }
-  return [bx, bz]
+  return { nodes, edges, adj, walk: walk.map(W => new Walk(W.map(r => rectBox(r.x0, r.z0, r.x1, r.z1)))) }
 }

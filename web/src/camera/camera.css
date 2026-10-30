@@ -1,0 +1,23 @@
+/* Site camera (#/cam?site=) */
+.cam2-head { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: end; margin-bottom: 18px; }
+.cam2-head .brand { display: inline-flex; align-items: center; gap: 8px; font: 700 22px/1 var(--display); text-decoration: none; margin-right: auto; align-self: center; }
+.cam2-head .brand svg { width: 26px; height: 26px; }
+.cam2-head select { min-width: 200px; max-width: 100%; }
+.cam2-grid { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(280px, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .cam2-grid { grid-template-columns: 1fr; } .cam2-head select { min-width: 0; width: 100%; } .cam2-head .pf-field { flex: 1 1 100%; } }
+.cam2-stage { position: relative; aspect-ratio: 4 / 3; background: #10161c; border-radius: 12px; overflow: hidden; }
+.cam2-stage video, .cam2-stage canvas, .cam2-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.cam2-stage .mirror { transform: scaleX(-1); }
+.cam2-cover { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 12px; padding: 20px; text-align: center; color: #e9edf1; }
+.cam2-cover p { max-width: 34ch; margin: 0; }
+.cam2-cover .pf-btn { min-width: 230px; }
+.cam2-live { position: absolute; top: 12px; left: 12px; display: inline-flex; align-items: center; gap: 8px; background: rgba(0, 0, 0, .6); color: #fff; font: 700 13px/1 var(--text); letter-spacing: .08em; padding: 7px 11px; border-radius: 999px; }
+.cam2-live i { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; }
+.cam2-live.bad i { background: #ef4444; }
+.cam2-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cam2-kpis > div { display: grid; gap: 4px; justify-items: start; }
+.cam2-meter { display: grid; grid-template-columns: 56px 1fr 40px; gap: 10px; align-items: center; margin: 6px 0; font-size: 14px; }
+.cam2-meter div { height: 8px; border-radius: 4px; background: #eef1f4; overflow: hidden; }
+.cam2-meter i { display: block; height: 100%; transition: width .3s; }
+.cam2-meter b { font: 700 15px/1 var(--num); text-align: right; }
+.cam2-key { font: 400 15px/1.2 var(--text); padding: 7px 10px; border: 1px solid var(--rule); border-radius: 8px; }

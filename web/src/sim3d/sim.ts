@@ -1,6 +1,8 @@
 // Crowd evacuation model: distance-to-exit fields on the walking graph, a load-balanced split of the
 // crowd across exits (and stairs), local collision avoidance, stair queues and live re-routing.
-import { buildNav, clampWalk, EXITS, ROOMS, inset, R, WALL_T, type Nav } from './layout.ts'
+// Everything about the building comes from a Plan, so the same model runs the demo block and any building graph.
+import { R, WALL_T, type Nav } from './layout.ts'
+import type { Plan, PlanExit } from './plan.ts'
 import type { Seat } from './build.ts'
 
 export type Mode = 'seated' | 'idle' | 'mill' | 'walk' | 'rail' | 'outside' | 'assembled' | 'trapped'
@@ -12,29 +14,33 @@ export type Agent = {
   mx: number; mz: number; millT: number; stuckT: number; lastD: number; danger: number; crouch: number
   out: boolean; tOut: number; target: [number, number] | null; slot: [number, number] | null; injured: boolean
   phase: number; move: number; scale: number
+  lookT: number; legT: number; ghost: number   // look-ahead timer, time on this leg, deadlock escape until
 }
 export type Hazard = { id: number; kind: 'fire' | 'collapse'; level: number; x: number; z: number; r: number; rMax: number; grow: number; label: string; t0: number }
 export type SimEvent = { kind: 'info' | 'warn' | 'danger' | 'good'; text: string }
 export type Group = { exit: string; letter: string; color: [number, number, number]; css: string }
 
+// muted but distinct: teal, ochre, lilac, olive (status colours stay reserved for safe / smoke / danger)
 export const GROUP_COLORS: [string, [number, number, number]][] = [
-  ['#22d3ee', [0.13, 0.83, 0.93]], ['#fbbf24', [0.98, 0.75, 0.14]], ['#e879f9', [0.91, 0.47, 0.98]], ['#a3e635', [0.64, 0.9, 0.21]],
+  ['#5fb4c6', [0.37, 0.71, 0.78]], ['#d3a24e', [0.83, 0.64, 0.31]], ['#b394d8', [0.7, 0.58, 0.85]], ['#93b863', [0.58, 0.72, 0.39]],
 ]
 const ARRIVE: Record<string, number> = { corr: 0.85, lobby: 1.0, landing: 0.8, door: 0.42, inner: 0.45, stair: 0.5, exit: 0.45, room: 0.6 }
-const STAIR_FLOW = 1.15
+const OUT_LEVEL = 99
 
 export class Sim {
-  nav: Nav = buildNav()
+  plan: Plan
+  nav: Nav
   agents: Agent[] = []
   D: Record<string, Float64Array> = {}
   blocked: Uint8Array
   pen: Float32Array
   hazards: Hazard[] = []
-  stairBlocked: Record<string, boolean> = { W: false, C: false, E: false }
+  stairBlocked: Record<string, boolean> = {}
   exitClosed: Record<string, boolean> = {}
   groups: Group[] = []
   groupOf: Record<string, number> = {}
   outBy: Record<string, number> = {}
+  outAsm: Record<string, number> = {}
   exitNode: Record<string, number> = {}
   inners: Record<string, number[]> = {}
   t = 0
@@ -42,6 +48,11 @@ export class Sim {
   quake = false
   alarm = false
   startRoom: string
+  private exits: PlanExit[]
+  private exitById: Record<string, PlanExit> = {}
+  private stairFlow: Record<string, number> = {}
+  private groundExits: boolean
+  private gx: number; private gz: number
   private rnd: () => number
   private emit: (e: SimEvent) => void
   private grid = new Map<number, Agent[]>()
@@ -49,17 +60,23 @@ export class Sim {
   private stairCache = new Map<string, string | null>()
   private nextHazard = 1
 
-  constructor(seats: Seat[], startRoom: string, rnd: () => number, emit: (e: SimEvent) => void) {
+  constructor(plan: Plan, seats: Seat[], startRoom: string, rnd: () => number, emit: (e: SimEvent) => void) {
+    this.plan = plan; this.nav = plan.nav; this.exits = plan.exits
     this.startRoom = startRoom; this.rnd = rnd; this.emit = emit
     const n = this.nav.nodes.length
     this.blocked = new Uint8Array(n); this.pen = new Float32Array(n)
+    let mx = Infinity, mz = Infinity
     for (const node of this.nav.nodes) {
       if (node.kind === 'exit') this.exitNode[node.exit!] = node.i
       if (node.kind === 'inner') (this.inners[node.room!] ??= []).push(node.i)
+      mx = Math.min(mx, node.x); mz = Math.min(mz, node.z)
     }
-    for (const e of EXITS) { this.outBy[e.id] = 0; this.exitClosed[e.id] = false }
-    const rooms = [...ROOMS.map(r => ({ id: r.id, level: r.level, people: r.people })), { id: 'lobby', level: 0, people: 6 }]
-    for (const room of rooms) {
+    // spatial hash offsets: keep cell indices positive for any building origin (and for the assembly points)
+    this.gx = 96 - Math.floor(Math.min(mx, plan.site.x0)); this.gz = 96 - Math.floor(Math.min(mz, plan.site.z0))
+    for (const e of this.exits) { this.outBy[e.id] = 0; this.outAsm[e.asm] = 0; this.exitClosed[e.id] = false; this.exitById[e.id] = e }
+    for (const s of plan.stairs) { this.stairBlocked[s.id] = false; this.stairFlow[s.id] = s.flow }
+    this.groundExits = this.exits.every(e => e.level === 0)
+    for (const room of plan.spawn) {
       const list = seats.filter(s => s.room === room.id)
       const stand = list.filter(s => !s.sit), sit = list.filter(s => s.sit)
       for (let k = sit.length - 1; k > 0; k--) { const j = Math.floor(rnd() * (k + 1)); [sit[k], sit[j]] = [sit[j], sit[k]] }
@@ -78,7 +95,7 @@ export class Sim {
       exit: 'MAIN', group: -1, rail: null, lane: (r() - 0.5) * 1.5,
       mx: s.x, mz: s.z, millT: 0, stuckT: 0, lastD: 1e9, danger: 0, crouch: 0,
       out: false, tOut: 0, target: null, slot: null, injured: false,
-      phase: r() * 6, move: 0, scale: 0.9 + r() * 0.13,
+      phase: r() * 6, move: 0, scale: 0.9 + r() * 0.13, lookT: 0, legT: 0, ghost: -1,
     })
   }
 
@@ -100,8 +117,29 @@ export class Sim {
         } else if (d < h.r + 0.5) B[n.i] = 1
       }
     }
-    for (const e of EXITS) this.D[e.id] = this.dijkstra(this.exitNode[e.id])
+    for (const e of this.exits) this.D[e.id] = this.dijkstra(this.exitNode[e.id])
     this.stairCache.clear()
+  }
+
+  /** If everything within r of (x, z) on a storey were blocked: how many people would have no way out, and how
+   * many exits nobody could reach any more. */
+  impact(level: number, x: number, z: number, r: number) {
+    const { nodes, adj } = this.nav, B = new Uint8Array(this.blocked)
+    for (const n of nodes) if (Math.abs(n.level - level) < 0.01 && Math.hypot(n.x - x, n.z - z) < r) B[n.i] = 1
+    const rooms = this.plan.spawn.filter(s => s.people && this.inners[s.id])
+    const all = new Uint8Array(nodes.length)
+    let exitsLost = 0
+    for (const e of this.exits) {
+      const s = this.exitNode[e.id]
+      if (B[s] || this.exitClosed[e.id]) { exitsLost++; continue }
+      const reach = new Uint8Array(nodes.length), q = [s]; reach[s] = 1
+      while (q.length) { const u = q.pop()!; for (const ed of adj[u]) if (!reach[ed.to] && !B[ed.to]) { reach[ed.to] = 1; q.push(ed.to) } }
+      if (!rooms.some(rm => this.inners[rm.id].some(i => reach[i]))) exitsLost++
+      for (let i = 0; i < reach.length; i++) if (reach[i]) all[i] = 1
+    }
+    let trapped = 0
+    for (const rm of rooms) if (!this.inners[rm.id].some(i => all[i])) trapped += rm.people
+    return { trapped, exitsLost }
   }
 
   private dijkstra(src: number) {
@@ -124,8 +162,8 @@ export class Sim {
 
   exitReachable(e: string) {
     if (this.blocked[this.exitNode[e]]) return false
-    const D = this.D[e]
-    return this.agents.some(a => !a.out && isFinite(this.costTo(a, e, D)))
+    const D = this.D[e], left = this.agents.filter(a => !a.out && a.mode !== 'trapped')
+    return !left.length || left.some(a => isFinite(this.costTo(a, e, D))) // nobody left inside: nothing is cut off
   }
 
   private startNodes(a: Agent): number[] {
@@ -154,12 +192,12 @@ export class Sim {
 
   /** First stair on the way from an agent to an exit (stairs are the shared bottleneck upstairs). */
   private stairOf(a: Agent, e: string) {
-    if (a.level === 0 && a.mode !== 'rail') return null
+    if (!this.plan.stairs.length || (this.groundExits && a.level === 0 && a.mode !== 'rail')) return null
     const D = this.D[e], from = a.mode === 'rail' && a.rail ? a.rail.b : a.node >= 0 && !a.pre.length ? a.node : this.startNodes(a)[0]
     const key = `${from}:${e}`
     if (this.stairCache.has(key)) return this.stairCache.get(key)!
     let n = from, found: string | null = null
-    for (let k = 0; k < 80 && n >= 0; k++) {
+    for (let k = 0; k < 600 && n >= 0; k++) {
       const node = this.nav.nodes[n]
       if (node.rail) { found = node.stair!; break }
       if (node.kind === 'exit') break
@@ -184,8 +222,8 @@ export class Sim {
    * is limited to three groups so it splits into clear sections instead of a stampede to the nearest door. */
   assign(initial: boolean) {
     const live = this.agents.filter(a => !a.out && a.mode !== 'trapped')
-    const ids = EXITS.map(e => e.id).filter(e => !this.blocked[this.exitNode[e]])
-    const flow: Record<string, number> = Object.fromEntries(EXITS.map(e => [e.id, e.flow]))
+    const ids = this.exits.map(e => e.id).filter(e => !this.blocked[this.exitNode[e]])
+    const flow: Record<string, number> = Object.fromEntries(this.exits.map(e => [e.id, e.flow]))
     const cost = live.map(a => ids.map(e => this.costTo(a, e)))
     let startPool = new Set(ids)
     let choice: (string | null)[] = []
@@ -201,7 +239,7 @@ export class Sim {
           const c = cost[k][j]
           if (!isFinite(c)) return
           const st = this.stairOf(a, e)
-          let s = c / 1.3 + (load[e] ?? 0) / flow[e] + (st ? (sload[st] ?? 0) / STAIR_FLOW : 0)
+          let s = c / 1.3 + (load[e] ?? 0) / flow[e] + (st ? (sload[st] ?? 0) / (this.stairFlow[st] ?? 1.15) : 0)
           if (!initial && a.exit === e) s -= 6
           if (s < bs) { bs = s; best = e }
         })
@@ -260,10 +298,12 @@ export class Sim {
 
   private reassignOne(a: Agent, from: number) {
     let best: string | null = null, bc = Infinity
-    for (const e of EXITS) {
+    for (const e of this.exits) {
       const d = this.D[e.id][from]
       if (!isFinite(d)) continue
-      const c = d / 1.3 + this.agents.filter(o => !o.out && o.exit === e.id).length / e.flow
+      let load = 0
+      for (const o of this.agents) if (!o.out && o.exit === e.id) load++
+      const c = d / 1.3 + load / e.flow
       if (c < bc) { bc = c; best = e.id }
     }
     if (!best) return false
@@ -284,18 +324,21 @@ export class Sim {
       this.trap(a); this.emit({ kind: 'danger', text: `Person trapped in ${this.roomLabel(a.room)}: no safe route` }); return
     }
     const n = this.nav.nodes[s]
-    a.pre = this.inners[a.room] ? (Math.abs(a.z - n.z) > 0.3 ? [[a.x, n.z]] : []) : []
-    a.node = s; a.prev = s; a.mode = 'walk'; a.stuckT = 0; a.lastD = 1e9
+    // line up with the door first (along the door wall's normal), then walk to it
+    a.pre = !this.inners[a.room] || n.kind !== 'inner' ? []
+      : n.axis === 'x' ? (Math.abs(a.x - n.x) > 0.3 ? [[n.x, a.z]] : []) : (Math.abs(a.z - n.z) > 0.3 ? [[a.x, n.z]] : [])
+    a.node = s; a.prev = s; a.mode = 'walk'; a.stuckT = 0; a.lastD = 1e9; a.legT = 0
   }
 
-  roomLabel(id: string) { return ROOMS.find(r => r.id === id)?.label ?? 'the lobby' }
+  roomLabel(id: string) { return this.plan.rooms.find(r => r.id === id)?.label ?? 'the lobby' }
 
   private decide(a: Agent, n: number, depth = 0): void {
     const node = this.nav.nodes[n]
     if (node.kind === 'exit') {
-      const e = EXITS.find(x => x.id === node.exit)!
+      const e = this.exitById[node.exit!]
       a.mode = 'outside'; a.out = true; a.tOut = this.t; a.target = e.out; a.rail = null
-      const k = this.outBy[e.id]++
+      this.outBy[e.id]++
+      const k = this.outAsm[e.asm]++
       const ring = Math.floor(Math.sqrt(k / 3)), ang = k * 2.39996
       a.slot = [e.assembly[0] + Math.cos(ang) * (0.9 + ring * 0.85), e.assembly[1] + Math.sin(ang) * (0.9 + ring * 0.85)]
       return
@@ -315,11 +358,11 @@ export class Sim {
       if (depth < 2 && this.reassignOne(a, n) && a.exit !== undefined) return this.decide(a, n, depth + 1)
       this.trap(a); this.emit({ kind: 'danger', text: `Person cut off near ${node.room ? this.roomLabel(node.room) : 'a corridor'}` }); return
     }
-    a.prev = n; a.node = best
+    a.prev = n; a.node = best; a.legT = 0
     if (rail) { a.mode = 'rail'; a.rail = { a: n, b: best, t: 0, len: Math.hypot(this.nav.nodes[best].x - node.x, this.nav.nodes[best].z - node.z) || len } }
     else if (a.mode === 'rail') {
       a.mode = 'walk'; a.rail = null; a.level = Math.round(node.level); a.lf = a.level
-      ;[a.x, a.z] = clampWalk(this.nav.walk[a.level], a.x, a.z)
+      ;[a.x, a.z] = this.nav.walk[a.level].clamp(a.x, a.z)
     }
   }
 
@@ -356,14 +399,14 @@ export class Sim {
     for (const a of this.agents) {
       if (a.mode === 'rail' && a.rail) { const k = `${a.rail.a}-${a.rail.b}`; let l = rails.get(k); if (!l) rails.set(k, l = []); l.push(a); continue }
       if (a.mode === 'assembled' || a.mode === 'trapped' && a.injured) continue
-      const key = ((a.out ? 9 : a.level) * 4096 + Math.floor(a.x + 64)) * 4096 + Math.floor(a.z + 64)
+      const key = ((a.out ? OUT_LEVEL : a.level) * 4096 + Math.floor(a.x + this.gx)) * 4096 + Math.floor(a.z + this.gz)
       let l = grid.get(key); if (!l) grid.set(key, l = []); l.push(a)
     }
     for (const a of this.agents) this.agentStep(a, dt)
   }
 
   private neighbours(a: Agent, cb: (o: Agent) => void) {
-    const lv = a.out ? 9 : a.level, cx = Math.floor(a.x + 64), cz = Math.floor(a.z + 64)
+    const lv = a.out ? OUT_LEVEL : a.level, cx = Math.floor(a.x + this.gx), cz = Math.floor(a.z + this.gz)
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
       const l = this.grid.get((lv * 4096 + cx + i) * 4096 + cz + j)
       if (l) for (const o of l) if (o !== a) cb(o)
@@ -390,13 +433,17 @@ export class Sim {
         if (a.sit > 0.15) return
         if (this.evacuating && this.t > a.goT) { this.startWalk(a); return }
         if (this.t > a.millT) {
-          const [x, z] = clampWalk(this.nav.walk[a.level], a.x + (r() - 0.5) * 2.6, a.z + (r() - 0.5) * 2.6)
+          const [x, z] = this.nav.walk[a.level].clamp(a.x + (r() - 0.5) * 2.6, a.z + (r() - 0.5) * 2.6)
           a.mx = x; a.mz = z; a.millT = this.t + 0.7 + r() * 1.3
         }
         this.steer(a, a.mx, a.mz, 0.75, dt, true)
         return
       }
       case 'walk': {
+        if (!a.pre.length && this.t > a.lookT) { a.lookT = this.t + 0.3 + r() * 0.1; if (this.lookAhead(a)) return }
+        // a jam that has not moved for a long time: let this person squeeze through for a moment
+        a.legT += dt
+        if (a.legT > 20) { a.legT = 0; a.ghost = this.t + 2.5 }
         let tx: number, tz: number, arrive: number
         if (a.pre.length) { [tx, tz] = a.pre[0]; arrive = 0.32 }
         else { const n = this.nav.nodes[a.node]; tx = n.x; tz = n.z; arrive = ARRIVE[n.kind] ?? 0.5 }
@@ -404,7 +451,11 @@ export class Sim {
         if (d < arrive) { if (a.pre.length) a.pre.shift(); else this.decide(a, a.node); return }
         if (d > a.lastD - 0.004) a.stuckT += dt; else a.stuckT = Math.max(0, a.stuckT - dt * 2)
         a.lastD = d
-        if (a.stuckT > 2.5) { a.vx += (r() - 0.5) * 2; a.vz += (r() - 0.5) * 2; a.stuckT = 1.2; if (a.pre.length) a.pre.shift() }
+        if (a.stuckT > 2.5) {
+          a.vx += (r() - 0.5) * 2; a.vz += (r() - 0.5) * 2; a.stuckT = 1.2
+          if (a.pre.length) a.pre.shift()
+          else if (!this.visible(a.level, a.x, a.z, tx, tz)) this.recover(a)
+        }
         this.steer(a, tx, tz, a.speed * (a.danger ? 1.35 : 1), dt, false)
         return
       }
@@ -445,24 +496,75 @@ export class Sim {
     }
   }
 
+  /** The next node is already in plain sight: skip the current one (smooth corners, no walking back to a node
+   * the crowd pushed you past). Never skips exits or stair entries. */
+  private lookAhead(a: Agent) {
+    const n = a.node, N = this.nav.nodes[n]
+    if (n < 0 || N.kind === 'exit' || N.kind === 'stair' || N.rail) return false
+    const D = this.D[a.exit]
+    let best = -1, bc = Infinity, rail = false
+    for (const e of this.nav.adj[n]) {
+      if (this.blocked[e.to]) continue
+      const c = e.len * (e.rail ? 1.25 : 1) + D[e.to]
+      if (c < bc) { bc = c; best = e.to; rail = e.rail }
+    }
+    if (best < 0 || rail || !isFinite(bc)) return false
+    const M = this.nav.nodes[best]
+    if (M.kind === 'stair' || Math.abs(M.level - a.level) > 0.01) return false
+    const dM = Math.hypot(M.x - a.x, M.z - a.z)
+    if (dM + D[best] >= Math.hypot(N.x - a.x, N.z - a.z) + D[n] - 0.05) return false
+    if (!this.visible(a.level, a.x, a.z, M.x, M.z)) return false
+    this.decide(a, n)
+    return true
+  }
+
+  /** Straight walk from one point to another stays inside the walkable area of the storey. */
+  private visible(level: number, ax: number, az: number, bx: number, bz: number) {
+    const W = this.nav.walk[level], k = Math.max(2, Math.ceil(Math.hypot(bx - ax, bz - az) / 0.3))
+    for (let i = 1; i <= k; i++) if (!W.contains(ax + ((bx - ax) * i) / k, az + ((bz - az) * i) / k, 0)) return false
+    return true
+  }
+
+  /** Pushed round a corner by the crowd and the target is now behind a wall: head for the best node in sight. */
+  private recover(a: Agent) {
+    const D = this.D[a.exit]
+    let best = -1, bc = Infinity
+    for (const reach of [9, Infinity]) { // nearby first; on long diagonal corridors the nearest node can be far
+      for (const n of this.nav.nodes) {
+        if (n.rail || n.kind === 'stair' || Math.abs(n.level - a.level) > 0.01 || this.blocked[n.i] || !isFinite(D[n.i])) continue
+        const d = Math.hypot(n.x - a.x, n.z - a.z)
+        if (d > reach || d + D[n.i] >= bc || !this.visible(a.level, a.x, a.z, n.x, n.z)) continue
+        bc = d + D[n.i]; best = n.i
+      }
+      if (best >= 0) break
+    }
+    if (best < 0 || best === a.node) return false
+    a.node = best; a.legT = 0
+    return true
+  }
+
   private steer(a: Agent, tx: number, tz: number, speed: number, dt: number, mill: boolean, outside = false) {
     const dx = tx - a.x, dz = tz - a.z, d = Math.hypot(dx, dz) || 1
     const ux = dx / d, uz = dz / d
     let sx = 0, sz = 0, slow = 1
-    this.neighbours(a, o => {
+    if (a.ghost < this.t) this.neighbours(a, o => {
       const ox = a.x - o.x, oz = a.z - o.z, dd = ox * ox + oz * oz
-      if (dd > 0.5 || dd < 1e-8) return
-      const dist = Math.sqrt(dd), push = (0.71 - dist) / 0.71
+      if (dd > 1.44 || dd < 1e-8) return
+      const dist = Math.sqrt(dd), ahead = -(ox * ux + oz * uz) / dist
+      // someone walking at us: both keep to their right so counter-flows form lanes instead of a deadlock
+      const oncoming = o.vx * ux + o.vz * uz < -0.2
+      if (oncoming && ahead > 0.3) { const k = 0.6 * (1.2 - dist); sx -= uz * k; sz += ux * k }
+      if (dd > 0.5) return
+      const push = (0.71 - dist) / 0.71
       sx += (ox / dist) * push; sz += (oz / dist) * push
-      const ahead = -(ox * ux + oz * uz) / dist
-      if (ahead > 0.55 && dist < 0.64) slow = Math.min(slow, Math.max(0.04, (dist - 0.34) / 0.3))
+      if (ahead > 0.55 && dist < 0.64) slow = Math.min(slow, oncoming ? 0.45 : Math.max(0.04, (dist - 0.34) / 0.3))
     })
     const want = mill && d < 0.3 ? 0 : speed * slow
     const wx = ux * want + sx * 1.7, wz = uz * want + sz * 1.7
     const k = Math.min(1, dt * 7)
     a.vx += (wx - a.vx) * k; a.vz += (wz - a.vz) * k
     let nx = a.x + a.vx * dt, nz = a.z + a.vz * dt
-    if (!outside) [nx, nz] = clampWalk(this.nav.walk[a.level], nx, nz)
+    if (!outside) [nx, nz] = this.nav.walk[a.level].clamp(nx, nz)
     const moved = Math.hypot(nx - a.x, nz - a.z)
     a.x = nx; a.z = nz
     const sp = moved / Math.max(dt, 1e-4)
@@ -491,7 +593,7 @@ export class Sim {
     if (s < 0) return []
     const path = [s]
     let n = s
-    for (let k = 0; k < 120; k++) {
+    for (let k = 0; k < 600; k++) {
       if (this.nav.nodes[n].kind === 'exit') break
       let best = -1, b = Infinity
       for (const e of this.nav.adj[n]) { if (this.blocked[e.to]) continue; const c = e.len * (e.rail ? 1.25 : 1) + D[e.to]; if (c < b) { b = c; best = e.to } }
@@ -503,8 +605,7 @@ export class Sim {
 
   /** Inside any room rectangle or walkable area of a storey: used to place incidents. */
   insideBuilding(level: number, x: number, z: number) {
-    const pad = R + WALL_T / 2
-    return this.nav.walk[level].some(r => { const q = inset(r, -pad); return x >= q.x0 && x <= q.x1 && z >= q.z0 && z <= q.z1 })
+    return !!this.nav.walk[level]?.contains(x, z, R + WALL_T / 2)
   }
 }
 

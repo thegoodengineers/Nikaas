@@ -7,3 +7,5 @@ httpx
 # capped: newer numpy/scipy only ship Linux wheels for glibc 2.28+, the python3.11 Lambda has 2.26
 numpy>=2,<2.3
 scipy>=1.13,<1.16
+# Web Push encryption and VAPID signing (nikaas/push.py)
+cryptography>=42

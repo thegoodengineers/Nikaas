@@ -37,7 +37,7 @@ Only the drawn plan counts. Ignore the title box, legends, logos, sponsor text a
 Return ONLY one JSON object, no other text:
 {
   "rooms": [{"id": "short_snake_case", "label": "name exactly as printed", "use": "gallery", "box": [x1, y1, x2, y2]}],
-  "points": [{"id": "p1", "at": [x, y]}],
+  "points": [{"id": "p1", "at": [x, y]}, {"id": "stair_a", "at": [x, y], "stair": true, "label": "Stair A"}],
   "exits": [{"id": "EXIT_MAIN", "label": "what it is", "at": [x, y]}],
   "links": [{"from": "id", "to": "id", "width": 1.2, "kind": "door"}]
 }
@@ -47,6 +47,9 @@ Return ONLY one JSON object, no other text:
   "use" is one of: seated_hall, classroom, lab, gallery, lobby, study, office, washroom, store, other.
 - points: walkway points along corridors/passages/verandahs, at every junction and in front of every room door,
   about every 5-10% of the photo width along long passages.
+- stair landings: for every staircase drawn INSIDE the building that leads to another floor, add one point
+  with "stair": true where people step onto the stairs (inside the stairwell), and link it to the nearest
+  walkway point. These are not exits; stacked floors are joined through them.
 - exits: every place people can leave the building: main entrance, outside doors, gaps in the outer wall
   that lead outside, steps drawn outside the walls, doors onto a verandah or courtyard. Look along the
   whole outer wall; most buildings have 2 or more.
@@ -144,6 +147,9 @@ def to_building(g, width_m, size=None):
         n = {"id": str(p.get("id")), "type": kind, "x": round((x - x0) * k, 1), "z": round((y - z0) * k, 1)}
         if kind == "exit":
             n["label"] = p.get("label") or p.get("id")
+        elif p.get("stair") is True or str(p.get("stair")).lower() == "true":
+            n["stair"] = True  # a stair landing: sites.link_floors joins it to the floor above
+            n["label"] = p.get("label") or "Stair"
         nodes.append(n)
     edges = []
     for e in g.get("links", []):
@@ -153,7 +159,10 @@ def to_building(g, width_m, size=None):
         ed["inferred"] = bool(e.get("inferred", False))
         ed["source"] = str(e.get("source", "model"))
         edges.append(ed)
-    return {"nodes": nodes, "edges": edges}
+    # where the whole photo sits in building metres [left, top, width, height], so an editor can draw the
+    # photo under the graph (top-left of the photo is grid 0,0)
+    photo_m = [round(-x0 * k, 2), round(-z0 * k, 2), round(1000 * ax * k, 2), round(1000 * ay * k, 2)]
+    return {"nodes": nodes, "edges": edges, "photo_m": photo_m}
 
 
 def _client(region):
@@ -306,9 +315,11 @@ def read_map(image, fmt="jpeg", width_m=80.0, name="building from photo", model_
         added = connect(building)
         probs = validate(building)
     building = building or {"nodes": [], "edges": []}
+    photo_m = building.pop("photo_m", None)
     qa_report = analyze_graph(building)
     building.update(name=name, units="m", vision={"model": model_id, "width_m": width_m, "calls": calls,
                                                   "usage": usage, "exits_added": new_exits, "auto_links": added,
-                                                  "photo_px": list(size) if size else None,
+                                                  "photo_px": list(size) if size else None, "photo_m": photo_m,
+                                                  "stairs": [n["id"] for n in building["nodes"] if n.get("stair")],
                                                   "qa": qa_report})
     return building, probs

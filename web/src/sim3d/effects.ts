@@ -72,7 +72,9 @@ export class Fire {
   private glow: any
   private scorch: any
   private acc = 0; private accS = 0
-  constructor(x: number, z: number) {
+  private ceil: number
+  constructor(x: number, z: number, ceiling = WALL_H) {
+    this.ceil = ceiling
     this.group.position.set(x, 0, z)
     this.group.add(this.flames.points, this.smoke.points)
     this.light = new THREE.PointLight('#ff7a2a', 60, 16, 1.6); this.light.position.y = 1.4; this.group.add(this.light)
@@ -100,7 +102,7 @@ export class Fire {
       this.accS--
     }
     // smoke spreads under the ceiling
-    for (let k = 0; k < S.n; k++) if (S.life[k] < 1 && S.pos[k * 3 + 1] > WALL_H - 0.4) { S.pos[k * 3 + 1] = WALL_H - 0.4; S.vel[k * 3 + 1] = 0; S.vel[k * 3] += (S.pos[k * 3] > 0 ? 1 : -1) * dt * 0.8; S.vel[k * 3 + 2] += (S.pos[k * 3 + 2] > 0 ? 1 : -1) * dt * 0.4 }
+    for (let k = 0; k < S.n; k++) if (S.life[k] < 1 && S.pos[k * 3 + 1] > this.ceil - 0.4) { S.pos[k * 3 + 1] = this.ceil - 0.4; S.vel[k * 3 + 1] = 0; S.vel[k * 3] += (S.pos[k * 3] > 0 ? 1 : -1) * dt * 0.8; S.vel[k * 3 + 2] += (S.pos[k * 3 + 2] > 0 ? 1 : -1) * dt * 0.4 }
     S.step(dt, 1.8, 0.3, 0.05)
     this.scorch.scale.setScalar(r * 2.6); this.glow.scale.setScalar(r * 2.2 + Math.sin(t * 9) * 0.15)
     this.light.intensity = 45 + r * 30 + Math.sin(t * 13) * 10 + Math.sin(t * 31) * 6
@@ -117,7 +119,7 @@ export class Collapse {
   private landed = false
   private r: number
   onLand?: () => void
-  constructor(M: Mats, x: number, z: number, r: number, count = 28, delay = 0) {
+  constructor(M: Mats, x: number, z: number, r: number, count = 28, delay = 0, fh = FH) {
     this.group.position.set(x, 0, z)
     this.group.add(this.dust.points)
     for (let k = 0; k < count; k++) {
@@ -126,7 +128,7 @@ export class Collapse {
       const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), k % 5 === 0 ? M.plaster : M.concrete)
       m.castShadow = true; m.receiveShadow = true
       const a = rnd() * Math.PI * 2, dd = Math.sqrt(rnd()) * r
-      m.position.set(Math.cos(a) * dd, FH - 0.35 + rnd() * 0.6 + delay * 9 * rnd(), Math.sin(a) * dd)
+      m.position.set(Math.cos(a) * dd, fh - 0.35 + rnd() * 0.6 + delay * 9 * rnd(), Math.sin(a) * dd)
       m.rotation.set(rnd() * 0.6, rnd() * 3, rnd() * 0.6)
       this.chunks.push({ m, v: new THREE.Vector3((rnd() - 0.5) * 0.6, -rnd() * 2, (rnd() - 0.5) * 0.6), w: new THREE.Vector3(rnd() - 0.5, rnd() - 0.5, rnd() - 0.5).multiplyScalar(4), h: Math.min(w, h, d) / 2 + 0.02, rest: false })
       this.group.add(m)
@@ -134,7 +136,7 @@ export class Collapse {
     // broken rebar
     for (let k = 0; k < 5; k++) {
       const m = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.2 + rnd(), 5), M.darkMetal)
-      m.position.set((rnd() - 0.5) * r, FH - 0.2, (rnd() - 0.5) * r); m.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3)
+      m.position.set((rnd() - 0.5) * r, fh - 0.2, (rnd() - 0.5) * r); m.rotation.set(rnd() * 3, rnd() * 3, rnd() * 3)
       this.chunks.push({ m, v: new THREE.Vector3(0, -1, 0), w: new THREE.Vector3(rnd(), rnd(), rnd()), h: 0.03, rest: false })
       this.group.add(m)
     }
@@ -170,11 +172,11 @@ const beamMat = (color: any) => new THREE.ShaderMaterial({
   vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
   fragmentShader: `uniform vec3 uColor; uniform float uTime; uniform float uAlpha; varying vec2 vUv;
     void main(){ float fade = pow(clamp(1.0 - vUv.y, 0.0, 1.0), 1.6); float bands = 0.55 + 0.45 * sin(vUv.y * 40.0 - uTime * 5.0);
-      float a = fade * (0.25 + 0.35 * bands) * uAlpha; gl_FragColor = vec4(uColor * 2.4 * a, a); }`,
+      float a = fade * (0.16 + 0.18 * bands) * uAlpha; gl_FragColor = vec4(uColor * 1.25 * a, a); }`,
   transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
 })
 
-/** Light column and pulsing ring marking an exit: green = safe, red = blocked, amber = smoke on the route. */
+/** Faint light column and slow ring marking an exit: green = safe, red = blocked, amber = smoke on the route. */
 export class Beacon {
   group = new THREE.Group()
   column: any; ring: any; pick: any
@@ -185,7 +187,7 @@ export class Beacon {
   constructor(x: number, z: number, id: string) {
     this.id = id
     this.group.position.set(x, 0, z)
-    const col = new THREE.CylinderGeometry(1.1, 1.1, 16, 28, 1, true); col.translate(0, 8, 0)
+    const col = new THREE.CylinderGeometry(0.8, 0.8, 10, 28, 1, true); col.translate(0, 5, 0)
     this.column = new THREE.Mesh(col, beamMat(this.color)); this.column.renderOrder = 5
     const rg = new THREE.RingGeometry(1.25, 1.65, 48); rg.rotateX(-Math.PI / 2)
     this.ring = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: this.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }))
@@ -200,29 +202,29 @@ export class Beacon {
     this.column.material.uniforms.uTime.value = t
     this.column.material.uniforms.uAlpha.value = this.alpha
     const k = (t * 0.8) % 1
-    this.ring.scale.setScalar(1 + k * 1.6); this.ring.material.opacity = this.alpha * (1 - k) * 0.9
-    this.ring.material.color.copy(this.color).multiplyScalar(2)
+    this.ring.scale.setScalar(1 + k * 1.6); this.ring.material.opacity = this.alpha * (1 - k) * 0.55
+    this.ring.material.color.copy(this.color).multiplyScalar(1.15)
     this.group.visible = this.alpha > 0.01
   }
 }
 
 /** Assembly point: a painted ring, a sign on a post. */
-export function assemblyMark(M: Mats, x: number, z: number) {
+export function assemblyMark(M: Mats, x: number, z: number, cx = 0, cz = 0) {
   const g = new THREE.Group(); g.position.set(x, 0, z)
   const ring = new THREE.RingGeometry(4.6, 4.9, 64); ring.rotateX(-Math.PI / 2)
-  const rm = new THREE.Mesh(ring, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.2, 1.3, 0.55), transparent: true, opacity: 0.75, depthWrite: false }))
+  const rm = new THREE.Mesh(ring, new THREE.MeshBasicMaterial({ color: new THREE.Color(0.24, 0.78, 0.46), transparent: true, opacity: 0.6, depthWrite: false }))
   rm.position.y = 0.02; g.add(rm)
   const fill = new THREE.CircleGeometry(4.6, 48); fill.rotateX(-Math.PI / 2)
-  const fm = new THREE.Mesh(fill, new THREE.MeshBasicMaterial({ color: '#0c8f4c', transparent: true, opacity: 0.16, depthWrite: false }))
+  const fm = new THREE.Mesh(fill, new THREE.MeshBasicMaterial({ color: '#0c8f4c', transparent: true, opacity: 0.12, depthWrite: false }))
   fm.position.y = 0.015; g.add(fm)
-  const d = Math.hypot(x, z) || 1, px = (-x / d) * 5.4, pz = (-z / d) * 5.4
+  const dx = cx - x, dz = cz - z, d = Math.hypot(dx, dz) || 1, px = (dx / d) * 5.4, pz = (dz / d) * 5.4
   const post = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.6, 8), M.steel); post.position.set(px, 1.3, pz); post.castShadow = true; g.add(post)
   const sign = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.12, 0.04), M.assemblySign); sign.position.set(px, 2.45, pz); sign.castShadow = true; g.add(sign)
-  sign.lookAt(-x, 2.45, -z)
+  sign.lookAt(px + dx, 2.45, pz + dz)
   return g
 }
 
-/** Glowing route ribbon with chevrons flowing toward the exit. Points carry a storey value so the ribbon
+/** Route ribbon with chevrons flowing toward the exit. Points carry a storey value so the ribbon
  * follows the floors when the building is pulled apart. */
 export class Ribbon {
   mesh: any
@@ -230,7 +232,7 @@ export class Ribbon {
   constructor(points: [number, number, number][], color: any, step: { value: number }, maxLevel: { value: number }) {
     const pos: number[] = [], lev: number[] = [], uv: number[] = [], idx: number[] = []
     let u = 0
-    const w = 0.32
+    const w = 0.27
     for (let k = 0; k < points.length; k++) {
       const [x, l, z] = points[k], p = points[Math.max(0, k - 1)], nx = points[Math.min(points.length - 1, k + 1)]
       let dx = nx[0] - p[0], dz = nx[2] - p[2]; const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d
@@ -259,8 +261,8 @@ export class Ribbon {
           float s = fract(vUv.x * 0.7 - uTime * 1.4);
           float chev = smoothstep(0.0, 0.06, s - across * 0.32) * (1.0 - smoothstep(0.26, 0.34, s - across * 0.32));
           float edge = smoothstep(0.72, 0.95, across);
-          float a = (0.22 + chev * 0.85 + edge * 0.5) * uAlpha * (1.0 - smoothstep(0.96, 1.0, across));
-          gl_FragColor = vec4(uColor * (0.9 + chev * 2.2), a);
+          float a = (0.16 + chev * 0.55 + edge * 0.35) * uAlpha * (1.0 - smoothstep(0.96, 1.0, across));
+          gl_FragColor = vec4(uColor * (0.75 + chev * 1.0), a);
         }`,
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
     })
@@ -292,7 +294,7 @@ export function stairBarrier(M: Mats, door: [number, number], axis: 'x' | 'z', w
     const p = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.07, 1.2, 8), M.red)
     p.position.set(door[0] + (axis === 'x' ? off : s * (width / 2 + 0.15)), 0.6, door[1] + (axis === 'z' ? off : s * (width / 2 + 0.15))); p.castShadow = true; g.add(p)
   }
-  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(4, 0.4, 0.3) }))
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.2, 0.3, 0.25) }))
   lamp.position.set(door[0] + (axis === 'x' ? off : -width / 2 - 0.15), 1.3, door[1] + (axis === 'z' ? off : axis === 'x' ? -width / 2 - 0.15 : 0))
   g.add(lamp); g.userData.lamp = lamp
   for (let k = 0; k < 9; k++) {
@@ -307,7 +309,7 @@ export function stairBarrier(M: Mats, door: [number, number], axis: 'x' | 'z', w
 export function marker() {
   const g = new THREE.Group()
   const rg = new THREE.RingGeometry(0.9, 1.1, 40); rg.rotateX(-Math.PI / 2)
-  const m = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: new THREE.Color(3, 1.2, 0.3), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }))
+  const m = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: new THREE.Color(1.6, 0.6, 0.2), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }))
   const cross = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 2.6).rotateX(-Math.PI / 2), m.material)
   const cross2 = cross.clone(); cross2.rotation.y = Math.PI / 2
   g.add(m, cross, cross2); g.position.y = 0.06; g.visible = false; g.renderOrder = 6

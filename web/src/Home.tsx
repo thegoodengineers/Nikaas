@@ -18,6 +18,18 @@ const CHAPTERS = [
 ]
 
 // Every number on this page is loaded from files generated out of runs/.
+// what the platform does, one card each (links go to the page that does it)
+const PLATFORM: [string, string, string, string][] = [
+  ['Check in with a QR code', 'A code at each entrance and on each room door. No app to install, no name asked: the phone gets a random id and the room it is in.', '#/go?site=office', 'Phone app'],
+  ['Alerts that reach the phone', 'Web Push alerts with sound and vibration, even when the page is closed. Instructions change with the emergency: fire, earthquake, gas, collapse.', '#/go?site=office', 'Phone app'],
+  ['Everyone gets their own way out', 'Step-by-step directions across floors and stairs, re-planned the moment a stair or corridor is blocked. People who cannot use stairs are sent to a refuge.', '#/go?site=office', 'See a route'],
+  ['Outside, to the assembly point', 'Walking directions in Google Maps, and an “I’m safe” button checked against the assembly point’s location for roll call.', '#/go?site=office', 'Phone app'],
+  ['A control room for the incident', 'Who is inside, safe, missing or asking for help, per floor. Start and clear the alarm, report hazards, print marshal lists and QR codes.', '#/control', 'Control room'],
+  ['Any building, from a photo or PDF', 'Upload the posted plan, one page per floor. Fix rooms, doors, exits and stairs in an editor; stairs are joined across floors automatically.', '#/buildings', 'Buildings'],
+  ['Fire, smoke and heat detection', 'Heat and smoke sensors and room cameras report hazards. A camera’s suspected fire is confirmed by Amazon Rekognition before routes change.', '#/cam?site=office', 'Site camera'],
+  ['Crowd control', 'Crowding per room and corridor against 2.7 and 4 people per m², floors released in waves, and rooms moved to another exit when a door queues.', '#/control', 'Control room'],
+]
+
 export default function Home() {
   const [val, setVal] = useState<Validation>()
   const [qa, setQa] = useState<{ score: number }>()
@@ -33,7 +45,7 @@ export default function Home() {
   useEffect(() => {
     fetch('data/validation.json').then(r => r.json()).then(setVal).catch(() => {})
     fetch('data/vision_nova_pro_qa.json').then(r => r.json()).then(setQa).catch(() => {})
-    fetch('data/monte_carlo.json').then(r => r.json()).then((xs: { building: string }[]) => setMcm(xs.find(x => x.building === 'iit_kgp_museum.json') as any)).catch(() => {})
+    fetch('data/monte_carlo.json').then(r => r.json()).then((xs: ({ building: string } & NonNullable<typeof mcm>)[]) => setMcm(xs.find(x => x.building === 'iit_kgp_museum.json'))).catch(() => {})
     fetch('data/wow.json').then(r => r.json()).then(setWow).catch(() => {})
     fetch('data/iit_kgp_museum.json').then(r => r.json()).then(setBuilding).catch(() => {})
     fetch('data/frames_iit_kgp_nearest.json').then(r => r.json()).then(setNearest).catch(() => {})
@@ -109,6 +121,17 @@ export default function Home() {
         </section>
         <p className="sources">Movement times, the part an exit plan can change. Every number is generated from the project’s run files; see Evidence.</p>
 
+        <section className="section" aria-labelledby="platform-h">
+          <h2 id="platform-h">One platform, from the floor plan to the last person out.</h2>
+          <div className="platform-grid">
+            {PLATFORM.map(([title, text, href, link]) => (
+              <a key={title} className="platform-card" href={href}>
+                <h3>{title}</h3><p>{text}</p><span>{link} →</span>
+              </a>
+            ))}
+          </div>
+        </section>
+
         <section className="section">
           <h2>Three crowds that had one way out.</h2>
           <div className="incidents">
@@ -149,7 +172,11 @@ export default function Home() {
           </details>
           <details>
             <summary>Is this for a real fire?</summary>
-            <p>Today it is for planning and drills: which room should use which exit, and what changes when a stair is blocked. Re-planning runs on AWS in seconds. The times are movement times; detection, alarm and reaction time come on top and an exit plan does not change them.</p>
+            <p>It is built for drills and for the minutes after an alarm: who is inside, which exit each room should use, who is safe and who needs help. It works alongside the building’s certified fire alarm and never replaces it. Phones get alerts and routes, re-planned on AWS in seconds when a hazard is reported. Simulated times are movement times; detection, alarm and reaction time come on top.</p>
+          </details>
+          <details>
+            <summary>What do you keep about the people who check in?</summary>
+            <p>Nothing that identifies them. A phone gets a random id, the room it is in, and its status. No name or number is asked for, the location is only read when someone taps “I’m safe”, and every check-in is deleted 24 hours after its last update. Cameras count people and check for fire in the browser; video is never uploaded.</p>
           </details>
           <details>
             <summary>Why not use existing egress software?</summary>
@@ -159,7 +186,7 @@ export default function Home() {
 
         <section className="closing">
           <h2>Your building has a map on the wall.</h2>
-          <div className="cta-row"><a className="cta" href="#/twin">Open the twin</a><a className="cta quiet" href="#/beat">Try to beat the plan</a></div>
+          <div className="cta-row"><a className="cta" href="#/buildings">Import your building</a><a className="cta quiet" href="#/control">Open the control room</a></div>
         </section>
       </div>
     </div>

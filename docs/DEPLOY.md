@@ -33,6 +33,9 @@ Returns `{"ok", "id", "building", "problems", "photo_key"}`. `building` is in th
 straight to `/simulate` when `ok` is true. `building.vision` says what was guessed:
 `exits_added` (from the exits-only pass) and `auto_links` (links the model left out, added to the nearest
 walkway). **Exits are the weak part (see `runs/vision_check.md`): let the user confirm them before simulating.**
+Stair landings come back as walkway points with `"stair": true` (also listed in `building.vision.stairs`), so
+`POST /plans/link-floors` can join floors; `building.vision.photo_m` says where the photo sits in metres, for the
+editor's underlay (`#/buildings`).
 
 Errors: 400 not base64, 413 too big, 415 not an image, 422 bad `width_m`, 502 Bedrock failed.
 Photos and results are kept 30 days in the private photo bucket (`photos/<id>.<ext>`, `results/<id>.json`).
@@ -63,12 +66,26 @@ optimiser at start-up, so every route would fail.
 
 Settings (stack `nikaas`, region) are in `samconfig.toml`, so no prompts.
 
+## Platform (sites, check-in, alerts, control room)
+The stack also has a DynamoDB table (`LiveTable`, live state with a 24 h TTL on check-ins), CloudFront in front of the
+website bucket (`WebHttpsUrl` output: phones only allow push alerts, GPS and the camera on https), and Rekognition
+access for confirming camera fire/smoke. The control-room key is an SSM parameter, made once and never touched by a
+redeploy:
+```bash
+aws ssm put-parameter --name /nikaas/control-key --type SecureString --value "<a long random string>" --region ap-south-1
+```
+Control endpoints (`POST /sites/{id}/alarm`, hazards, sensors, cameras, `GET /sites/{id}/control`, saving sites) need it in
+the `x-control-key` header; the control room asks for it once. Phones never need it. Local runs without the variable are
+open. The Web Push key pair (VAPID) is made on first use and stored in the table.
+
 ## Publish the website
 
 ```bash
 cd web && npm ci && npm run build && cd ..
 aws s3 sync web/dist s3://nikaas-webbucket-hbkfctr0cw8s --delete --exclude index.html --cache-control "public,max-age=300"
 aws s3 cp web/dist/index.html s3://nikaas-webbucket-hbkfctr0cw8s/index.html --cache-control no-cache --content-type text/html
+aws s3 cp web/dist/sw.js s3://nikaas-webbucket-hbkfctr0cw8s/sw.js --cache-control no-cache --content-type text/javascript
+aws s3 cp web/dist/manifest.webmanifest s3://nikaas-webbucket-hbkfctr0cw8s/manifest.webmanifest --cache-control no-cache --content-type application/manifest+json
 ```
 
 The API URL comes from `web/.env.production` at build time.

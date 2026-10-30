@@ -1,0 +1,77 @@
+/* Phone app (#/go): one column, large touch targets, calm on a normal day, unmistakable in an emergency. */
+body.go-mode { background: #f6f7f9; }
+.go-app { --ok: #15803d; --bad: #b91c1c; max-width: 520px; margin: 0 auto; min-height: 100vh; padding: 14px 16px 40px; display: grid; gap: 14px; align-content: start; font-size: 16px; }
+.go-app h1, .go-app h2 { letter-spacing: 0; }
+.go-brand { display: flex; align-items: center; gap: 10px; min-height: 44px; }
+.go-logo { width: 36px; height: 36px; border-radius: 9px; background: var(--exit); display: grid; place-items: center; flex: none; }
+.go-logo svg { width: 24px; height: 24px; }
+.go-brand-text { display: grid; line-height: 1.15; min-width: 0; }
+.go-brand-text b { font: 700 17px/1.1 var(--display); }
+.go-brand-text span { font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.go-switch { margin-left: auto; font-size: 13px; padding: 6px 8px; white-space: nowrap; }
+.go-title { font: 700 clamp(26px, 7vw, 32px)/1.12 var(--display); margin: 0; }
+.go-stack { display: grid; gap: 12px; }
+.go-center { display: grid; gap: 12px; text-align: center; }
+.go-list { display: grid; gap: 8px; }
+.go-site { display: grid; gap: 2px; text-align: left; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--rule); background: #fff; font: inherit; color: inherit; cursor: pointer; }
+.go-site b { font-size: 17px; }
+.go-site span { font-size: 14px; color: var(--text-2); }
+.go-site:hover { border-color: #b8c0c8; }
+.go-rooms { display: grid; gap: 6px; }
+.go-room-btn { text-align: left; padding: 13px 14px; border-radius: 10px; border: 1px solid var(--rule); background: #fff; font: 600 16px/1.2 var(--text); color: var(--text-1); cursor: pointer; }
+.go-room-btn.on { border-color: var(--exit); background: #ecfdf3; box-shadow: inset 0 0 0 1px var(--exit); }
+.go-room { display: block; font: 700 22px/1.2 var(--display); margin: 4px 0 2px; }
+.go-status { display: grid; gap: 6px; justify-items: start; }
+.go-details summary { cursor: pointer; font-weight: 700; margin-top: 8px; }
+.go-details[open] summary { margin-bottom: 8px; }
+.go-exit-line { display: flex; gap: 12px; align-items: center; margin: 0; }
+.go-exit-line svg { width: 36px; height: 36px; flex: none; }
+.go-exit-line > span { display: grid; }
+.go-exit-line b { font: 700 20px/1.2 var(--display); }
+.go-map-embed { width: 100%; height: 220px; border: 1px solid var(--rule); border-radius: 12px; background: #e9edf1; }
+
+/* emergency */
+.go-alarm-head { background: var(--bad); color: #fff; border-radius: 14px; padding: 14px 16px; display: grid; gap: 6px; }
+.go-alarm-head b { font: 800 20px/1.1 var(--display); letter-spacing: .02em; }
+.go-alarm-head p { margin: 0; font-size: 16px; line-height: 1.45; }
+.go-alarm-head .go-msg { font-weight: 700; }
+.go-elapsed { margin-left: auto; font: 700 18px/1 var(--num); font-variant-numeric: tabular-nums; opacity: .9; }
+.go-pulse { width: 12px; height: 12px; border-radius: 50%; background: #fff; flex: none; }
+@media (prefers-reduced-motion: no-preference) { .go-pulse { animation: go-blink 1s steps(2, start) infinite; } @keyframes go-blink { to { visibility: hidden; } } }
+.go-silence { justify-self: start; background: rgba(255, 255, 255, .15); border-color: rgba(255, 255, 255, .5); color: #fff; padding: 7px 12px; font-size: 14px; }
+.go-silence:hover { background: rgba(255, 255, 255, .25); }
+.go-exit { display: flex; gap: 14px; align-items: center; background: var(--g); color: #fff; border-radius: 16px; padding: 18px; }
+.go-exit > svg { width: 64px; height: 64px; flex: none; }
+.go-exit div { display: grid; gap: 2px; min-width: 0; }
+.go-exit span { font-size: 15px; opacity: .92; }
+.go-exit b { font: 700 clamp(26px, 8vw, 34px)/1.05 var(--display); overflow-wrap: anywhere; }
+.go-refuge { background: #1e3a8a; color: #fff; border-radius: 16px; padding: 18px; display: grid; gap: 4px; }
+.go-refuge b { font: 700 24px/1.15 var(--display); }
+.go-wait { border: 2px solid #f59e0b; background: #fffbeb; color: #78350f; border-radius: 14px; padding: 14px 16px; display: grid; gap: 4px; }
+.go-wait b { font: 700 20px/1.2 var(--display); }
+.go-steps ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.go-steps-head { margin-bottom: 8px; }
+.go-step { display: grid; grid-template-columns: 28px 1fr; gap: 10px; padding: 10px 8px; border-radius: 10px; color: var(--text-1); line-height: 1.4; }
+.go-step-ico { width: 28px; height: 28px; border-radius: 50%; background: #eef1f4; display: grid; place-items: center; font-size: 14px; color: var(--text-2); }
+.go-step.stairs .go-step-ico { background: #eef2ff; color: #3949ab; }
+.go-step.exit .go-step-ico { background: #ecfdf3; color: var(--ok); }
+.go-step.refuge .go-step-ico { background: #eff6ff; color: #1d4ed8; }
+.go-step.now { background: #f1f5f9; box-shadow: inset 3px 0 0 var(--text-1); font-weight: 700; }
+.go-step.done { color: var(--text-2); }
+.go-steps li { cursor: default; }
+.go-steps .go-step[class*="now"], .go-steps .go-step { cursor: pointer; }
+.go-map { display: grid; gap: 10px; }
+.go-legend { display: flex; gap: 6px 14px; align-items: center; flex-wrap: wrap; margin: 0; }
+.go-legend span { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: -8px; }
+.lg-you { background: var(--evac); } .lg-exit { background: var(--exit); } .lg-fire { background: #dc2626; }
+.go-outside { display: grid; gap: 8px; }
+.go-outside b { font: 700 18px/1.25 var(--display); }
+.go-out-dist { margin: 0; font: 700 18px/1.3 var(--text); }
+.go-actions { display: grid; gap: 10px; position: sticky; bottom: 10px; padding: 8px; background: rgba(246, 247, 249, .92); backdrop-filter: blur(8px); border-radius: 16px; }
+.go-help-btn { border-color: #fca5a5; color: var(--bad); }
+.go-safe { background: #ecfdf3; border: 1px solid #bbf7d0; border-radius: 16px; padding: 18px; display: grid; gap: 6px; color: #14532d; }
+.go-safe b { font: 700 24px/1.15 var(--display); }
+.go-safe .pf-btn { justify-self: start; margin-top: 6px; }
+.go-sheet { position: fixed; inset: 0; background: rgba(15, 23, 42, .45); display: grid; align-items: end; z-index: 20; }
+.go-sheet-card { background: #fff; border-radius: 18px 18px 0 0; padding: 18px 16px 24px; display: grid; gap: 10px; max-width: 520px; width: 100%; margin: 0 auto; }
+.go-sheet-card h2 { font: 700 20px/1.2 var(--display); margin: 0 0 4px; }

@@ -12,7 +12,7 @@ import { type Mats, labelTex, mulberry32 } from './materials.ts'
 export type Seat = { x: number; z: number; yaw: number; sit: boolean; room: string; level: number }
 
 /** UVs in metres so textures keep their real size on every box. */
-function worldUV(g: any) {
+export function worldUV(g: any) {
   const p = g.attributes.position, n = g.attributes.normal, uv = g.attributes.uv
   for (let i = 0; i < p.count; i++) {
     const nx = Math.abs(n.getX(i)), ny = Math.abs(n.getY(i)), nz = Math.abs(n.getZ(i))
@@ -23,7 +23,7 @@ function worldUV(g: any) {
 }
 
 const UP = new THREE.Vector3(0, 1, 0)
-class Batch {
+export class Batch {
   m = new Map<any, any[]>()
   add(mat: any, g: any) {
     if (!mat.userData.keepUV) worldUV(g)
@@ -177,8 +177,8 @@ function buildWalls(b: Batch, M: Mats, L: number) {
 }
 
 // ---------- furniture ----------
-type Kit = ReturnType<typeof kit>
-function kit(b: Batch, M: Mats, seats: Seat[], level: number, rnd: () => number) {
+export type Kit = ReturnType<typeof kit>
+export function kit(b: Batch, M: Mats, seats: Seat[], level: number, rnd: () => number) {
   const rot = (lx: number, lz: number, yaw: number): [number, number] => [lx * Math.cos(yaw) + lz * Math.sin(yaw), -lx * Math.sin(yaw) + lz * Math.cos(yaw)]
   const pb = (mat: any, w: number, h: number, d: number, x: number, z: number, yaw: number, lx: number, ly: number, lz: number) => {
     const [ox, oz] = rot(lx, lz, yaw); b.box(mat, w, h, d, x + ox, ly, z + oz, yaw)
