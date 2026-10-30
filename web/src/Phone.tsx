@@ -8,12 +8,14 @@ type Me = {
   distance_m: number; walk_s: number; path: string[]; alert: boolean; blocked: string[]; blocked_labels: string[]
   map?: { nodes: MapNode[]; edges: [string, string][] }
   people?: number; live?: { count: number; design: number } | null // live = counted by a camera (Nikaas Live)
+  accessible?: boolean; needs_assistance?: boolean; accessible_mode?: boolean; guidance?: string
 }
 type State = { room_labels: Record<string, string>; version: number }
 
 // The judge's phone during a Live Drill: pick your room, get your own exit, re-routed live.
 export default function Phone() {
   const [room, setRoom] = useState(() => { try { return localStorage.getItem('nikaas-room') ?? '' } catch { return '' } })
+  const [accessible, setAccessible] = useState(() => { try { return localStorage.getItem('nikaas-accessible') === '1' } catch { return false } })
   const [rooms, setRooms] = useState<Record<string, string>>()
   const [me, setMe] = useState<Me>()
   const [flash, setFlash] = useState(false)
@@ -36,7 +38,8 @@ export default function Phone() {
     let alive = true
     const poll = async () => {
       try {
-        const r = await fetch(`${API}/drill?room=${encodeURIComponent(room)}&since=${seen.current}`)
+        const url = `${API}/drill?room=${encodeURIComponent(room)}&since=${seen.current}${accessible ? '&accessible=true' : ''}`
+        const r = await fetch(url)
         if (!r.ok) throw new Error(String(r.status))
         const m: Me = await r.json()
         if (!alive) return
@@ -49,9 +52,10 @@ export default function Phone() {
     }
     poll(); const id = setInterval(poll, 1500)
     return () => { alive = false; clearInterval(id) }
-  }, [room])
+  }, [room, accessible])
 
   function choose(r: string) { try { localStorage.setItem('nikaas-room', r) } catch { /* private mode */ } seen.current = 0; setRoom(r) }
+  function toggleAccessible(v: boolean) { try { localStorage.setItem('nikaas-accessible', v ? '1' : '0') } catch { /* private mode */ } setAccessible(v) }
 
   if (!room) return (
     <main className="phone">
@@ -61,6 +65,10 @@ export default function Phone() {
       <div className="phone-rooms">
         {Object.entries(rooms ?? {}).map(([id, label]) => <button key={id} onClick={() => choose(id)}>{label}</button>)}
       </div>
+      <label className="phone-accessible">
+        <input type="checkbox" checked={accessible} onChange={e => toggleAccessible(e.target.checked)} />
+        I need a stair-free route (wheelchair / mobility)
+      </label>
     </main>
   )
 
@@ -71,14 +79,29 @@ export default function Phone() {
       {flash && me && <div className="phone-fire">Fire at {me.blocked_labels.join(', ')}. Your exit has changed.</div>}
       {me ? (
         <>
-          <div className="phone-exit">
-            <ExitIcon />
-            <div><span>Your exit</span><b>{me.exit_label}</b></div>
-          </div>
-          <p className="phone-walk">{me.distance_m} m · about {me.walk_s} s walking</p>
+          {me.needs_assistance ? (
+            <div className="phone-assistance">
+              <div className="phone-assist-icon">♿</div>
+              <b>Wait at your room's refuge point</b>
+              <p>There is no stair-free route from this room. A steward will come to assist you.</p>
+              {me.guidance && <p className="phone-note">{me.guidance}</p>}
+            </div>
+          ) : (
+            <>
+              <div className="phone-exit">
+                <ExitIcon />
+                <div><span>Your exit</span><b>{me.exit_label}</b></div>
+              </div>
+              <p className="phone-walk">{me.distance_m} m · about {me.walk_s} s walking</p>
+            </>
+          )}
           {me.live && <p className="phone-note"><span className="live-badge">LIVE</span> Planned for the {me.live.count} people a camera counts in this room (floor plan: {me.live.design}).</p>}
           {me.blocked_labels.length > 0 && !flash && <p className="phone-note">Avoid: {me.blocked_labels.join(', ')} (blocked)</p>}
-          {me.map && <MiniMap me={me} />}
+          {!me.needs_assistance && me.map && <MiniMap me={me} />}
+          <label className="phone-accessible phone-accessible--inline">
+            <input type="checkbox" checked={accessible} onChange={e => toggleAccessible(e.target.checked)} />
+            Stair-free route
+          </label>
         </>
       ) : <p className="phone-note">{err || 'Connecting…'}</p>}
     </main>

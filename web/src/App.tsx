@@ -6,11 +6,17 @@ type Node = { id: string; type: 'room' | 'corridor' | 'exit'; x: number; z: numb
 type Building = { name: string; nodes: Node[]; edges: { from: string; to: string; width: number }[] }
 type Frame = { t: number; people: [number, number, string][] }
 type Run = {
-  total_time_s: number; per_exit: Record<string, number>; bottleneck: string; peak_queue: number; edge_load?: Record<string, number>
+  total_time_s: number; p95_time_s?: number; per_exit: Record<string, number>; bottleneck: string; peak_queue: number; edge_load?: Record<string, number>
   frames: Frame[]; door_routes?: Record<string, string[][]>
   lower_bound_s?: number; nearest_s?: number // set for Nikaas plans
-  plan?: Record<string, string>
+  plan?: Record<string, string>; compliance?: number; profile?: string
 }
+
+const PROFILES: { id: string; label: string; compliance: number; desc: string }[] = [
+  { id: 'guidance', label: 'Guided (90%)', compliance: 0.9, desc: '9 in 10 follow the plan' },
+  { id: 'mixed',    label: 'Mixed (65%)',  compliance: 0.65, desc: '35% take the familiar exit' },
+  { id: 'panic',    label: 'Panic (30%)',  compliance: 0.3,  desc: '70% ignore the plan — real crowd' },
+]
 
 // Live API (AWS). Without it the page falls back to saved runs, so ?demo=1 and offline demos still work.
 const API = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, '') ?? ''
@@ -47,19 +53,19 @@ async function post(path: string, body: unknown) {
 }
 
 // plan 'nearest' = today's rule; 'nikaas' = Ayush's optimiser (/optimise), then simulated with that plan
-async function fetchRun(building: Building, blocked: string[], src: typeof SOURCES[number], plan: string): Promise<Run> {
+async function fetchRun(building: Building, blocked: string[], src: typeof SOURCES[number], plan: string, compliance = 1.0): Promise<Run> {
   const SAVED = src.saved, frame_every = src.frameEvery ?? 1
   const b = blocked.slice().sort().join('+')
   const key = plan === 'nikaas' ? `nikaas:${b}` : b
-  if ((!API || DEMO || src.offline) && key in SAVED) return (await fetch(SAVED[key])).json()
+  // saved runs are always 100% compliance; use live API for compliance < 1
+  if (compliance >= 1.0 && (!API || DEMO || src.offline) && key in SAVED) return (await fetch(SAVED[key])).json()
   if (!API) throw new Error('This scenario needs the live API (set VITE_API_URL).')
-  if (plan !== 'nikaas') return post('/simulate', { building, blocked, frame_every })
+  if (plan !== 'nikaas') return post('/simulate', { building, blocked, frame_every, compliance })
   const [opt, nearest] = await Promise.all([
     post('/optimise', { building, blocked, simulate: true, frame_every }),
     post('/simulate', { building, blocked, frame_every: 1e6 }),
   ])
-  // newer API returns the simulated plan in the same call; older deployments need a second request
-  const run = opt.run ?? await post('/simulate', { building, blocked, plan: opt.plan, frame_every })
+  const run = opt.run ?? await post('/simulate', { building, blocked, plan: opt.plan, frame_every, compliance })
   return { ...run, lower_bound_s: opt.lower_bound_s, nearest_s: nearest.total_time_s }
 }
 
@@ -75,6 +81,7 @@ export default function App() {
   const [speed, setSpeed] = useState(4)
   const [mode3d, setMode3d] = useState(true)
   const [plan, setPlan] = useState<'nearest' | 'nikaas'>('nearest')
+  const [compliance, setCompliance] = useState(1.0)
   const [qa, setQa] = useState<{ score: number; status: string; warnings: { severity: string; message: string }[] }>()
   useEffect(() => { fetch('data/vision_nova_pro_qa.json').then(r => r.json()).then(setQa).catch(() => {}) }, [])
   const canvas = useRef<HTMLCanvasElement>(null)
@@ -84,11 +91,11 @@ export default function App() {
     if (!building) return
     let live = true
     setRun(undefined); setError(''); setI(0)
-    fetchRun(building, blocked, source, plan)
+    fetchRun(building, blocked, source, plan, compliance)
       .then(r => { if (live) { setRun(r); if (!blocked.length) setBaseline(b => ({ ...b, [plan]: r.total_time_s })) } })
       .catch(e => live && setError(String(e.message ?? e)))
     return () => { live = false }
-  }, [building, blocked, plan])
+  }, [building, blocked, plan, compliance])
   useEffect(() => {
     if (!run || !playing) return
     const id = setInterval(() => setI(k => Math.min(k + 1, run.frames.length - 1)), 1000 / speed)
@@ -210,6 +217,34 @@ export default function App() {
         </div>
       )}
       <div className="ctl-row">
+        <div className="ctl">
+          <span>Crowd behaviour — how many follow the plan?</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+            <div className="seg">
+              {PROFILES.map(p => (
+                <button key={p.id} title={p.desc}
+                  className={compliance === p.compliance ? 'on' : ''}
+                  onClick={() => setCompliance(p.compliance)}>
+                  {p.label}
+                </button>
+              ))}
+              <button className={compliance === 1.0 ? 'on' : ''} onClick={() => setCompliance(1.0)}>Full (100%)</button>
+            </div>
+            <input type="range" min={0} max={100} step={5} value={Math.round(compliance * 100)}
+              style={{ width: 120 }}
+              aria-label="Compliance percentage"
+              onChange={e => setCompliance(Number(e.target.value) / 100)} />
+            <span style={{ fontFamily: 'var(--mono)', fontSize: 13, minWidth: 36 }}>{Math.round(compliance * 100)}%</span>
+          </div>
+          {compliance < 1.0 && (
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+              {Math.round((1 - compliance) * 100)}% of occupants ignore the plan and take the nearest exit instead.
+              {' '}The Nikaas plan routes the remaining {Math.round(compliance * 100)}% to compensate.
+            </div>
+          )}
+        </div>
+      </div>
+      <div className="ctl-row">
         <div className="ctl"><span>Block an exit (or tap one on the map)</span>
           <div className="chips">
             {exits.map(n => <button key={n.id} className={blocked.includes(n.id) ? 'fire' : ''} aria-pressed={blocked.includes(n.id)} onClick={() => toggleExit(n.id)}>{n.label ?? n.id}</button>)}
@@ -250,6 +285,10 @@ export default function App() {
           ))}
           <hr style={{ border: 0, borderTop: '1px solid var(--line)' }} />
           <Stat label="Total evacuation" value={run ? `${run.total_time_s} s${delta !== undefined ? `  (${delta >= 0 ? '+' : ''}${delta.toFixed(1)} s vs all exits open)` : ''}` : '…'} />
+          {run?.p95_time_s !== undefined && <Stat label="95th-percentile (last 5% out)" value={`${run.p95_time_s} s`} />}
+          {run?.compliance !== undefined && run.compliance < 1.0 && (
+            <Stat label="Compliance modelled" value={`${Math.round(run.compliance * 100)}% follow plan · ${Math.round((1 - run.compliance) * 100)}% take nearest exit`} />
+          )}
           {run?.nearest_s !== undefined && (
             <div style={{ background: '#ecfdf3', border: '1px solid var(--accent)', padding: '8px 10px', marginTop: 8 }}>
               <div style={{ fontFamily: 'var(--serif)', fontSize: 26, color: 'var(--accent)' }}>

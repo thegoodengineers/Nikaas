@@ -172,6 +172,13 @@ body.phone-mode { background: #fff; }
 .phone-change { margin-left: auto; font-size: 13px; padding: 6px 10px; }
 .phone-rooms { display: grid; gap: 10px; }
 .phone-rooms button { text-align: left; padding: 16px 18px; font-size: 18px; border-radius: 14px; }
+.phone-accessible { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--fg2); padding: 14px 0 0; cursor: pointer; }
+.phone-accessible input { width: 20px; height: 20px; accent-color: var(--exit); cursor: pointer; flex: none; }
+.phone-accessible--inline { padding: 16px 0 0; font-size: 14px; }
+.phone-assistance { background: var(--surface2); border-radius: 18px; padding: 24px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.phone-assist-icon { font-size: 52px; line-height: 1; }
+.phone-assistance b { font-size: 19px; }
+.phone-assistance p { font-size: 15px; color: var(--fg2); margin: 0; }
 .phone-exit { display: flex; align-items: center; gap: 16px; background: var(--exit); color: #fff; border-radius: 22px; padding: 22px; box-shadow: 0 14px 40px var(--exit-glow); }
 .phone-exit svg { width: 72px; height: 72px; flex: none; }
 .phone-exit span { display: block; font-size: 16px; opacity: .9; }
