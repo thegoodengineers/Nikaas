@@ -8,7 +8,7 @@
 - **30 Oct 15:07** — A crash in the report script hid stale numbers: one run that did not finish (empty time) made
   `scripts/report.py` stop part-way, so the website's results file had silently stopped updating. Lesson: the
   scripts that publish numbers need the same care as the simulator; an unfinished run is a result to show, not skip.
-- **30 Oct 15:20** — A comparison bug, not a model bug: with an exit blocked, the Twin compared the Nikaas run against
+- **30 Oct 14:59** — A comparison bug, not a model bug: with an exit blocked, the Twin compared the Nikaas run against
   the nearest-exit baseline and showed "-116.8 s vs all exits open". Each plan now has its own baseline (+28.8 s).
 - **30 Oct 15:30** — Reviewing a 2,500-line change to the core simulator: tests passing was not enough, so we re-ran 11
   scenarios before and after and required every time, queue and plan to be identical. They were, but the check also
