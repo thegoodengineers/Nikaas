@@ -714,10 +714,20 @@ def start_alarm(sid: str, type_: str = "fire", message: str = "", origin: str | 
     rooms = a["plan"]["rooms"]
     title = f"{ALARM_TYPES[type_].upper()} · {site['name']}"
 
+    nodes = _nodes(site)
+    blocked = set(a["plan"].get("blocked", []))
+    open_exits = [_label(nodes[x]) for x in _building(site).exits if x not in blocked]
+    shut = [_label(nodes[x]) for x in _building(site).exits if x in blocked]
+
     def msg(p):
         r = rooms.get(p.get("room") or "")
         first = "Drop, cover and hold on until the shaking stops. Then " if type_ == "earthquake" else ""
-        body = f"{first}{'l' if first else 'L'}eave now by {r['exit_label']} (Group {r['group']})." if r else f"{first}{'l' if first else 'L'}eave the building now. Open Nikaas for your route."
+        go = "l" if first else "L"
+        if r:
+            body = f"{first}{go}eave now by {r['exit_label']} (group {r['group']}), {round(r.get('distance_m', 0))} m. Tap for step-by-step directions."
+        else:  # no room known: still say which exits are open, then ask for the room
+            body = (f"{first}{go}eave now by the nearest open exit: {', '.join(open_exits[:3])}." + (f" Do not use {', '.join(shut[:2])}." if shut else "")
+                    + " Tap to choose your room for your fastest route.")
         return {"title": title, "body": body, "tag": a["id"], "url": f"/#/go?site={sid}", "alarm": True}
     _notify(sid, people(sid), msg)
     # the text message: short and plain (one SMS part), with this person's own link to their route
@@ -803,6 +813,8 @@ def me(sid: str, token: str) -> dict:
         "alarm": {k: a[k] for k in ("id", "type", "message", "started_at", "origin", "version", "phased", "wave_gap_s")} if a else None,
         "route": route,
         "hazards": [{k: h[k] for k in ("id", "kind", "node", "floor", "label")} for h in hz],
+        # exits nobody should use right now (a hazard on or in front of them), so a phone without a room still sees where to go
+        "blocked_exits": sorted(x for x in b.exits if x in (set((a.get("plan") or {}).get("blocked", [])) if a else set()) | _blocked(hz)),
         "map": _map(site),
         "version": a["version"] if a else 0,
     }

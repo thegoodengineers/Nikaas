@@ -27,9 +27,11 @@ type Props = {
   /** moving dashes along the route */
   animate?: boolean
   targetLabel?: string
+  /** only rooms react to taps (no walkway, stair or exit targets): choosing where you are */
+  roomsOnly?: boolean
 }
 
-export default function PlanView({ nodes, edges, floor, route, routeColor = 'var(--exit)', hazards = [], here, target, roomFill, badges, blocked = [], onNode, selected, label, className, showLabels, labels, focus, stepNode, animate, targetLabel }: Props) {
+export default function PlanView({ nodes, edges, floor, route, routeColor = 'var(--exit)', hazards = [], here, target, roomFill, badges, blocked = [], onNode, selected, label, className, showLabels, labels, focus, stepNode, animate, targetLabel, roomsOnly }: Props) {
   const reduced = typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches
   const on = (n: MapNode) => floor === null || n[6] === floor || n[6] === null
   const pos = Object.fromEntries(nodes.map(n => [n[0], n]))
@@ -72,17 +74,17 @@ export default function PlanView({ nodes, edges, floor, route, routeColor = 'var
           aria-label={onNode ? labels?.[n[0]] ?? n[0] : undefined}>
           <rect x={n[2] - n[4] / 2} y={n[3] - n[5] / 2} width={Math.max(n[4], unit * 2)} height={Math.max(n[5], unit * 2)} rx={unit * 0.6}
             style={{ fill: roomFill?.[n[0]], strokeWidth: (n[0] === here || n[0] === selected ? 0.7 : 0.35) * unit }} />
-          {showLabels && labels?.[n[0]] && n[4] > unit * 8 && <text x={n[2]} y={n[3]} className="plan-text" style={{ fontSize: Math.min(n[5] * 0.28, unit * 3.4) }}>{labels[n[0]]}</text>}
+          {showLabels && labels?.[n[0]] && n[4] > unit * 8 && <text x={n[2]} y={n[3]} className="plan-text" style={{ fontSize: Math.min(n[5] * 0.28, unit * 3.4, (n[4] * 0.9) / (labels[n[0]].length * 0.58)) }}>{labels[n[0]]}</text>}
           {badges?.[n[0]] && <text x={n[2]} y={n[3] + (showLabels ? Math.min(n[5] * 0.3, unit * 3.6) : 0)} className="plan-badge" style={{ fontSize: Math.min(n[5] * 0.32, unit * 3.8) }}>{badges[n[0]]}</text>}
         </g>
       ))}
       {vis.filter(n => n[1] !== 'room' && landings.has(n[0])).map(n => (
-        <g key={n[0]} className={`plan-stair ${onNode ? 'is-click' : ''} ${n[0] === selected ? 'is-selected' : ''}`} onClick={onNode ? () => onNode(n[0]) : undefined}>
+        <g key={n[0]} className={`plan-stair ${onNode && !roomsOnly ? 'is-click' : ''} ${n[0] === selected ? 'is-selected' : ''}`} onClick={onNode && !roomsOnly ? () => onNode(n[0]) : undefined}>
           <rect x={n[2] - unit * 2.2} y={n[3] - unit * 2.2} width={unit * 4.4} height={unit * 4.4} rx={unit * 0.5} style={{ strokeWidth: 0.35 * unit }} />
           {[0, 1, 2].map(k => <line key={k} x1={n[2] - unit * 1.4} x2={n[2] + unit * 1.4} y1={n[3] - unit * 1.1 + k * unit * 1.1} y2={n[3] - unit * 1.1 + k * unit * 1.1} style={{ strokeWidth: 0.3 * unit }} />)}
         </g>
       ))}
-      {onNode && vis.filter(n => n[1] === 'corridor' && !landings.has(n[0])).map(n => (
+      {onNode && !roomsOnly && vis.filter(n => n[1] === 'corridor' && !landings.has(n[0])).map(n => (
         <circle key={n[0]} cx={n[2]} cy={n[3]} r={unit * 1.5} className={`plan-node is-click ${n[0] === selected ? 'is-selected' : ''}`} onClick={() => onNode(n[0])} />
       ))}
       {segs.map(([a, b], k) => (
@@ -94,7 +96,7 @@ export default function PlanView({ nodes, edges, floor, route, routeColor = 'var
       {vis.filter(n => n[1] === 'exit').map(n => {
         const off = blockedSet.has(n[0])
         return (
-          <g key={n[0]} className={`plan-exit ${off ? 'is-blocked' : ''} ${n[0] === target ? 'is-target' : ''} ${onNode ? 'is-click' : ''}`} onClick={onNode ? () => onNode(n[0]) : undefined}>
+          <g key={n[0]} className={`plan-exit ${off ? 'is-blocked' : ''} ${n[0] === target ? 'is-target' : ''} ${onNode && !roomsOnly ? 'is-click' : ''}`} onClick={onNode && !roomsOnly ? () => onNode(n[0]) : undefined}>
             <circle cx={n[2]} cy={n[3]} r={unit * (n[0] === target ? 3 : 2.3)} />
             {off && <path d={`M${n[2] - unit} ${n[3] - unit}L${n[2] + unit} ${n[3] + unit}M${n[2] + unit} ${n[3] - unit}L${n[2] - unit} ${n[3] + unit}`} style={{ strokeWidth: 0.5 * unit }} />}
           </g>

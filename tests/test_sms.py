@@ -198,3 +198,23 @@ def test_phone_can_send_itself_a_test_notification(client, monkeypatch):
     assert client.get("/sites/office/control").json()["push"] == {"on": 1, "total": 1}
     client.post("/sites/office/alarm", json={"type": "fire"})
     assert got[-1]["alarm"] is True and "FIRE" in got[-1]["title"]
+
+
+def test_alarm_notification_always_names_an_exit(client, monkeypatch):
+    got = {}
+    monkeypatch.setattr(push, "send", lambda sub, msg, ttl=600: got.__setitem__(sub["endpoint"], msg) or 201)
+    sub = lambda n: {"endpoint": f"https://push.example/{n}", "keys": {"p256dh": "x", "auth": "y"}}
+    room = next(n["id"] for n in client.get("/sites/office").json()["building"]["nodes"] if n["type"] == "room")
+    client.post("/sites/office/checkin", json={"token": T1, "room": room})
+    client.post("/sites/office/checkin", json={"token": T2, "room": None})
+    client.post("/sites/office/push", json={"token": T1, "subscription": sub(1)})
+    client.post("/sites/office/push", json={"token": T2, "subscription": sub(2)})
+    ex = next(n for n in client.get("/sites/office").json()["building"]["nodes"] if n["type"] == "exit")
+    client.post("/sites/office/hazards", json={"kind": "fire", "node": ex["id"]})
+    client.post("/sites/office/alarm", json={"type": "fire"})
+    with_room, without = got["https://push.example/1"]["body"], got["https://push.example/2"]["body"]
+    assert with_room.startswith("Leave now by ") and " m." in with_room
+    assert "nearest open exit" in without and "choose your room" in without
+    label = ex.get("label", ex["id"])
+    assert f"Do not use {label}" in without
+    assert client.get(f"/sites/office/me?token={T2}").json()["blocked_exits"] == [ex["id"]]

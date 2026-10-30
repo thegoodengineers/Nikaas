@@ -19,7 +19,7 @@ export type Person = {
 }
 export type Me = {
   site: { id: string; name: string; floors: Floor[]; rooms: [string, string, string | null][]; exits: [string, string][] }
-  person: Person; alarm: Alarm | null; route: Route | null; hazards: Hazard[]; map: { nodes: MapNode[]; edges: MapEdge[] }; version: number
+  person: Person; alarm: Alarm | null; route: Route | null; hazards: Hazard[]; blocked_exits?: string[]; map: { nodes: MapNode[]; edges: MapEdge[] }; version: number
 }
 export type SiteSummary = { id: string; name: string; address: string; demo: boolean; floors: number; rooms: number; exits: number; people: number; geo: Geo | null }
 export type Geo = { lat: number; lng: number; rotation_deg: number }
