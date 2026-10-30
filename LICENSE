@@ -19,7 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
-Third-party code in this repository keeps its own licence: three.js (MIT, web/src/vendor/three),
-qrcode-generator (MIT, web/src/vendor/qrcode), pdf.js (Apache-2.0, web/src/vendor/pdfjs),
-TensorFlow.js and COCO-SSD (Apache-2.0, web/public/vendor). Fonts are under the SIL Open Font Licence.

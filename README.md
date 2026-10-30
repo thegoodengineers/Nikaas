@@ -61,4 +61,4 @@ uvicorn nikaas.api:app --reload
 
 ## Licence
 
-MIT, see [LICENSE](LICENSE). Vendored third-party code (three.js, qrcode-generator, pdf.js, TensorFlow.js, COCO-SSD) keeps its own licence, listed in the same file.
+MIT, see [LICENSE](LICENSE). Vendored third-party code (three.js, qrcode-generator, pdf.js, TensorFlow.js, COCO-SSD) keeps its own licence, listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
