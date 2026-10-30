@@ -20,11 +20,11 @@ export default function Drill() {
   useEffect(() => { fetch('data/iit_kgp_museum.json').then(r => r.json()).then(setBuilding) }, [])
   useEffect(() => { fetch(`${API}/drill`).then(r => (r.ok ? r.json() : undefined)).then(s => s && setState(s)).catch(() => {}) }, [])
 
-  async function push(blocked: string[]) {
+  async function push(blocked: string[], reset = false) {
     if (!building) return
     setBusy(true); setErr('')
     try {
-      const r = await fetch(`${API}/drill`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ building, blocked }) })
+      const r = await fetch(`${API}/drill`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ building, blocked, reset }) })
       if (!r.ok) throw new Error(`Server error ${r.status}`)
       setState(await r.json())
     } catch (e) { setErr(e instanceof Error ? e.message : String(e)) } finally { setBusy(false) }
@@ -60,6 +60,7 @@ export default function Drill() {
                   </button>
                 ))}
               </div>
+              <button className="quiet" disabled={busy} onClick={() => push([], true)} style={{ marginTop: 10 }}>Start over (clear fires and alerts)</button>
               {state.changed.length > 0 && <p className="drill-changed">{state.changed.length} rooms were just re-routed. Their phones are vibrating.</p>}
               <div className="table-wrap" style={{ marginTop: 16 }}>
                 <table className="data">
