@@ -3,6 +3,8 @@
 ![Nikaas: the building is already evacuating; a fire at the main entrance re-routes everyone](docs/img/hero.gif)
 
 ## For judges, start here
+**▶ Demo video (3 min 20 s): https://youtu.be/zwIpXaX80vI** — the building twin, the 3D simulation, a live fire alarm reaching a phone, the live drill and the evidence.
+
 **Nikaas is an open-source evacuation digital twin** — photograph a posted exit map, and Nikaas times the evacuation and finds the room-to-exit assignment that moves everyone out fastest.
 
 - **44.6% faster** evacuation movement time on the demo lab block: nearest-exit rule 301 s → Nikaas plan 167 s, saving 134 s for 528 people (`runs/wow.csv`).
@@ -15,7 +17,7 @@
 - **Building-safety platform** (`docs/PLATFORM.md`): people scan a QR code at the entrance or on a room door (no name asked; a mobile number only if they opt in to emergency texts; deleted after 24 h); in an emergency their phone gets a push alert and their own step-by-step route across floors, re-planned when a hazard blocks a stair; people who cannot use stairs are sent to a refuge; outside, Google Maps walks them to the assembly point and "I'm safe" is checked against its location. The control room (`#/control`) sees who is inside, safe, missing or asking for help, starts and clears alarms, releases floors in waves, diverts rooms when an exit queues (only when the simulator confirms it is faster), and prints marshal lists and QR codes. Buildings come from a PDF or photos, one page per floor, fixed in an editor with stairs joined across floors (`#/buildings`). Heat and smoke sensors and room cameras raise hazards; a camera's suspected fire is confirmed by Amazon Rekognition. 16 tests in `tests/test_platform.py`.
 - **Live drill**: judges scan a QR code, pick their room, and their phone shows their own exit; block an exit and every affected phone flashes red with its new route (and vibrates on Android). Phones taped beside doors become live exit signs that turn red and point to the nearest open exit.
 
-Live site: **http://nikaas-webbucket-hbkfctr0cw8s.s3-website.ap-south-1.amazonaws.com** (Platform, Control room, Buildings, Digital twin, Evidence; footer: 3D simulation, Live drill, Plan challenge, Site camera, Phone app; on phones `#/go`, `#/me` and `#/sign`). Push alerts, GPS and the camera need the HTTPS address: **https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html**. The 3D Sim page is an illustration with its own simple walkers; the validated times are on the Twin and Evidence pages · API: https://4kzez16ucj.execute-api.ap-south-1.amazonaws.com/health · Demo video: *(fill before submission)*
+Live site: **http://nikaas-webbucket-hbkfctr0cw8s.s3-website.ap-south-1.amazonaws.com** (Platform, Control room, Buildings, 3D simulation, Digital twin, Evidence; Tools menu: Live drill, Room camera, Phone app, Exit sign; on phones `#/go`, `#/me` and `#/sign`). Push alerts, GPS and the camera need the HTTPS address: **https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html**. The 3D Sim page is an illustration with its own simple walkers; the validated times are on the Twin and Evidence pages · API: https://4kzez16ucj.execute-api.ap-south-1.amazonaws.com/health · Demo video: **https://youtu.be/zwIpXaX80vI**
 
 ---
 
