@@ -75,9 +75,18 @@ room the exit that empties the building fastest, re-planning when a stair is blo
 Built from scratch at **AfterHours 1.0** (DBIT, 30–31 Oct 2026), Theme 03: Simulation & Digital
 Twins, by **TheGoodEngineers** (team AH50): Ayush V U, Bhumika G, Abhijeet, Chirag R H.
 
-**Working today:** simulator (SFPE-validated) · API live on AWS (`/simulate`, `/optimise`, `/vision`) · website with 2D + 3D twin, nearest-vs-Nikaas comparison, tap-to-block · photo-to-building with Amazon Nova
-**In progress:** Crowd mode density analysis (densities being corrected) · stadium building
-**Not built yet:** multi-floor buildings · NBC travel-distance check
+**Working today:**
+- Simulator validated against the SFPE handbook (245.25 s vs the published 245.2 s) and an optimiser that is checked against a proven fastest-possible time
+- Buildings with several floors and shared stairwells
+- Floor plans from a PDF or photos (read by Amazon Nova), fixed in an editor, with 8 automatic plan checks (including NBC 2016 minimum exit count)
+- Building-safety platform: QR check-in, push alerts with each phone's own route, control room, marshal sheets, sensors and room cameras
+- Live drill with judges' phones and phones as exit signs
+- 3D simulation, digital twin (nearest exit vs Nikaas plan, crowd behaviour, wheelchair users) and an evidence page
+- Crowd mode (opt-in density warnings) and a stadium scaled to 2,001 people
+- API live on AWS; 196 automated tests; every push to `main` is tested and deployed automatically
+
+**Limits:** crowd densities come from a flow model, not a spatial crowd model · the full 14,600-person stadium does not finish within the simulator's 30-minute cap · the 3D simulation is an illustration (validated times are on the twin and evidence pages) · text messages need an SMS provider; the AWS account cannot send SMS yet, so phones use push notifications
+**Not built yet:** NBC travel-distance check
 
 > Every number above comes from `runs/` or `docs/RESULTS.md`. If a number has no file behind it, it is not here.
 
