@@ -17,7 +17,54 @@
 - **Building-safety platform** (`docs/PLATFORM.md`): people scan a QR code at the entrance or on a room door (no name asked; a mobile number only if they opt in to emergency texts; deleted after 24 h); in an emergency their phone gets a push alert and their own step-by-step route across floors, re-planned when a hazard blocks a stair; people who cannot use stairs are sent to a refuge; outside, Google Maps walks them to the assembly point and "I'm safe" is checked against its location. The control room (`#/control`) sees who is inside, safe, missing or asking for help, starts and clears alarms, releases floors in waves, diverts rooms when an exit queues (only when the simulator confirms it is faster), and prints marshal lists and QR codes. Buildings come from a PDF or photos, one page per floor, fixed in an editor with stairs joined across floors (`#/buildings`). Heat and smoke sensors and room cameras raise hazards; a camera's suspected fire is confirmed by Amazon Rekognition. 16 tests in `tests/test_platform.py`.
 - **Live drill**: judges scan a QR code, pick their room, and their phone shows their own exit; block an exit and every affected phone flashes red with its new route (and vibrates on Android). Phones taped beside doors become live exit signs that turn red and point to the nearest open exit.
 
-Live site: **http://nikaas-webbucket-hbkfctr0cw8s.s3-website.ap-south-1.amazonaws.com** (Platform, Control room, Buildings, 3D simulation, Digital twin, Evidence; Tools menu: Live drill, Room camera, Phone app, Exit sign; on phones `#/go`, `#/me` and `#/sign`). Push alerts, GPS and the camera need the HTTPS address: **https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html**. The 3D Sim page is an illustration with its own simple walkers; the validated times are on the Twin and Evidence pages · API: https://4kzez16ucj.execute-api.ap-south-1.amazonaws.com/health · Demo video: **https://youtu.be/zwIpXaX80vI**
+## Links
+
+**Watch and try**
+
+| | |
+|---|---|
+| Demo video (3 min 20 s) | **https://youtu.be/zwIpXaX80vI** |
+| Live site (HTTPS, use this one: phone alerts, GPS and the camera need it) | **https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html** |
+| Live site (plain HTTP address) | http://nikaas-webbucket-hbkfctr0cw8s.s3-website.ap-south-1.amazonaws.com |
+| API health check | https://4kzez16ucj.execute-api.ap-south-1.amazonaws.com/health |
+| API: the demo buildings | https://4kzez16ucj.execute-api.ap-south-1.amazonaws.com/sites |
+| Source code | https://github.com/thegoodengineers/Nikaas |
+| Automatic deploys (every push to `main`) | https://github.com/thegoodengineers/Nikaas/actions/workflows/deploy.yml |
+
+**Every page of the live site**
+
+| Page | What it is | Link |
+|---|---|---|
+| Platform | Home: the building already evacuating; tap an exit to start a fire | [open](https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html#/) |
+| Control room | Who is inside, safe or asking for help; start and clear alarms | [open](https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html#/control?site=office) |
+| Buildings | Import a floor plan (PDF or photo) or draw one; edit floors and stairs | [open](https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html#/buildings) |
+| 3D simulation | The main feature: fire, earthquake or collapse, group-by-group evacuation in 3D | [open](https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html#/sim) |
+| Digital twin | Nearest exit vs the Nikaas plan, crowd behaviour, block an exit | [open](https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html#/twin) |
+| Evidence | Where every number comes from: SFPE check, lower bounds, 200-run tests | [open](https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html#/evidence) |
+| Live drill | Presenter screen with the QR code judges scan | [open](https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html#/drill) |
+| Phone app | What people see after scanning a building QR code (alerts, route, "I'm safe") | [open](https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html#/go?site=office) |
+| Drill phone | The judge's phone during a live drill: pick a room, follow the arrows | [open](https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html#/me) |
+| Exit sign | A phone taped beside a door becomes a live exit sign | [open](https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html#/sign) |
+| Room camera | A laptop camera counts people and spots fire for the control room | [open](https://nikaas-webbucket-hbkfctr0cw8s.s3.ap-south-1.amazonaws.com/index.html#/cam?site=office) |
+
+The 3D simulation is an illustration with its own simple walkers; the validated times are on the Digital twin and Evidence pages.
+
+**Documents**
+
+| | |
+|---|---|
+| All results, generated from `runs/` | [docs/RESULTS.md](docs/RESULTS.md) |
+| What our evacuation times mean (method and assumptions) | [docs/METHOD.md](docs/METHOD.md) |
+| Multi-floor buildings and shared stairwells | [docs/MULTI_FLOOR_METHOD.md](docs/MULTI_FLOOR_METHOD.md) |
+| Building-safety platform: check-in, alerts, control room | [docs/PLATFORM.md](docs/PLATFORM.md) |
+| Crowd density research (crush-risk thresholds) | [docs/CROWD_RESEARCH.md](docs/CROWD_RESEARCH.md) |
+| Building data format shared by every part | [docs/CONTRACT.md](docs/CONTRACT.md) |
+| Deploying to AWS | [docs/DEPLOY.md](docs/DEPLOY.md) |
+| Pitch script | [docs/PITCH.md](docs/PITCH.md) |
+| Submission text | [docs/submission.md](docs/submission.md) |
+| Open questions and the defaults we chose | [docs/QUESTIONS.md](docs/QUESTIONS.md) |
+| Licence and third-party notices | [LICENSE](LICENSE) · [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) |
+
 
 ---
 
