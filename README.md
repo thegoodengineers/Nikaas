@@ -175,7 +175,7 @@ Then open http://localhost:5173. Deploying to your own AWS account: [docs/DEPLOY
 
 **AI tools used:**
 
-> **TODO (team to fill before submission):** list the AI tools we used while building Nikaas and what we used each one for. The event rules require this disclosure. (Amazon Nova and Amazon Rekognition above are parts of the product, not build tools.)
+Claude (Anthropic) was used as an AI coding assistant to help write and review code and documentation. Every part was reviewed, tested and can be explained by the team; the measured results come from our own scripts in `runs/`. (Amazon Nova and Amazon Rekognition above are parts of the product, not build tools.)
 
 ## Layout
 - `nikaas/building.py` graph loading, shortest paths, nearest-exit plan
