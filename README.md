@@ -75,18 +75,28 @@ room the exit that empties the building fastest, re-planning when a stair is blo
 Built from scratch at **AfterHours 1.0** (DBIT, 30–31 Oct 2026), Theme 03: Simulation & Digital
 Twins, by **TheGoodEngineers** (team AH50): Ayush V U, Bhumika G, Abhijeet, Chirag R H.
 
-**Working today:**
+## Status: working, in progress, not built
+
+**Working today** (all on the live site, 196 automated tests pass):
 - Simulator validated against the SFPE handbook (245.25 s vs the published 245.2 s) and an optimiser that is checked against a proven fastest-possible time
 - Buildings with several floors and shared stairwells
 - Floor plans from a PDF or photos (read by Amazon Nova), fixed in an editor, with 8 automatic plan checks (including NBC 2016 minimum exit count)
-- Building-safety platform: QR check-in, push alerts with each phone's own route, control room, marshal sheets, sensors and room cameras
+- Building-safety platform: QR check-in, push alerts with each phone's own route, control room, marshal sheets, sensor readings and room cameras raising hazards
 - Live drill with judges' phones and phones as exit signs
 - 3D simulation, digital twin (nearest exit vs Nikaas plan, crowd behaviour, wheelchair users) and an evidence page
 - Crowd mode (opt-in density warnings) and a stadium scaled to 2,001 people
-- API live on AWS; 196 automated tests; every push to `main` is tested and deployed automatically
+- API live on AWS; every push to `main` is tested and deployed automatically
 
-**Limits:** crowd densities come from a flow model, not a spatial crowd model · the full 14,600-person stadium does not finish within the simulator's 30-minute cap · the 3D simulation is an illustration (validated times are on the twin and evidence pages) · text messages need an SMS provider; the AWS account cannot send SMS yet, so phones use push notifications
-**Not built yet:** NBC travel-distance check
+**In progress:**
+- Emergency text messages: the code and tests exist (`nikaas/sms.py`), but the AWS account cannot send SMS yet, so phones get push notifications instead
+- Full-size stadium: the 14,600-person stadium does not finish within the simulator's 30-minute cap; the 2,001-person version does
+
+**Not built yet:**
+- NBC travel-distance check
+- Physical sensor hardware: sensors report over `POST /sites/{id}/sensors`, but no smoke or heat sensor board has been wired to it yet
+- A spatial crowd model: crowd densities come from a flow model and are capped at 10 people/m²
+
+**Limits to know:** the 3D simulation is an illustration with its own simple walkers (the validated times are on the twin and evidence pages) · scale, occupancy and exit widths of the demo buildings are our assumptions (`docs/QUESTIONS.md`) · times cover the movement phase only, not detection or pre-movement delay (`docs/METHOD.md`)
 
 > Every number above comes from `runs/` or `docs/RESULTS.md`. If a number has no file behind it, it is not here.
 
@@ -103,13 +113,69 @@ digitised into `data/iit_kgp_museum.json` (`scripts/make_iit_kgp.py`; overlay ch
 Photo: "Floor Plan Panel - NMST - IIT Kharagpur" by Biswarup Ganguly, CC BY 3.0, via Wikimedia Commons
 (https://commons.wikimedia.org/wiki/File:Floor_Plan_Panel_-_NMST_-_IIT_Kharagpur_-_West_Midnapore_2015-09-28_4616.JPG).
 
-## Run locally
+## Setup and run locally
+
+Needs Python 3.11 and Node.js 22 (both tested on Windows 11 and on Ubuntu in CI). No AWS account is needed for the simulator, optimiser, tests or a local website; photo reading, camera fire confirmation and texts need AWS (see below).
+
 ```
-pip install -r requirements.txt
-python -m pytest -q
-python scripts/run_nearest.py data/sample_floor.json
-uvicorn nikaas.api:app --reload
+git clone https://github.com/thegoodengineers/Nikaas
+cd Nikaas
+python -m pip install -r requirements.txt boto3
+python -m pytest -q                                   # 196 tests
+python scripts/run_nearest.py data/sample_floor.json   # one simulation, printed and added to runs/results.csv
+python -m uvicorn nikaas.api:app --port 8013           # API on http://localhost:8013/health
 ```
+
+Website, in a second terminal (it talks to the API through `VITE_API_URL`):
+
+```
+cd web
+npm ci
+VITE_API_URL=http://localhost:8013 npx vite            # PowerShell: $env:VITE_API_URL="http://localhost:8013"; npx vite
+```
+
+Then open http://localhost:5173. Deploying to your own AWS account: [docs/DEPLOY.md](docs/DEPLOY.md).
+
+## Tech stack
+
+| Layer | What we use |
+|---|---|
+| Simulator and optimiser | Python 3.11, NumPy, SciPy (`linprog` for the lower-bound flow LP) |
+| API | FastAPI + Pydantic, wrapped for AWS Lambda with Mangum |
+| Website | React 19, TypeScript, Vite; three.js for 3D; pdf.js for PDF floor plans; TensorFlow.js COCO-SSD for counting people on a room camera, in the browser |
+| Cloud | AWS SAM: API Gateway, Lambda, S3 (website and photos), DynamoDB (live platform state), SSM Parameter Store, CloudWatch |
+| Photo to building | Amazon Bedrock, Amazon Nova Pro (vision) |
+| Camera fire check | Amazon Rekognition (labels Fire, Flame, Smoke) |
+| Phone alerts | Web Push (VAPID, `cryptography`); SMS gateways in `nikaas/sms.py` (Amazon SNS, Fast2SMS, Twilio) |
+| Tests and CI | pytest (196 tests), GitHub Actions: tests, type-check and build, then deploy on every push to `main` |
+
+## Hardware and dependencies
+
+- **To run it:** any laptop that runs Python 3.11 and Node 22. No GPU.
+- **For the live features:** phones with a modern browser (push alerts, GPS and the camera need the HTTPS address); a laptop webcam for the room camera; old phones taped beside doors as live exit signs.
+- **Sensors:** any smoke or heat sensor that can send an HTTP request can post readings to `POST /sites/{id}/sensors`; we have not built or wired a sensor board yet.
+- **Python packages:** `requirements.txt` (fastapi, uvicorn, pydantic, mangum, httpx, numpy, scipy, cryptography, pytest; boto3 for the AWS parts).
+- **Website packages:** `web/package.json` (react, react-dom, pdfjs-dist, vite, typescript, eslint).
+- **External services (only for the live deployment):** AWS (Lambda, API Gateway, S3, DynamoDB, SSM, Bedrock, Rekognition, SNS) and Google Maps links for walking to the assembly point.
+
+## Disclosure: external code, data and tools
+
+**Our code.** Everything in `nikaas/`, `tests/`, `scripts/` and `web/src/` (outside `web/src/vendor/`) was written by the four of us, first at AfterHours 1.0 (DBIT, 30-31 Oct 2026) and then on this repository. The commit history shows who wrote what.
+
+**External code we include, unchanged, under its own licence** (full list in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)):
+- three.js (MIT), `web/src/vendor/three`
+- qrcode-generator (MIT), `web/src/vendor/qrcode`
+- pdf.js 4.10.38 (Apache-2.0), `web/src/vendor/pdfjs`
+- TensorFlow.js 4.22.0 and the COCO-SSD model (Apache-2.0), `web/public/vendor`
+- Fonts: Bricolage Grotesque, Big Shoulders Display, Atkinson Hyperlegible (SIL Open Font Licence), `web/public/fonts`
+
+**Libraries we depend on** (installed, not copied): the Python and npm packages listed above, each under its own licence.
+
+**Methods and data from published sources:** the SFPE hydraulic evacuation model and Engineering Guide Example 1 (our simulator reproduces it, `tests/test_sim.py`); quickest-flow network flows (Ford and Fulkerson, *Flows in Networks*, 1962) for the lower bound; crowd-density thresholds with sources in [docs/CROWD_RESEARCH.md](docs/CROWD_RESEARCH.md); NBC 2016 exit-count rule; the IIT Kharagpur floor-plan photo (CC BY 3.0, credited below).
+
+**AI tools used:**
+
+> **TODO (team to fill before submission):** list the AI tools we used while building Nikaas and what we used each one for. The event rules require this disclosure. (Amazon Nova and Amazon Rekognition above are parts of the product, not build tools.)
 
 ## Layout
 - `nikaas/building.py` graph loading, shortest paths, nearest-exit plan
