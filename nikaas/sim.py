@@ -99,7 +99,8 @@ def door_paths(b: Building, room, ex, blocked=()):
 
 def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_every=1.0, premove=(0.0, 0.0),
              compliance: float = 1.0, nearest: dict | None = None, wheelchair_fraction: float = 0.0):
-    """Run one evacuation. plan: room -> exit. Returns a dict in the API contract shape.
+    """Run one evacuation. plan: room -> exit, or room -> {door neighbour node: exit} to send the people at
+    each door of a room to their own exit (a door-level plan). Returns a dict in the API contract shape.
 
     compliance: fraction of occupants who follow `plan` (1.0 = everyone obeys).
     The rest are "rebels" who follow `nearest` (computed if not supplied).
@@ -127,9 +128,14 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
 
         # compliant vs rebel split applies only to ambulatory occupants
         n_compliant = round(n_ambulatory * compliance)
-        groups = [(plan[room], n_compliant, False), (rebel_plan[room], n_ambulatory - n_compliant, False)]
+        spec = plan[room]
+        groups = [(spec, n_compliant, False), (rebel_plan[room], n_ambulatory - n_compliant, False)]
 
-        primary_ex = plan[room]  # used for the UI route ribbons
+        if isinstance(spec, dict):  # door-level plan: the widest door's exit stands for the room
+            widths = {nb: e.width for nb, e in b.adj[room]}
+            primary_ex = spec[max(spec, key=lambda d: widths.get(d, 0.0))]
+        else:
+            primary_ex = spec  # used for the UI route ribbons
         if primary_ex in blocked:
             raise ValueError(f"plan sends {room} to blocked exit {primary_ex}")
         primary_doors = door_paths(b, room, primary_ex, blocked)
@@ -157,6 +163,28 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
 
         for ex, count, is_wc in groups:
             if count == 0:
+                continue
+            if isinstance(ex, dict):  # door-level plan: split by door width, each door group to its own exit
+                doors = []
+                for nb, e in b.adj[room]:
+                    x = ex.get(nb)
+                    if x is None or x in blocked or nb in blocked and nb != x:
+                        continue
+                    rest = [x] if nb == x else shortest_path(b, nb, x, blocked | {room})[1]
+                    if rest:
+                        doors.append((e.width, x, [room] + rest))
+                if not doors:
+                    raise ValueError(f"door plan for {room} reaches no open exit")
+                total_w = sum(w for w, _, _ in doors)
+                counts = [int(count * w / total_w) for w, _, _ in doors]
+                for i in range(count - sum(counts)):
+                    counts[i % len(counts)] += 1
+                for (_, x, path), k in zip(doors, counts):
+                    for _ in range(k):
+                        people.append(Person(pid, room, x, path, start=rng.uniform(*premove),
+                                             ox=(rng.random() - .5) * node.get("w", 4) * .8,
+                                             oz=(rng.random() - .5) * node.get("d", 4) * .8))
+                        pid += 1
                 continue
             if ex in blocked:
                 ex = primary_ex  # fall back to compliant exit if rebel exit is blocked
