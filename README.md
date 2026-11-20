@@ -9,12 +9,13 @@
 
 - **44.6% faster** evacuation movement time on the demo lab block: nearest-exit rule 301 s → Nikaas plan 167 s, saving 134 s for 528 people (`runs/wow.csv`).
 - **Within 3.71 s of a proven lower bound** — no plan can move everyone out faster than 163.04 s with the same exits and widths, and Nikaas reaches 166.75 s (`runs/wow.csv`).
+- **Within 2.4 s of the best possible on every single-floor test case** when a room may be divided between exits (each phone gets its own route, so the platform can carry this out): for example the IIT Kharagpur floor 124.0 s → 120.0 s against a proven lower bound of 118.5 s (`runs/improvements.csv`).
 - **Validated against SFPE Handbook Example 1**: 245.25 s vs the published 245.2 s (0.05 s error, `tests/test_sim.py`).
 - **Not one lucky run**: with both plans fixed and 200 random runs per building (each person starts after a random delay of up to 60 s, room head counts off by up to ±20%, our assumptions), the Nikaas plan is faster in 193 of 200 runs on the IIT Kharagpur floor (median 13.75 s saved) and 200 of 200 on the lab block (median 130.25 s) (`runs/monte_carlo_summary.csv`).
-- **Multi-floor buildings with shared stairwells**: on a 5-floor tower with 450 people, the nearest-exit rule sends everyone down one stairwell (375.25 s); the Nikaas plan uses both and gets everyone out in 206.0 s, 26.27 s above the proven lower bound (`runs/multi_floor.csv`). On the 3-floor office test building the plan ties the nearest-exit rule.
-- **Scales to a stadium**: a representative stadium scaled to 2,001 people, 348.5 s → 203.0 s with the same gates (`runs/stadium_results.csv`).
+- **Multi-floor buildings with shared stairwells**: on a 5-floor tower with 450 people, the nearest-exit rule sends everyone down one stairwell (375.25 s); the Nikaas plan uses both and gets everyone out in 206.0 s (`runs/multi_floor.csv`). Every tower room is exactly as far from both exits, so the nearest-exit rule breaks the tie the same way for all of them. 206.0 s is the best of all 512 room plans; dividing rooms between exits brings it to 199.5 s, 10 s above a time-expanded lower bound of 189.5 s (`runs/improvements.csv`). On the 3-floor office the plan ties the nearest-exit rule at 210.5 s, the best of all 1,024 room plans.
+- **Scales to a stadium**: a representative stadium scaled to 2,001 people, 348.5 s → 203.0 s with the same gates (`runs/stadium_results.csv`); sending each door of a stand to its own gate brings it to 165.5 s, and with the west gate closed dividing the stands between gates cuts 231.75 s to 190.75 s (`runs/improvements.csv`).
 - **Crowd mode (opt-in)**: `POST /simulate` with `crowd: true` flags corridor and door edges above our early-warning densities (concern 2.7 p/m², crush warning 4 p/m²), both set below the roughly 5 people/m² where published sources put crush risk (`docs/CROWD_RESEARCH.md`). Densities are estimated from a flow model, not a spatial crowd model, and are capped at 10 p/m².
-- **Building-safety platform** (`docs/PLATFORM.md`): people scan a QR code at the entrance or on a room door (no name asked; a mobile number only if they opt in to emergency texts; deleted after 24 h); in an emergency their phone gets a push alert and their own step-by-step route across floors, re-planned when a hazard blocks a stair; people who cannot use stairs are sent to a refuge; outside, Google Maps walks them to the assembly point and "I'm safe" is checked against its location. The control room (`#/control`) sees who is inside, safe, missing or asking for help, starts and clears alarms, releases floors in waves, diverts rooms when an exit queues (only when the simulator confirms it is faster), and prints marshal lists and QR codes. Buildings come from a PDF or photos, one page per floor, fixed in an editor with stairs joined across floors (`#/buildings`). Heat and smoke sensors and room cameras raise hazards; a camera's suspected fire is confirmed by Amazon Rekognition. 16 tests in `tests/test_platform.py`.
+- **Building-safety platform** (`docs/PLATFORM.md`): people scan a QR code at the entrance or on a room door (no name asked; a mobile number only if they opt in to emergency texts; deleted after 24 h); in an emergency their phone gets a push alert and their own step-by-step route across floors, re-planned when a hazard blocks a stair; people who cannot use stairs are sent to a refuge; outside, Google Maps walks them to the assembly point and "I'm safe" is checked against its location. The control room (`#/control`) sees who is inside, safe, missing or asking for help, starts and clears alarms, releases floors in waves (later floors are told to wait, with a countdown), diverts rooms when an exit queues (only when the simulator confirms it is faster), and prints marshal lists and QR codes. Buildings come from a PDF or photos, one page per floor, fixed in an editor with stairs joined across floors (`#/buildings`). Heat and smoke sensors and room cameras raise hazards; a camera's suspected fire is confirmed by Amazon Rekognition. 17 tests in `tests/test_platform.py`.
 - **Live drill**: judges scan a QR code, pick their room, and their phone shows their own exit; block an exit and every affected phone flashes red with its new route (and vibrates on Android). Phones taped beside doors become live exit signs that turn red and point to the nearest open exit.
 
 ## Links
@@ -77,8 +78,9 @@ Twins, by **TheGoodEngineers** (team AH50): Ayush V U, Bhumika G, Abhijeet, Chir
 
 ## Status: working, in progress, not built
 
-**Working today** (all on the live site, 196 automated tests pass):
-- Simulator validated against the SFPE handbook (245.25 s vs the published 245.2 s) and an optimiser that is checked against a proven fastest-possible time
+**Working today** (all on the live site, 205 automated tests pass):
+- Simulator validated against the SFPE handbook (245.25 s vs the published 245.2 s) and an optimiser that is checked against a proven fastest-possible time (two lower bounds: exits and stairwells, and every door, corridor and stair over time)
+- Door-level and share plans that divide a room between exits (engine and scripts; the live platform still sends each room to one exit)
 - Buildings with several floors and shared stairwells
 - Floor plans from a PDF or photos (read by Amazon Nova), fixed in an editor, with 8 automatic plan checks (including NBC 2016 minimum exit count)
 - Building-safety platform: QR check-in, push alerts with each phone's own route, control room, marshal sheets, sensor readings and room cameras raising hazards
@@ -140,14 +142,14 @@ Then open http://localhost:5173. Deploying to your own AWS account: [docs/DEPLOY
 
 | Layer | What we use |
 |---|---|
-| Simulator and optimiser | Python 3.11, NumPy, SciPy (`linprog` for the lower-bound flow LP) |
+| Simulator and optimiser | Python 3.11, NumPy, SciPy (`linprog` for the lower-bound flow LP, `csgraph.maximum_flow` for the time-expanded bound) |
 | API | FastAPI + Pydantic, wrapped for AWS Lambda with Mangum |
 | Website | React 19, TypeScript, Vite; three.js for 3D; pdf.js for PDF floor plans; TensorFlow.js COCO-SSD for counting people on a room camera, in the browser |
 | Cloud | AWS SAM: API Gateway, Lambda, S3 (website and photos), DynamoDB (live platform state), SSM Parameter Store, CloudWatch |
 | Photo to building | Amazon Bedrock, Amazon Nova Pro (vision) |
 | Camera fire check | Amazon Rekognition (labels Fire, Flame, Smoke) |
 | Phone alerts | Web Push (VAPID, `cryptography`); SMS gateways in `nikaas/sms.py` (Amazon SNS, Fast2SMS, Twilio) |
-| Tests and CI | pytest (196 tests), GitHub Actions: tests, type-check and build, then deploy on every push to `main` |
+| Tests and CI | pytest (205 tests), GitHub Actions: tests, type-check and build, then deploy on every push to `main` |
 
 ## Hardware and dependencies
 
@@ -171,7 +173,7 @@ Then open http://localhost:5173. Deploying to your own AWS account: [docs/DEPLOY
 
 **Libraries we depend on** (installed, not copied): the Python and npm packages listed above, each under its own licence.
 
-**Methods and data from published sources:** the SFPE hydraulic evacuation model and Engineering Guide Example 1 (our simulator reproduces it, `tests/test_sim.py`); quickest-flow network flows (Ford and Fulkerson, *Flows in Networks*, 1962) for the lower bound; crowd-density thresholds with sources in [docs/CROWD_RESEARCH.md](docs/CROWD_RESEARCH.md); NBC 2016 exit-count rule; the IIT Kharagpur floor-plan photo (CC BY 3.0, credited below).
+**Methods and data from published sources:** the SFPE hydraulic evacuation model and Engineering Guide Example 1 (our simulator reproduces it, `tests/test_sim.py`); quickest-flow network flows (Ford and Fulkerson, *Flows in Networks*, 1962) and the quickest transshipment problem on time-expanded networks (Hoppe and Tardos, *Math. Oper. Res.* 25(1), 2000) for the lower bounds; crowd-density thresholds with sources in [docs/CROWD_RESEARCH.md](docs/CROWD_RESEARCH.md); NBC 2016 exit-count rule; the IIT Kharagpur floor-plan photo (CC BY 3.0, credited below).
 
 **AI tools used:**
 

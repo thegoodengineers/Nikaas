@@ -32,3 +32,26 @@ person's pre-movement delay is uniform in [0, 60] s, and every room's occupancy 
 movement times elsewhere. Real pre-movement distributions depend on the building type and alarm system (BSI
 PD 7974-6:2019); with drill data the same script can be re-run with measured ranges.
 
+## Plans and lower bounds (`nikaas/optimise.py`, `nikaas/tef.py`)
+
+**Three kinds of plan.** A *room plan* sends each room to one exit; this is what the live platform uses. A
+*door-level plan* (`{door: exit}`, `optimise_doors()`) lets the people at each door of a room use their own exit.
+A *share plan* (`{exit: fraction}`, `optimise_shares()`) divides a room between exits; the platform could carry
+it out because every phone already gets its own route. Each refinement starts from the previous plan and keeps a
+change only if the simulated movement time drops, so it is never slower than where it started.
+
+**Two lower bounds.** No plan of any kind can beat either bound with the same exits and widths:
+
+- *Exits and stairwells* (`lower_bound()`): a linear program in which every exit and every shared stairwell
+  passes people no faster than its capacity.
+- *Every edge over time* (`time_expanded_bound()`): the building is copied once per time step and every door,
+  corridor and stair carries at most its capacity in each step (a quickest-flow problem on a time-expanded network,
+  Ford and Fulkerson 1958; Hoppe and Tardos 2000). Travel times are rounded down and capacities up, so it stays a
+  bound. It is much tighter where an inner corridor is the bottleneck (the stadium), and slightly looser on simple
+  floors because of the rounding.
+
+`optimise()` reports the larger of the two. As with any flow model, the bounds hold up to about one person's
+headway at an exit (0.45-1.1 s for our buildings), because the simulator lets the first arrival at an idle door
+straight through. `scripts/run_improvements.py` checks every case and stops if a bound ever exceeds a plan the
+simulator achieved.
+
