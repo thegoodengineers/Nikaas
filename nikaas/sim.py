@@ -403,8 +403,8 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
 
     done = all(p.state in ("out", "refuge") for p in people)
     bottleneck = max(peak_q, key=peak_q.get) if peak_q else None
-    tot_time = round(max(p.t_out for p in people), 2) if done and people else None
-    # refuge people never exit; count them but exclude from timing stats
+    # refuge people never exit; count them but exclude from timing stats (their t_out stays NaN)
+    tot_time = round(max((p.t_out for p in people if p.state == "out"), default=0.0), 2) if done and people else None
     refuge_count = sum(p.state == "refuge" for p in people)
     t_outs = sorted(p.t_out for p in people if not math.isnan(p.t_out))
     p95 = round(t_outs[int(len(t_outs) * 0.95)] if t_outs else 0, 2)
