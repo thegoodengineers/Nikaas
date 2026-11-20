@@ -1,0 +1,11 @@
+building,sha256,blocked,people,nearest_s,room_plan_s,door_plan_s,exit_bound_s,time_expanded_bound_s,bound_s,gap_s,optimise_runtime_s,tef_runtime_s,commit
+lab_block.json,1ca510ac6c25,-,528,301.25,166.75,166.75,163.04,161.0,163.04,3.71,4.07,0.85,27c995b
+lab_block.json,1ca510ac6c25,B,528,437.5,303.0,303.0,301.85,299.0,301.85,1.15,1.81,2.27,27c995b
+iit_kgp_museum.json,896c5ba43109,-,507,145.25,124.0,124.0,117.59,117.0,117.59,6.41,1.47,0.44,27c995b
+iit_kgp_museum.json,896c5ba43109,MAIN,507,318.0,223.5,223.5,221.58,220.0,221.58,1.92,3.0,1.4,27c995b
+sample_floor.json,b856dff359c2,-,300,156.5,152.5,152.5,136.1,134.0,136.1,16.4,0.41,0.25,27c995b
+sample_floor.json,b856dff359c2,A,300,262.25,262.25,262.25,259.67,259.0,259.67,2.58,0.07,0.59,27c995b
+multi_floor_tower.json,c34ee4afe8a8,-,450,375.25,206.0,206.0,179.73,188.0,188.0,18.0,6.81,0.81,27c995b
+multi_floor_office.json,c09382f73ee3,-,400,210.5,210.5,210.5,192.02,167.0,192.02,18.48,3.31,0.28,27c995b
+stadium_scaled.json,8b740f25152c,-,2001,348.5,203.0,165.5,107.11,129.0,129.0,36.5,26.18,0.43,27c995b
+stadium_scaled.json,8b740f25152c,GATE_W,2001,505.25,231.75,231.75,126.2,158.0,158.0,73.75,16.55,0.75,27c995b
