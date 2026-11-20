@@ -66,3 +66,21 @@ Times from the alarm (pre-movement uniform in [0, max] s per person, room occupa
 | lab_block.json | 200 | 60.0 | 0.2 | 308.25 / 333.75 | 178.0 / 187.25 | 200 | 0 | 0 | 130.25 | be5bf7b |
 
 - iit_kgp_museum.json: in the 7 runs where the nearest-exit rule wins, 453-499 people were in the building (planned for 507); the plan lost by 4.25 s at the median, 10.75 s at most.
+
+
+## Room, door-level and share plans with both lower bounds (`runs/improvements.csv`)
+
+Movement time (s). Bound = the larger of the exit/stairwell LP bound and the time-expanded bound (see docs/METHOD.md); gap = best plan minus bound.
+
+| Building | Blocked | People | Nearest | Room plan | Door plan | Share plan | Exit bound | Time-expanded bound | Bound | Gap | Commit |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| lab_block.json | - | 528 | 301.25 | 166.75 | 166.75 | 165.0 | 163.04 | 162.5 | 163.04 | 1.96 | e15c28e |
+| lab_block.json | B | 528 | 437.5 | 303.0 | 303.0 | 303.0 | 301.85 | 300.5 | 301.85 | 1.15 | e15c28e |
+| iit_kgp_museum.json | - | 507 | 145.25 | 124.0 | 124.0 | 120.0 | 117.59 | 118.5 | 118.5 | 1.5 | e15c28e |
+| iit_kgp_museum.json | MAIN | 507 | 318.0 | 223.5 | 223.5 | 222.75 | 221.58 | 221.0 | 221.58 | 1.17 | e15c28e |
+| sample_floor.json | - | 300 | 156.5 | 152.5 | 152.5 | 138.5 | 136.1 | 135.5 | 136.1 | 2.4 | e15c28e |
+| sample_floor.json | A | 300 | 262.25 | 262.25 | 262.25 | 262.25 | 259.67 | 260.0 | 260.0 | 2.25 | e15c28e |
+| multi_floor_tower.json | - | 450 | 375.25 | 206.0 | 206.0 | 199.5 | 179.73 | 189.5 | 189.5 | 10.0 | e15c28e |
+| multi_floor_office.json | - | 400 | 210.5 | 210.5 | 210.5 | 210.5 | 192.02 | 168.0 | 192.02 | 18.48 | e15c28e |
+| stadium_scaled.json | - | 2001 | 348.5 | 203.0 | 165.5 | 165.5 | 107.11 | 131.0 | 131.0 | 34.5 | e15c28e |
+| stadium_scaled.json | GATE_W | 2001 | 505.25 | 231.75 | 231.75 | 190.75 | 126.2 | 160.0 | 160.0 | 30.75 | e15c28e |

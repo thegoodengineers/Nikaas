@@ -99,6 +99,8 @@ Rules:
   head count for that node (used for occupancy and density).
 - Phased release (`phased: true`): the incident floor and the floor above leave first, then the other floors
   in waves `wave_gap_s` apart (phased evacuation, BS 9999). Single-floor buildings ignore it.
+  Phones on later floors are told to stay where they are, with the time until their floor leaves, instead of
+  "Leave now" (push and text message); the open page shows the countdown.
 - Divert: when one exit's estimated clearing time is over 1.5 x the best exit's and over 60 s, rooms are moved
   to other exits and their phones are told.
 - Density per room (people / floor area) and per camera node: early-warning flags `concern` at 2.7 p/m² and `crush` (warning) at 4.0 p/m²

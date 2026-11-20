@@ -111,3 +111,18 @@ if mc.exists():
                   (web / "monte_carlo.json").open("w"), indent=1)
     print(NL.join(extra))
 
+
+
+# room, door-level and share plans with both lower bounds (scripts/run_improvements.py -> runs/improvements.csv)
+imp = Path("runs/improvements.csv")
+if imp.exists():
+    irows = list(csv.DictReader(imp.open(encoding="utf-8")))
+    extra = ["", "## Room, door-level and share plans with both lower bounds (`runs/improvements.csv`)", "",
+             "Movement time (s). Bound = the larger of the exit/stairwell LP bound and the time-expanded bound "
+             "(see docs/METHOD.md); gap = best plan minus bound.", "",
+             "| Building | Blocked | People | Nearest | Room plan | Door plan | Share plan | Exit bound | Time-expanded bound | Bound | Gap | Commit |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    extra += [f"| {r['building']} | {r['blocked']} | {r['people']} | {r['nearest_s']} | {r['room_plan_s']} | {r['door_plan_s']} | "
+              f"{r['share_plan_s']} | {r['exit_bound_s']} | {r['time_expanded_bound_s']} | {r['bound_s']} | {r['gap_s']} | {r['commit']} |" for r in irows]
+    md.write_text(md.read_text(encoding="utf-8") + NL + NL.join(extra) + NL, encoding="utf-8")
+    print(NL.join(extra))
