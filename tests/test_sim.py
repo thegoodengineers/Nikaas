@@ -129,3 +129,18 @@ def test_queuing_people_are_spread_out_not_stacked():
     queued = {(x, z) for x, z, st in first if st == "queuing"}
     n_queued = sum(1 for *_, st in first if st == "queuing")
     assert n_queued > 100 and len(queued) > 0.9 * n_queued  # almost every queued person has their own spot
+
+
+def test_total_time_ignores_people_waiting_at_a_refuge():
+    # A room whose only exit is down a stair: wheelchair users cannot use stairs, so they wait at a refuge.
+    # The total time must be the time of the last person who actually walks out, not NaN.
+    b = load({"nodes": [{"id": "r", "type": "room", "x": 0, "z": 0, "people": 20, "w": 0.1, "d": 0.1},
+                        {"id": "c", "type": "corridor", "x": 5, "z": 0},
+                        {"id": "X", "type": "exit", "x": 10, "z": 0}],
+              "edges": [{"from": "r", "to": "c", "width": 1.0, "length": 5.0, "kind": "door"},
+                        {"from": "c", "to": "X", "width": 1.2, "length": 5.0, "kind": "stair"}]})
+    walk = simulate(b, {"r": "X"}, frame_every=1e9)
+    mixed = simulate(b, {"r": "X"}, frame_every=1e9, wheelchair_fraction=0.1)
+    assert mixed["wheelchair_refuge"] == 2
+    assert mixed["total_time_s"] == mixed["total_time_s"]  # not NaN
+    assert 0 < mixed["total_time_s"] <= walk["total_time_s"]
