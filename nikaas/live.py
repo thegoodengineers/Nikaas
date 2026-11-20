@@ -499,7 +499,7 @@ def _plan(site: dict, occ: dict, blocked: set) -> dict:
     cands = [("nearest exit", nearest), ("balanced", balanced)]
     if not bd.get("floors") and len(bd["nodes"]) <= 80 and not trapped:
         try:
-            cands.append(("optimised", optimise(bs, blocked)["plan"]))
+            cands.append(("optimised", optimise(bs, blocked, bound=False)["plan"]))
         except Exception:
             pass
     best = None
@@ -730,11 +730,23 @@ def start_alarm(sid: str, type_: str = "fire", message: str = "", origin: str | 
     open_exits = [_label(nodes[x]) for x in _building(site).exits if x not in blocked]
     shut = [_label(nodes[x]) for x in _building(site).exits if x in blocked]
 
+    def wait_s(p) -> float:
+        """Seconds this person's floor waits under phased release (0 = leave now)."""
+        floor = nodes.get(p.get("room") or "", {}).get("floor_id")
+        return (a.get("waves") or {}).get(floor, 0) * a.get("wave_gap_s", 60) if a.get("phased") and floor else 0
+
+    def when(s: float) -> str:
+        return f"{round(s / 60)} min" if s >= 90 else f"{int(s)} s"
+
     def msg(p):
         r = rooms.get(p.get("room") or "")
         first = "Drop, cover and hold on until the shaking stops. Then " if type_ == "earthquake" else ""
         go = "l" if first else "L"
-        if r:
+        w = wait_s(p)
+        if r and w:  # a later wave: stay put so the stairs stay clear for the floors leaving first
+            body = (f"{first}{'s' if first else 'S'}tay where you are: your floor leaves in about {when(w)}, by {r['exit_label']} "
+                    f"(group {r['group']}). Tap to see the countdown and your route.")
+        elif r:
             body = f"{first}{go}eave now by {r['exit_label']} (group {r['group']}), {round(r.get('distance_m', 0))} m. Tap for step-by-step directions."
         else:  # no room known: still say which exits are open, then ask for the room
             body = (f"{first}{go}eave now by the nearest open exit: {', '.join(open_exits[:3])}." + (f" Do not use {', '.join(shut[:2])}." if shut else "")
@@ -744,7 +756,8 @@ def start_alarm(sid: str, type_: str = "fire", message: str = "", origin: str | 
     # the text message: short and plain (one SMS part), with this person's own link to their route
     head = {"earthquake": "EARTHQUAKE", "fire": "FIRE ALARM", "gas": "GAS LEAK", "collapse": "COLLAPSE", "drill": "EVACUATION DRILL"}.get(type_, "EMERGENCY")
     first = "Drop, cover, hold on. When shaking stops, leave." if type_ == "earthquake" else "Leave now. No lifts."
-    _text_people(sid, people(sid), lambda p: f"{head} at {_ascii(site['name'])[:40]}. {first} Your exit route: {link_base}/r/{p.get('link', '')}", "alarm")
+    later = lambda p: f"Wait: your floor leaves in about {when(wait_s(p))}. No lifts."  # noqa: E731
+    _text_people(sid, people(sid), lambda p: f"{head} at {_ascii(site['name'])[:40]}. {later(p) if wait_s(p) else first} Your exit route: {link_base}/r/{p.get('link', '')}", "alarm")
     return a
 
 

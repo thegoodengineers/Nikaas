@@ -257,3 +257,15 @@ def test_push_message_decrypts_like_a_browser_would():
     jwt = hdr.split("t=")[1].split(",")[0]
     claims = json.loads(base64.urlsafe_b64decode(jwt.split(".")[1] + "=="))
     assert claims["aud"] == "https://fcm.googleapis.com"
+
+
+def test_phased_release_tells_later_floors_to_wait(client, fresh):
+    # r_GF_1 is in wave 1 when the fire starts on F1: its phone must say wait, not leave now
+    client.post("/sites/office/checkin", json={"token": T1, "room": "r_GF_1"})
+    client.post("/sites/office/push", json={"token": T1, "subscription": SUB})
+    client.post("/sites/office/checkin", json={"token": T2, "room": "r_F1_1"})
+    client.post("/sites/office/push", json={"token": T2, "subscription": {**SUB, "endpoint": "https://push.example.test/def"}})
+    client.post("/sites/office/alarm", json={"type": "fire", "origin": "r_F1_1", "phased": True, "wave_gap_s": 45})
+    body = {ep: m["body"] for ep, m in fresh}
+    assert body["https://push.example.test/abc"].startswith("Stay where you are: your floor leaves in about 45 s")
+    assert body["https://push.example.test/def"].startswith("Leave now by")

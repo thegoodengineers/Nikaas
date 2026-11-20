@@ -9,6 +9,7 @@ from scipy.optimize import linprog
 
 from .building import Building, load, nearest_plan, shortest_path
 from .sim import effective_width, simulate, SPECIFIC_FLOW, STAIR_SPEED, WALK_SPEED, door_paths
+from .tef import time_expanded_bound
 
 
 def compute_exit_capacities(b: Building, blocked=()):
@@ -201,7 +202,7 @@ def lower_bound(b: Building | dict, blocked=()) -> float:
     return round(total_people / total_cap + min_w, 2) if total_cap > 0 else 0.0
 
 
-def optimise(b: Building | dict, blocked=()) -> dict:
+def optimise(b: Building | dict, blocked=(), bound: bool = True) -> dict:
     """Find exit allocation {room: exit} that empties the building fastest.
     Returns: {"plan": {room: exit}, "total_time_s": float, "lower_bound_s": float}
     """
@@ -301,9 +302,14 @@ def optimise(b: Building | dict, blocked=()) -> dict:
         else:
             break
 
-    lb = lower_bound(b, blocked)
-    # The lower bound mathematically cannot exceed actual time
-    lb = min(lb, current_time)
+    lb = None
+    if bound:  # report the tighter of two valid bounds: exits/stairwells only, and every edge over time
+        lb = lower_bound(b, blocked)
+        try:
+            lb = max(lb, time_expanded_bound(b, blocked, upper=current_time))
+        except ValueError:
+            pass
+        lb = min(lb, current_time)  # a bound can never exceed an achieved time
 
     return {
         "plan": current_plan,
@@ -311,3 +317,97 @@ def optimise(b: Building | dict, blocked=()) -> dict:
         "lower_bound_s": lb,
     }
 
+
+
+def optimise_doors(b: Building | dict, blocked=(), start: dict | None = None, max_rounds: int = 30) -> dict:
+    """Door-level refinement: the people at each door of a room may use a different exit.
+    Starts from a room plan (optimise() if none given) and keeps any single-door change that lowers the
+    simulated movement time. Rooms with one door keep their room-level exit."""
+    if not isinstance(b, Building):
+        b = load(b)
+    blocked = set(blocked)
+    base = start or optimise(b, blocked, bound=False)["plan"]
+    open_exits = [x for x in b.exits if x not in blocked]
+    plan = {}
+    for r, ex in base.items():
+        doors = [nb for nb, _ in b.adj[r] if nb not in blocked or nb in open_exits]
+        plan[r] = {d: ex for d in doors} if len(doors) > 1 else ex
+    best = simulate(b, plan, blocked, frame_every=1e9)["total_time_s"]
+    for _ in range(max_rounds):
+        improved = False
+        for r, spec in plan.items():
+            if not isinstance(spec, dict):
+                continue
+            for d in spec:
+                reach = [x for x in open_exits if x == d or shortest_path(b, d, x, blocked | {r})[1]]
+                for x in reach:
+                    if x == spec[d]:
+                        continue
+                    cand = {**plan, r: {**spec, d: x}}
+                    t = simulate(b, cand, blocked, frame_every=1e9, max_t=best)["total_time_s"]
+                    if t is not None and t == t and t < best - 0.01:
+                        plan, spec, best, improved = cand, cand[r], t, True
+        if not improved:
+            break
+    return {"plan": plan, "total_time_s": best}
+
+
+def _shares_of(b: Building, room, spec) -> dict:
+    """A room's plan entry as {exit: share}: an exit, a door plan (shared by door width) or shares already."""
+    if not isinstance(spec, dict):
+        return {spec: 1.0}
+    if all(isinstance(v, (int, float)) for v in spec.values()):
+        return dict(spec)
+    widths = {nb: e.width for nb, e in b.adj[room]}
+    out = {}
+    for d, x in spec.items():
+        out[x] = out.get(x, 0.0) + widths.get(d, 0.0)
+    tot = sum(out.values()) or 1.0
+    return {x: w / tot for x, w in out.items()}
+
+
+def optimise_shares(b: Building | dict, blocked=(), start: dict | None = None, steps=(0.25, 0.1, 0.05),
+                    time_limit_s: float = 300.0) -> dict:
+    """Share plans: each room may be divided between exits ({exit: fraction}), which the platform can carry out
+    because every phone gets its own route. Starts from `start` (a room or door plan; optimise() if none) and
+    moves a slice of one room from one exit to another while that lowers the simulated movement time, with
+    slices of 25 %, then 10 %, then 5 %. Never returns a plan slower than its start."""
+    import time as _time
+    if not isinstance(b, Building):
+        b = load(b)
+    blocked = set(blocked)
+    t_end = _time.perf_counter() + time_limit_s
+    base = start or optimise(b, blocked, bound=False)["plan"]
+    plan = {r: _shares_of(b, r, s) for r, s in base.items()}
+    reach = {r: [x for x in b.exits if x not in blocked and door_paths(b, r, x, blocked)] for r in plan}
+    best = simulate(b, plan, blocked, frame_every=1e9)["total_time_s"]
+    start_time = simulate(b, base, blocked, frame_every=1e9)["total_time_s"]
+    if start_time <= best:  # the share form of a door plan can differ slightly; keep whichever is faster
+        best_plan, best = base, start_time
+    else:
+        best_plan = plan
+    for step in steps:
+        improved = True
+        while improved and _time.perf_counter() < t_end:
+            improved = False
+            for r in plan:
+                if b.people().get(r, 0) * step < 1:  # slice smaller than one person
+                    continue
+                for a_ in [x for x, v in plan[r].items() if v >= step - 1e-9]:
+                    for b_ in reach[r]:
+                        if b_ == a_:
+                            continue
+                        sh = dict(plan[r])
+                        sh[a_] = round(sh[a_] - step, 6)
+                        sh[b_] = round(sh.get(b_, 0.0) + step, 6)
+                        sh = {x: v for x, v in sh.items() if v > 1e-9}
+                        cand = {**plan, r: sh}
+                        t = simulate(b, cand, blocked, frame_every=1e9, max_t=best)["total_time_s"]
+                        if t is not None and t == t and t < best - 0.01:
+                            plan, best, best_plan, improved = cand, t, cand, True
+                            break
+                    if improved:
+                        break
+                if improved:
+                    break
+    return {"plan": best_plan, "total_time_s": best}

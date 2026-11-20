@@ -75,7 +75,7 @@ All flight segments belonging to the same physical shaft are tagged with a commo
    - **Independent Flight Capacity:** Each stair flight edge $k$ accumulates credit $\text{credit}_k \leftarrow \text{credit}_k + C_k \times \Delta t$.
    - **Shaft Entrance Quota:** External admissions across all floor doors consume shared group credit $\text{group\_credit}_g \leftarrow \text{group\_credit}_g + C_g \times \Delta t$.
    - **Fair Multi-Floor Round-Robin:** External admissions rotate among waiting floor queues via a circular round-robin pointer $\text{group\_rr\_ptr}_g$, ensuring equal opportunity for occupants on every level.
-   - **1:1 Landing Zipper Merge:** At intermediate floor landings where descending traffic meets floor door entrants, a deterministic alternating toggle (`landing_toggle`) alternates 1:1 between internal descending evacuees and floor door entrants. Neither flow stream can monopolize the descending flight or starve the other.
+   - **Landing merge (measured, not 1:1):** At a landing, people already descending use only the flight's own credit, while floor entrants also need the shared group credit and take turns by floor. A `landing_toggle` exists, but people already descending go whenever the group credit is below 1, so the merge is not a strict 1:1 zipper. Measured on the 5-floor tower (nearest plan), the upper floors clear within about 20 s of each other (F1 356.25 s, F2 363.75 s, F3 369.5 s, F4 375.25 s), so each floor gets a fair share of the stair. Neither stream starves the other.
 
 ---
 
