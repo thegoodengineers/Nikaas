@@ -60,3 +60,23 @@ def test_door_level_plan_splits_a_room_across_exits():
     one = simulate(b, {"r": "A"}, frame_every=1e9)
     split = simulate(b, {"r": {"A": "A", "B": "B"}}, frame_every=1e9)
     assert split["per_exit"] == {"A": 100, "B": 100} and split["total_time_s"] <= one["total_time_s"]
+
+
+def test_share_plan_divides_a_room_exactly():
+    b = load({"nodes": [{"id": "r", "type": "room", "x": 0, "z": 0, "people": 101, "w": 10, "d": 4},
+                        {"id": "A", "type": "exit", "x": -10, "z": 0}, {"id": "B", "type": "exit", "x": 10, "z": 0}],
+              "edges": [{"from": "r", "to": "A", "width": 1.0, "length": 10, "kind": "door"},
+                        {"from": "r", "to": "B", "width": 1.0, "length": 10, "kind": "door"}]})
+    run = simulate(b, {"r": {"A": 0.3, "B": 0.7}}, frame_every=1e9)
+    assert run["per_exit"] == {"A": 30, "B": 71} and run["people"] == 101 and run["completed"]
+
+
+def test_share_plans_beat_room_plans_and_respect_the_bound():
+    from nikaas.optimise import optimise_shares
+    b = load(ROOT / "data/sample_floor.json")
+    room = optimise(b)  # 152.5 s, the best of all 64 room plans
+    shares = optimise_shares(b, start=room["plan"], time_limit_s=120)
+    assert shares["total_time_s"] < room["total_time_s"]
+    assert shares["total_time_s"] >= room["lower_bound_s"]
+    run = simulate(b, shares["plan"], frame_every=1e9)
+    assert run["people"] == sum(b.people().values()) and run["total_time_s"] == shares["total_time_s"]

@@ -131,6 +131,16 @@ def simulate(b: Building, plan: dict, blocked=(), seed=7, max_t=1800.0, frame_ev
         spec = plan[room]
         groups = [(spec, n_compliant, False), (rebel_plan[room], n_ambulatory - n_compliant, False)]
 
+        if isinstance(spec, dict) and spec and all(isinstance(v, (int, float)) for v in spec.values()):
+            # share plan {exit: fraction}: the room is divided between exits (each phone gets its own route),
+            # people counted by largest remainder so the shares add up to the room exactly
+            tot = sum(spec.values()) or 1.0
+            raw = {x: n_compliant * v / tot for x, v in spec.items()}
+            ks = {x: int(v) for x, v in raw.items()}
+            for x in sorted(raw, key=lambda x: raw[x] - ks[x], reverse=True)[:n_compliant - sum(ks.values())]:
+                ks[x] += 1
+            groups = [(x, k, False) for x, k in ks.items()] + groups[1:]
+            spec = max(spec, key=spec.get)
         if isinstance(spec, dict):  # door-level plan: the widest door's exit stands for the room
             widths = {nb: e.width for nb, e in b.adj[room]}
             primary_ex = spec[max(spec, key=lambda d: widths.get(d, 0.0))]

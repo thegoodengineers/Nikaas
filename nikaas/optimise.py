@@ -350,3 +350,64 @@ def optimise_doors(b: Building | dict, blocked=(), start: dict | None = None, ma
         if not improved:
             break
     return {"plan": plan, "total_time_s": best}
+
+
+def _shares_of(b: Building, room, spec) -> dict:
+    """A room's plan entry as {exit: share}: an exit, a door plan (shared by door width) or shares already."""
+    if not isinstance(spec, dict):
+        return {spec: 1.0}
+    if all(isinstance(v, (int, float)) for v in spec.values()):
+        return dict(spec)
+    widths = {nb: e.width for nb, e in b.adj[room]}
+    out = {}
+    for d, x in spec.items():
+        out[x] = out.get(x, 0.0) + widths.get(d, 0.0)
+    tot = sum(out.values()) or 1.0
+    return {x: w / tot for x, w in out.items()}
+
+
+def optimise_shares(b: Building | dict, blocked=(), start: dict | None = None, steps=(0.25, 0.1, 0.05),
+                    time_limit_s: float = 300.0) -> dict:
+    """Share plans: each room may be divided between exits ({exit: fraction}), which the platform can carry out
+    because every phone gets its own route. Starts from `start` (a room or door plan; optimise() if none) and
+    moves a slice of one room from one exit to another while that lowers the simulated movement time, with
+    slices of 25 %, then 10 %, then 5 %. Never returns a plan slower than its start."""
+    import time as _time
+    if not isinstance(b, Building):
+        b = load(b)
+    blocked = set(blocked)
+    t_end = _time.perf_counter() + time_limit_s
+    base = start or optimise(b, blocked, bound=False)["plan"]
+    plan = {r: _shares_of(b, r, s) for r, s in base.items()}
+    reach = {r: [x for x in b.exits if x not in blocked and door_paths(b, r, x, blocked)] for r in plan}
+    best = simulate(b, plan, blocked, frame_every=1e9)["total_time_s"]
+    start_time = simulate(b, base, blocked, frame_every=1e9)["total_time_s"]
+    if start_time <= best:  # the share form of a door plan can differ slightly; keep whichever is faster
+        best_plan, best = base, start_time
+    else:
+        best_plan = plan
+    for step in steps:
+        improved = True
+        while improved and _time.perf_counter() < t_end:
+            improved = False
+            for r in plan:
+                if b.people().get(r, 0) * step < 1:  # slice smaller than one person
+                    continue
+                for a_ in [x for x, v in plan[r].items() if v >= step - 1e-9]:
+                    for b_ in reach[r]:
+                        if b_ == a_:
+                            continue
+                        sh = dict(plan[r])
+                        sh[a_] = round(sh[a_] - step, 6)
+                        sh[b_] = round(sh.get(b_, 0.0) + step, 6)
+                        sh = {x: v for x, v in sh.items() if v > 1e-9}
+                        cand = {**plan, r: sh}
+                        t = simulate(b, cand, blocked, frame_every=1e9, max_t=best)["total_time_s"]
+                        if t is not None and t == t and t < best - 0.01:
+                            plan, best, best_plan, improved = cand, t, cand, True
+                            break
+                    if improved:
+                        break
+                if improved:
+                    break
+    return {"plan": best_plan, "total_time_s": best}
