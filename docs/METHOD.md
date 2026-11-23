@@ -55,3 +55,17 @@ headway at an exit (0.45-1.1 s for our buildings), because the simulator lets th
 straight through. `scripts/run_improvements.py` checks every case and stops if a bound ever exceeds a plan the
 simulator achieved.
 
+
+## Against measured evacuations (`scripts/run_theatres.py`, `runs/theatres.csv`)
+
+The simulator is compared with eight unannounced trial evacuations of real lecture theatres (61 to 246 people each)
+published by Spearpoint and Xiang (Fire Safety Science 10, 2011, doi 10.3801/IAFSS.FSS.10-599): room size, exit
+widths, the number of people who used each exit and the time until the last person was out. The people who used an
+exit stay on that exit. **Our assumptions, not in the source:** they are spread evenly over walking distances from
+0 to room length + room width, and the two rear exits limited by a 1.05 m stair are stairs. No constant is changed.
+
+Result: within 15 % of the measured time in 5 of the 8 rooms, mean absolute error 12.5 %, and fast by 11.5 % on
+average. Halving the walking distances gives 12.8 %, multiplying them by 1.5 gives 11.3 %. The rooms have fixed
+seating and aisles that our graph of a theatre does not represent, and they are single rooms, so this checks the
+door model only. The `balanced_exits_s` column keeps the people and exits and lets a local search choose the split
+between exits; it is a simulated estimate that assumes anyone can reach any exit equally easily.
